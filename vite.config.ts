@@ -14,7 +14,9 @@ export default defineConfig({
       targets: [
         { src: "manifest.json", dest: "." },
         { src: "background.js", dest: "." },
-        { src: "public/icon.png", dest: "." },
+        { src: "public/icon16.png", dest: "." },
+        { src: "public/icon48.png", dest: "." },
+        { src: "public/icon128.png", dest: "." },
       ],
     }),
     {
