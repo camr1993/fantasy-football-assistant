@@ -1,11 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "Fantasy Assistant (Dev)",
+  "name": "Fantasy Assistant",
   "version": "0.1",
-  "description": "Injects fantasy football tips into Yahoo Fantasy.",
+  "description": "Injects fantasy football tips into Yahoo.",
   "permissions": ["scripting", "activeTab"],
   "background": {
     "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
   },
   "content_scripts": [
     {
@@ -13,7 +16,10 @@
       "js": ["content.js"]
     }
   ],
-  "action": {
-    "default_popup": "popup.html"
-  }
+  "web_accessible_resources": [
+    {
+      "resources": ["content.js"],
+      "matches": ["https://*.fantasysports.yahoo.com/*"]
+    }
+  ]
 }
