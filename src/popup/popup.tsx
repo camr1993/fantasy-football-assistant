@@ -80,28 +80,6 @@ function Popup() {
     }
   }
 
-  function listenForOAuthCallback() {
-    // Listen for messages from the OAuth callback
-    const messageListener = (message: any) => {
-      if (message.type === 'YAHOO_OAUTH_SUCCESS') {
-        setUser(message.user);
-        setIsAuthenticated(true);
-        setError(null);
-        // Store user data in chrome storage
-        chrome.storage.local.set({ yahoo_user: message.user });
-      } else if (message.type === 'YAHOO_OAUTH_ERROR') {
-        setError(message.error);
-      }
-    };
-
-    chrome.runtime.onMessage.addListener(messageListener);
-
-    // Clean up listener after 5 minutes
-    setTimeout(() => {
-      chrome.runtime.onMessage.removeListener(messageListener);
-    }, 300000);
-  }
-
   async function submitAuthCode() {
     if (!authCode.trim()) {
       setError('Please enter the authorization code');
