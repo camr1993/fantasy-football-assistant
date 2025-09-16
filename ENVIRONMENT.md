@@ -40,12 +40,12 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 1. **Create a Yahoo Developer App:**
    - Go to https://developer.yahoo.com/
    - Create a new application
-   - Set the redirect URI to: `https://gauanzpirzdhbfbctlkg.supabase.co/functions/v1/oath/callback`
+   - Set the redirect URI to: `https://gauanzpirzdhbfbctlkg.supabase.co/functions/v1/oauth/callback`
    - Note down your Client ID, Client Secret, and App ID
 
 2. **Configure Environment Variables:**
    - Add the Yahoo credentials to your Supabase Edge Functions environment variables
-   - Deploy the OAuth function: `supabase functions deploy oath`
+   - Deploy the OAuth function: `supabase functions deploy oauth`
 
 ## Setup Instructions
 
@@ -59,7 +59,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
 3. **For OAuth Function:**
    - Set the environment variables in Supabase dashboard
-   - Deploy the function: `supabase functions deploy oath`
+   - Deploy the function: `supabase functions deploy oauth`
 
 ## How It Works
 

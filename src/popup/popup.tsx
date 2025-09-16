@@ -53,7 +53,7 @@ function Popup() {
 
       // Get the OAuth URL from our edge function
       const response = await fetch(
-        'https://gauanzpirzdhbfbctlkg.supabase.co/functions/v1/oath/auth',
+        'https://gauanzpirzdhbfbctlkg.supabase.co/functions/v1/oauth/auth',
         {
           headers: {
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
@@ -63,13 +63,19 @@ function Popup() {
       );
       const data = await response.json();
 
-      if (data.auth_url) {
+      if (data.auth_url && data.nonce) {
+        // Store nonce in Chrome storage for later validation
+        await chrome.storage.local.set({
+          oauth_nonce: data.nonce,
+          oauth_timestamp: Date.now(),
+        });
+
         // Open OAuth flow in a new tab
         chrome.tabs.create({ url: data.auth_url });
         // Clear any previous error
         setError(null);
       } else {
-        setError('Failed to get OAuth URL');
+        setError('Failed to get OAuth URL or nonce');
       }
     } catch (error) {
       console.error('OAuth initiation error:', error);
@@ -89,8 +95,29 @@ function Popup() {
       setLoading(true);
       setError(null);
 
+      // Get stored nonce from Chrome storage
+      const result = await chrome.storage.local.get([
+        'oauth_nonce',
+        'oauth_timestamp',
+      ]);
+
+      if (!result.oauth_nonce) {
+        setError('No OAuth session found. Please initiate OAuth again.');
+        return;
+      }
+
+      // Check if nonce is not too old (10 minutes)
+      const now = Date.now();
+      const maxAge = 10 * 60 * 1000; // 10 minutes
+      if (now - result.oauth_timestamp > maxAge) {
+        setError('OAuth session expired. Please initiate OAuth again.');
+        // Clean up expired session
+        chrome.storage.local.remove(['oauth_nonce', 'oauth_timestamp']);
+        return;
+      }
+
       const response = await fetch(
-        'https://gauanzpirzdhbfbctlkg.supabase.co/functions/v1/oath/callback',
+        'https://gauanzpirzdhbfbctlkg.supabase.co/functions/v1/oauth/callback',
         {
           method: 'POST',
           headers: {
@@ -100,6 +127,7 @@ function Popup() {
           body: JSON.stringify({
             code: authCode.trim(),
             state: 'fantasy-football-assistant',
+            nonce: result.oauth_nonce, // Send the stored nonce
           }),
         }
       );
@@ -113,8 +141,12 @@ function Popup() {
         setAuthCode('');
         // Store user data in chrome storage
         chrome.storage.local.set({ yahoo_user: data.user });
+        // Clean up OAuth session data
+        chrome.storage.local.remove(['oauth_nonce', 'oauth_timestamp']);
       } else {
         setError(data.error || 'Token exchange failed');
+        // Clean up OAuth session data on error too
+        chrome.storage.local.remove(['oauth_nonce', 'oauth_timestamp']);
       }
     } catch (error) {
       console.error('Token exchange error:', error);

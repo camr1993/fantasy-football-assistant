@@ -7,13 +7,14 @@ import {
   YAHOO_CLIENT_SECRET,
   REDIRECT_URI,
 } from '../utils/constants.ts';
+// Nonce validation now done by comparing Chrome storage nonce with ID token nonce
 
 // Handle OAuth callback from Yahoo
 export async function handleOAuthCallback(req: Request) {
   const timer = performance.start('oauth_callback');
 
   try {
-    let code, error, state;
+    let code, error, state, nonce;
 
     // Handle both GET (from Yahoo redirect) and POST (from manual code entry)
     if (req.method === 'GET') {
@@ -26,6 +27,7 @@ export async function handleOAuthCallback(req: Request) {
       code = body.code;
       error = body.error;
       state = body.state;
+      nonce = body.nonce; // Extract nonce from request body
     } else {
       logger.warn('Invalid method for OAuth callback', { method: req.method });
       return new Response('Method not allowed', {
@@ -55,6 +57,11 @@ export async function handleOAuthCallback(req: Request) {
         status: 400,
         headers: { ...corsHeaders },
       });
+    }
+
+    // Log state parameter for debugging
+    if (state) {
+      logger.info('State parameter received', { state });
     }
 
     // Exchange authorization code for tokens
@@ -90,6 +97,9 @@ export async function handleOAuthCallback(req: Request) {
       hasIdToken: !!tokenData.id_token,
     });
 
+    // Nonce validation will be done after parsing ID token
+    // We'll compare the nonce from Chrome storage with the nonce in the ID token
+
     // Parse user information from ID token
     const idToken = tokenData.id_token;
     let userInfo;
@@ -103,7 +113,38 @@ export async function handleOAuthCallback(req: Request) {
           hasEmail: !!userInfo.email,
           hasName: !!userInfo.name,
           hasSub: !!userInfo.sub,
+          hasNonce: !!userInfo.nonce,
         });
+
+        // Validate nonce from Chrome storage against nonce in ID token
+        if (userInfo.nonce) {
+          logger.info('Nonce found in ID token', { nonce: userInfo.nonce });
+
+          // For POST requests (from popup), validate against stored nonce
+          if (nonce) {
+            if (userInfo.nonce !== nonce) {
+              logger.error('Nonce mismatch - potential security issue', {
+                idTokenNonce: userInfo.nonce,
+                storedNonce: nonce,
+              });
+              return new Response('Nonce mismatch - potential security issue', {
+                status: 400,
+                headers: { ...corsHeaders },
+              });
+            }
+            logger.info('Nonce validation successful - nonces match', {
+              nonce: userInfo.nonce,
+            });
+          } else {
+            logger.warn(
+              'No nonce provided in request - cannot validate ID token nonce'
+            );
+          }
+        } else {
+          logger.warn(
+            'No nonce found in ID token - this may indicate a security issue'
+          );
+        }
       }
     }
 

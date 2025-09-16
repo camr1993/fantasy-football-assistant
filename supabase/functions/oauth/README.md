@@ -5,7 +5,7 @@ This Supabase Edge Function handles Yahoo OAuth 2.0 authentication for the Fanta
 ## Structure
 
 ```
-oath/
+oauth/
 ├── index.ts                    # Main entry point with routing
 ├── handlers/                   # Request handlers
 │   ├── oauth-callback.ts      # Handles OAuth callback from Yahoo
@@ -60,4 +60,4 @@ All logs are structured JSON with the following format:
 }
 ```
 
-View logs in the Supabase Dashboard under Functions → oath → Logs.
+View logs in the Supabase Dashboard under Functions → oauth → Logs.
