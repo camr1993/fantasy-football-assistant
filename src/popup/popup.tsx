@@ -62,7 +62,6 @@ function Popup() {
         }
       );
       const data = await response.json();
-      console.log('data', data);
 
       if (data.auth_url) {
         // Open OAuth flow in a new tab
@@ -106,7 +105,6 @@ function Popup() {
       );
 
       const data = await response.json();
-      console.log('Token exchange response:', data);
 
       if (data.success) {
         setUser(data.user);

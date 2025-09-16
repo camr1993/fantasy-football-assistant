@@ -15,7 +15,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "types": ["node", "vite/client", "deno"]
+    "types": ["node", "vite/client", "deno", "chrome"]
   },
   "include": [
     "src",
