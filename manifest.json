@@ -3,7 +3,7 @@
   "name": "Fantasy Assistant",
   "version": "0.1",
   "description": "Injects fantasy football tips into Yahoo.",
-  "permissions": ["scripting", "activeTab"],
+  "permissions": ["scripting", "activeTab", "tabs", "storage"],
   "background": {
     "service_worker": "background.js"
   },
