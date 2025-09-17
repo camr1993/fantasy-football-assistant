@@ -6,10 +6,6 @@ export interface User {
   created_at?: string;
 }
 
-export interface TestUsersResponse {
-  users: User[];
-}
-
 // API Error Response
 export interface ApiError {
   error: string;

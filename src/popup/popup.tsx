@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
-import { User } from '../types/api';
 import { apiClient } from '../api/client';
 import { tokenManager } from '../utils/tokenManager';
 
 function Popup() {
-  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -13,25 +11,8 @@ function Popup() {
   const [authCode, setAuthCode] = useState('');
 
   useEffect(() => {
-    getUsers();
     checkAuthStatus();
   }, []);
-
-  async function getUsers() {
-    setLoading(true);
-    setError(null);
-
-    const response = await apiClient.getTestUsers();
-
-    if (response.success && response.data) {
-      setUsers(response.data.users);
-    } else {
-      setError(response.error?.error || 'Failed to fetch users');
-      setUsers([]);
-    }
-
-    setLoading(false);
-  }
 
   async function checkAuthStatus() {
     // Check if user is already authenticated
@@ -319,17 +300,6 @@ function Popup() {
         )}
 
         <button onClick={() => alert('Test tip!')}>Test Tip</button>
-
-        {users.length > 0 && (
-          <div style={{ marginTop: '8px' }}>
-            <h4>Users:</h4>
-            {users.map((user) => (
-              <div key={user.id} style={{ fontSize: '12px' }}>
-                {user.name}
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
