@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { User } from '../types/api';
 import { apiClient } from '../api/client';
+import { tokenManager } from '../utils/tokenManager';
 
 function Popup() {
   const [users, setUsers] = useState<User[]>([]);
@@ -40,6 +41,34 @@ function Popup() {
       if (result.yahoo_user) {
         setUser(result.yahoo_user);
         setIsAuthenticated(true);
+
+        // Check if tokens are still valid and attempt refresh if needed
+        const hasValidTokens = await tokenManager.hasValidTokens();
+        if (!hasValidTokens) {
+          console.log('Tokens are expired, attempting to refresh...');
+          try {
+            // Attempt to refresh tokens
+            const accessToken = await tokenManager.getValidAccessToken();
+            if (!accessToken) {
+              console.log('Token refresh failed, signing out user');
+              signOut();
+              setError('Session expired. Please sign in again.');
+            } else {
+              console.log('Tokens refreshed successfully');
+              // Update user data with refreshed tokens
+              const updatedResult = await chrome.storage.local.get([
+                'yahoo_user',
+              ]);
+              if (updatedResult.yahoo_user) {
+                setUser(updatedResult.yahoo_user);
+              }
+            }
+          } catch (refreshError) {
+            console.error('Error refreshing tokens:', refreshError);
+            signOut();
+            setError('Session expired. Please sign in again.');
+          }
+        }
       }
     } catch (error) {
       console.error('Error checking auth status:', error);
@@ -157,9 +186,30 @@ function Popup() {
   }
 
   function signOut() {
-    chrome.storage.local.remove(['yahoo_user']);
+    tokenManager.clearTokens();
     setUser(null);
     setIsAuthenticated(false);
+  }
+
+  async function testYahooApi() {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await apiClient.getLeagues();
+
+      if (response.success) {
+        console.log('Yahoo API response:', response.data);
+        setError('Yahoo API call successful! Check console for data.');
+      } else {
+        setError(response.error?.error || 'Yahoo API call failed');
+      }
+    } catch (error) {
+      console.error('Yahoo API test error:', error);
+      setError('Failed to test Yahoo API');
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -249,7 +299,26 @@ function Popup() {
       )}
 
       <div style={{ marginTop: '16px' }}>
-        <button onClick={() => alert('Test tip!')}>Test</button>
+        {isAuthenticated && (
+          <button
+            onClick={testYahooApi}
+            disabled={loading}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#10b981',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              marginBottom: '8px',
+              width: '100%',
+            }}
+          >
+            {loading ? 'Testing...' : 'Test Yahoo API'}
+          </button>
+        )}
+
+        <button onClick={() => alert('Test tip!')}>Test Tip</button>
 
         {users.length > 0 && (
           <div style={{ marginTop: '8px' }}>
