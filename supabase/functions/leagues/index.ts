@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
     // Make Yahoo API call to get leagues (this will handle token refresh automatically)
     const response = await edgeTokenManager.makeYahooApiCall(
       userId,
-      'https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/games;game_keys=nfl/leagues'
+      'https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/games;game_keys=nfl/leagues?format=json'
     );
 
     if (!response.ok) {
@@ -47,6 +47,7 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           error: `Yahoo API error: ${response.status} ${response.statusText}`,
+          details: errorText,
         }),
         {
           status: response.status,
@@ -55,7 +56,36 @@ Deno.serve(async (req) => {
       );
     }
 
-    const data = await response.json();
+    // Check content type to handle both XML and JSON responses
+    const contentType = response.headers.get('content-type') || '';
+    let data;
+
+    if (contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      // If it's XML, try to parse it as JSON anyway (in case format=json didn't work)
+      const responseText = await response.text();
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        logger.error('Failed to parse response as JSON', {
+          contentType,
+          responseText: responseText.substring(0, 500), // Log first 500 chars
+          parseError: parseError.message,
+        });
+        timer.end();
+        return new Response(
+          JSON.stringify({
+            error: 'Yahoo API returned non-JSON response',
+            details: 'Expected JSON but received XML or other format',
+          }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+    }
     logger.info('Successfully fetched leagues', { userId });
 
     timer.end();
