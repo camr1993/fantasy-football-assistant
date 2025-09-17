@@ -23,7 +23,7 @@ export function handleOAuthInitiation() {
   authUrl.searchParams.set('client_id', YAHOO_CLIENT_ID);
   authUrl.searchParams.set('redirect_uri', REDIRECT_URI);
   authUrl.searchParams.set('response_type', 'code');
-  authUrl.searchParams.set('scope', 'openid profile email');
+  authUrl.searchParams.set('scope', 'openid profile email fspt-r');
   authUrl.searchParams.set('state', 'fantasy-football-assistant');
   authUrl.searchParams.set('nonce', nonce);
 

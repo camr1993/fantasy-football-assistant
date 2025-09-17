@@ -2,13 +2,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { logger, performance } from '../oauth/utils/logger.ts';
 import { edgeTokenManager } from '../oauth/utils/tokenManager.ts';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers':
-    'authorization, x-client-info, x-user-id, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, PUT, DELETE',
-};
+import { corsHeaders } from '../oauth/utils/constants.ts';
 
 Deno.serve(async (req) => {
   const timer = performance.start('leagues_request');
@@ -38,7 +32,7 @@ Deno.serve(async (req) => {
     // Make Yahoo API call to get leagues (this will handle token refresh automatically)
     const response = await edgeTokenManager.makeYahooApiCall(
       userId,
-      'https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/games/leagues'
+      'https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/games;game_keys=nfl/leagues'
     );
 
     if (!response.ok) {
