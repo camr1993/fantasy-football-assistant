@@ -1,5 +1,3 @@
-import { supabase } from '../supabaseClient';
-
 export interface TokenData {
   access_token: string;
   refresh_token: string;
@@ -31,41 +29,34 @@ class TokenManager {
    */
   async getValidAccessToken(): Promise<string | null> {
     try {
-      // Get current user from Supabase
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser();
+      // Get user data from Chrome storage instead of Supabase auth
+      const result = await chrome.storage.local.get(['yahoo_user']);
+      const user = result.yahoo_user as YahooUser;
 
-      if (error || !user) {
-        console.error('No authenticated user found:', error);
+      if (!user) {
+        console.error('No user found in Chrome storage');
         return null;
       }
 
-      const userMetadata = user.user_metadata as YahooUser;
-
-      if (
-        !userMetadata?.yahoo_access_token ||
-        !userMetadata?.yahoo_refresh_token
-      ) {
-        console.error('No Yahoo tokens found in user metadata');
+      if (!user?.yahoo_access_token || !user?.yahoo_refresh_token) {
+        console.error('No Yahoo tokens found in user data');
         return null;
       }
 
       // Check if token is expired or about to expire (refresh 5 minutes before expiry)
-      const expiresAt = new Date(userMetadata.yahoo_token_expires_at);
+      const expiresAt = new Date(user.yahoo_token_expires_at);
       const now = new Date();
       const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
 
       if (expiresAt <= fiveMinutesFromNow) {
         console.log('Token is expired or about to expire, refreshing...');
         const refreshedTokens = await this.refreshTokens(
-          userMetadata.yahoo_refresh_token
+          user.yahoo_refresh_token
         );
         return refreshedTokens?.access_token || null;
       }
 
-      return userMetadata.yahoo_access_token;
+      return user.yahoo_access_token;
     } catch (error) {
       console.error('Error getting valid access token:', error);
       return null;
@@ -164,26 +155,20 @@ class TokenManager {
    */
   async hasValidTokens(): Promise<boolean> {
     try {
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser();
+      // Get user data from Chrome storage instead of Supabase auth
+      const result = await chrome.storage.local.get(['yahoo_user']);
+      const user = result.yahoo_user as YahooUser;
 
-      if (error || !user) {
+      if (!user) {
         return false;
       }
 
-      const userMetadata = user.user_metadata as YahooUser;
-
-      if (
-        !userMetadata?.yahoo_access_token ||
-        !userMetadata?.yahoo_refresh_token
-      ) {
+      if (!user?.yahoo_access_token || !user?.yahoo_refresh_token) {
         return false;
       }
 
       // Check if token is expired
-      const expiresAt = new Date(userMetadata.yahoo_token_expires_at);
+      const expiresAt = new Date(user.yahoo_token_expires_at);
       const now = new Date();
 
       return expiresAt > now;

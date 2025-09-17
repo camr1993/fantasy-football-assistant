@@ -119,19 +119,21 @@ class ApiClient {
   }
 
   /**
-   * Get current user ID from Supabase
+   * Get current user ID from Chrome storage
    */
   private async getCurrentUserId(): Promise<string> {
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser();
+    try {
+      const result = await chrome.storage.local.get(['yahoo_user']);
+      const user = result.yahoo_user;
 
-    if (error || !user) {
+      if (!user || !user.id) {
+        throw new Error('No authenticated user found');
+      }
+
+      return user.id;
+    } catch (error) {
       throw new Error('No authenticated user found');
     }
-
-    return user.id;
   }
 }
 

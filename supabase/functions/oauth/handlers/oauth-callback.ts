@@ -315,7 +315,7 @@ export async function handleOAuthCallback(req: Request) {
       });
     }
 
-    // Return success response with user info
+    // Return success response with user info and tokens
     timer.end();
     return new Response(
       JSON.stringify({
@@ -325,6 +325,10 @@ export async function handleOAuthCallback(req: Request) {
           id: user.user?.id,
           email: user.user?.email,
           name: user.user?.user_metadata?.name,
+          yahoo_access_token: user.user?.user_metadata?.yahoo_access_token,
+          yahoo_refresh_token: user.user?.user_metadata?.yahoo_refresh_token,
+          yahoo_token_expires_at:
+            user.user?.user_metadata?.yahoo_token_expires_at,
         },
       }),
       {
