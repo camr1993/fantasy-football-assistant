@@ -15,8 +15,13 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "types": ["node", "vite/client", "deno"]
+    "types": ["node", "vite/client", "deno", "chrome"]
   },
-  "include": ["src", "vite.config.ts", "supabase/functions/**/*.ts"],
+  "include": [
+    "src",
+    "src/types/**/*.d.ts",
+    "vite.config.ts",
+    "supabase/functions/**/*.ts"
+  ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
