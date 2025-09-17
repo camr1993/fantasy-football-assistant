@@ -42,7 +42,7 @@ class EdgeTokenManager {
         return null;
       }
 
-      const userMetadata = user.user_metadata as YahooUser;
+      const userMetadata = user.user.user_metadata as YahooUser;
 
       if (
         !userMetadata?.yahoo_access_token ||
@@ -208,7 +208,7 @@ class EdgeTokenManager {
         return false;
       }
 
-      const userMetadata = user.user_metadata as YahooUser;
+      const userMetadata = user.user.user_metadata as YahooUser;
 
       if (
         !userMetadata?.yahoo_access_token ||

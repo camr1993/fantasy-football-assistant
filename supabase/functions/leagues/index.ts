@@ -1,8 +1,14 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { logger, performance } from '../oauth/utils/logger.ts';
-import { corsHeaders } from '../oauth/utils/constants.ts';
 import { edgeTokenManager } from '../oauth/utils/tokenManager.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, x-user-id, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, PUT, DELETE',
+};
 
 Deno.serve(async (req) => {
   const timer = performance.start('leagues_request');
