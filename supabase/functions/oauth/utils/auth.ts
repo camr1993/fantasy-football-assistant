@@ -14,28 +14,19 @@ export interface AuthenticatedUser {
  * This is the single authentication function used by all edge functions.
  *
  * Flow:
- * 1. Client sends request with Authorization: Bearer <yahoo-access-token>
+ * 1. Client sends request with Yahoo token in request body
  * 2. Server validates Yahoo token with Yahoo's API
  * 3. If token is expired/invalid, returns 401
  * 4. Client handles 401 by refreshing tokens and retrying
  */
-export async function authenticateRequest(req: Request): Promise<{
+export async function authenticateRequest(
+  req: Request,
+  yahooToken: string
+): Promise<{
   user: AuthenticatedUser | null;
   error: string | null;
 }> {
   try {
-    // Get the Authorization header
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader) {
-      return { user: null, error: 'Missing authorization header' };
-    }
-
-    // Extract the Yahoo access token
-    const yahooToken = authHeader.replace('Bearer ', '');
-    if (!yahooToken) {
-      return { user: null, error: 'Invalid authorization header format' };
-    }
-
     // Validate the Yahoo access token by calling Yahoo's userinfo endpoint
     const userInfoResponse = await fetch(
       'https://api.login.yahoo.com/openid/v1/userinfo',

@@ -1,4 +1,5 @@
 import { ApiResponse } from '../types/api';
+import { supabase } from '../supabaseClient';
 
 class ApiClient {
   /**
@@ -14,23 +15,19 @@ class ApiClient {
         };
       }
 
-      const response = await fetch('/functions/v1/leagues', {
-        method: 'POST',
+      const { data, error } = await supabase.functions.invoke('leagues', {
         headers: {
-          Authorization: `Bearer ${yahooToken}`,
-          'Content-Type': 'application/json',
+          'X-Yahoo-Token': yahooToken,
         },
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
+      if (error) {
         return {
           success: false,
-          error: { error: errorData.error || 'API call failed' },
+          error: { error: error.message || 'API call failed' },
         };
       }
 
-      const data = await response.json();
       return {
         success: true,
         data: data,
@@ -58,23 +55,19 @@ class ApiClient {
         };
       }
 
-      const response = await fetch('/functions/v1/teams', {
-        method: 'POST',
+      const { data, error } = await supabase.functions.invoke('teams', {
         headers: {
-          Authorization: `Bearer ${yahooToken}`,
-          'Content-Type': 'application/json',
+          'X-Yahoo-Token': yahooToken,
         },
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
+      if (error) {
         return {
           success: false,
-          error: { error: errorData.error || 'API call failed' },
+          error: { error: error.message || 'API call failed' },
         };
       }
 
-      const data = await response.json();
       return {
         success: true,
         data: data,

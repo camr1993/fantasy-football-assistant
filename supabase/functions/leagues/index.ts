@@ -22,15 +22,25 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Authenticate the request
-    const { user, error: authError } = await authenticateRequest(req);
+    // Get Yahoo token from custom header
+    const yahooAccessToken = req.headers.get('x-yahoo-token');
+
+    if (!yahooAccessToken) {
+      logger.warn('No Yahoo access token provided');
+      timer.end();
+      return createErrorResponse('Yahoo access token required', 401);
+    }
+
+    // Authenticate the request using the Yahoo token
+    const { user, error: authError } = await authenticateRequest(
+      req,
+      yahooAccessToken
+    );
     if (!user || authError) {
       logger.warn('Authentication failed', { error: authError });
       timer.end();
       return createErrorResponse(authError || 'Authentication required', 401);
     }
-
-    const yahooAccessToken = user.user_metadata.yahoo_access_token;
 
     // Make Yahoo API call to get leagues
     const response = await makeYahooApiCall(
@@ -44,7 +54,7 @@ Deno.serve(async (req) => {
         status: response.status,
         statusText: response.statusText,
         errorText,
-        userId,
+        userId: user.id,
       });
       timer.end();
       return new Response(
@@ -89,7 +99,7 @@ Deno.serve(async (req) => {
         );
       }
     }
-    logger.info('Successfully fetched leagues', { userId });
+    logger.info('Successfully fetched leagues', { userId: user.id });
 
     timer.end();
     return new Response(
