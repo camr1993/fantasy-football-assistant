@@ -1,51 +1,36 @@
-import { supabase } from '../supabaseClient';
 import { ApiResponse } from '../types/api';
-import { tokenManager } from '../utils/tokenManager';
 
 class ApiClient {
-  /**
-   * Make a Yahoo API call with automatic token refresh
-   */
-  async makeYahooApiCall(
-    url: string,
-    options: RequestInit = {}
-  ): Promise<Response> {
-    const accessToken = await tokenManager.getValidAccessToken();
-
-    if (!accessToken) {
-      throw new Error('No valid access token available');
-    }
-
-    const headers = {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      ...options.headers,
-    };
-
-    return fetch(url, {
-      ...options,
-      headers,
-    });
-  }
-
   /**
    * Get user's fantasy leagues via edge function
    */
   async getLeagues(): Promise<ApiResponse<any>> {
     try {
-      const { data, error } = await supabase.functions.invoke('leagues', {
-        headers: {
-          'x-user-id': await this.getCurrentUserId(),
-        },
-      });
-
-      if (error) {
+      const yahooToken = await this.getYahooAccessToken();
+      if (!yahooToken) {
         return {
           success: false,
-          error: { error: error.message || 'Unknown error' },
+          error: { error: 'No valid Yahoo access token' },
         };
       }
 
+      const response = await fetch('/functions/v1/leagues', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${yahooToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        return {
+          success: false,
+          error: { error: errorData.error || 'API call failed' },
+        };
+      }
+
+      const data = await response.json();
       return {
         success: true,
         data: data,
@@ -65,19 +50,31 @@ class ApiClient {
    */
   async getTeams(): Promise<ApiResponse<any>> {
     try {
-      const { data, error } = await supabase.functions.invoke('teams', {
-        headers: {
-          'x-user-id': await this.getCurrentUserId(),
-        },
-      });
-
-      if (error) {
+      const yahooToken = await this.getYahooAccessToken();
+      if (!yahooToken) {
         return {
           success: false,
-          error: { error: error.message || 'Unknown error' },
+          error: { error: 'No valid Yahoo access token' },
         };
       }
 
+      const response = await fetch('/functions/v1/teams', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${yahooToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        return {
+          success: false,
+          error: { error: errorData.error || 'API call failed' },
+        };
+      }
+
+      const data = await response.json();
       return {
         success: true,
         data: data,
@@ -93,20 +90,22 @@ class ApiClient {
   }
 
   /**
-   * Get current user ID from Chrome storage
+   * Get Yahoo access token from Chrome storage
    */
-  private async getCurrentUserId(): Promise<string> {
+  private async getYahooAccessToken(): Promise<string | null> {
     try {
       const result = await chrome.storage.local.get(['yahoo_user']);
       const user = result.yahoo_user;
 
-      if (!user || !user.id) {
-        throw new Error('No authenticated user found');
+      if (!user || !user.yahoo_access_token) {
+        console.error('No Yahoo access token found');
+        return null;
       }
 
-      return user.id;
+      return user.yahoo_access_token;
     } catch (error) {
-      throw new Error('No authenticated user found');
+      console.error('Error getting Yahoo access token:', error);
+      return null;
     }
   }
 }

@@ -2,7 +2,11 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { logger, performance } from '../oauth/utils/logger.ts';
 import { corsHeaders } from '../oauth/utils/constants.ts';
-import { edgeTokenManager } from '../oauth/utils/tokenManager.ts';
+import { makeYahooApiCall } from '../oauth/utils/yahooApi.ts';
+import {
+  authenticateRequest,
+  createErrorResponse,
+} from '../oauth/utils/auth.ts';
 
 Deno.serve(async (req) => {
   const timer = performance.start('teams_request');
@@ -18,21 +22,20 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get user ID from request headers
-    const userId = req.headers.get('x-user-id');
-    if (!userId) {
-      logger.warn('Missing user ID in request headers');
+    // Authenticate the request
+    const { user, error: authError } = await authenticateRequest(req);
+    if (!user || authError) {
+      logger.warn('Authentication failed', { error: authError });
       timer.end();
-      return new Response(JSON.stringify({ error: 'User ID is required' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return createErrorResponse(authError || 'Authentication required', 401);
     }
 
-    // Make Yahoo API call to get teams (this will handle token refresh automatically)
-    const response = await edgeTokenManager.makeYahooApiCall(
-      userId,
-      'https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/games/teams'
+    const yahooAccessToken = user.user_metadata.yahoo_access_token;
+
+    // Make Yahoo API call to get teams
+    const response = await makeYahooApiCall(
+      yahooAccessToken,
+      'https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/games;game_keys=nfl/teams?format=json'
     );
 
     if (!response.ok) {

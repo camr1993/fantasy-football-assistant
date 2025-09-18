@@ -1,23 +1,56 @@
-// Follow this setup guide to integrate the Deno language server with your editor:
-// https://deno.land/manual/getting_started/setup_your_environment
-// This enables autocomplete, go to definition, etc.
-
 // Setup type definitions for built-in Supabase Runtime APIs
-import "jsr:@supabase/functions-js/edge-runtime.d.ts"
-
-console.log("Hello from Functions!")
+import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
+import { logger, performance } from '../oauth/utils/logger.ts';
+import { corsHeaders } from '../oauth/utils/constants.ts';
+import {
+  authenticateRequest,
+  createErrorResponse,
+} from '../oauth/utils/auth.ts';
 
 Deno.serve(async (req) => {
-  const { name } = await req.json()
-  const data = {
-    message: `Hello ${name}!`,
-  }
+  const timer = performance.start('tips_request');
 
-  return new Response(
-    JSON.stringify(data),
-    { headers: { "Content-Type": "application/json" } },
-  )
-})
+  try {
+    // Handle CORS preflight requests
+    if (req.method === 'OPTIONS') {
+      logger.info('Handling CORS preflight request');
+      timer.end();
+      return new Response(null, {
+        status: 200,
+        headers: corsHeaders,
+      });
+    }
+
+    // Authenticate the request
+    const { user, error: authError } = await authenticateRequest(req);
+    if (!user || authError) {
+      logger.warn('Authentication failed', { error: authError });
+      timer.end();
+      return createErrorResponse(authError || 'Authentication required', 401);
+    }
+
+    // TODO: Implement actual tips functionality
+    const data = {
+      message: `Hello ${user.email}! Tips functionality coming soon.`,
+      user: {
+        id: user.id,
+        email: user.email,
+      },
+    };
+
+    timer.end();
+    return new Response(JSON.stringify(data), {
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json',
+      },
+    });
+  } catch (error) {
+    logger.error('Error in tips function', error);
+    timer.end();
+    return createErrorResponse('Internal server error', 500);
+  }
+});
 
 /* To invoke locally:
 

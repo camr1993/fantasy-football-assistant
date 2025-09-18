@@ -11,17 +11,56 @@ export async function handleTokenRefresh(req: Request) {
   const timer = performance.start('token_refresh');
 
   try {
-    const { refresh_token } = await req.json();
+    const { refresh_token, user_id } = await req.json();
 
     if (!refresh_token) {
       logger.warn('No refresh token provided');
-      return new Response('Refresh token is required', {
+      return new Response(
+        JSON.stringify({ error: 'Refresh token is required' }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    if (!user_id) {
+      logger.warn('No user ID provided');
+      return new Response(JSON.stringify({ error: 'User ID is required' }), {
         status: 400,
-        headers: { ...corsHeaders },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    logger.info('Refreshing token', { hasRefreshToken: !!refresh_token });
+    // Verify the user exists and has the provided refresh token
+    const { data: user, error: userError } =
+      await supabase.auth.admin.getUserById(user_id);
+
+    if (userError || !user) {
+      logger.warn('User not found for token refresh', {
+        user_id,
+        error: userError,
+      });
+      return new Response(JSON.stringify({ error: 'User not found' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Verify the refresh token matches what we have stored
+    const userMetadata = user.user.user_metadata;
+    if (userMetadata?.yahoo_refresh_token !== refresh_token) {
+      logger.warn('Refresh token mismatch', { user_id });
+      return new Response(JSON.stringify({ error: 'Invalid refresh token' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    logger.info('Refreshing token', {
+      hasRefreshToken: !!refresh_token,
+      userId: user_id,
+    });
 
     // Exchange refresh token for new access token
     const tokenResponse = await fetch(
@@ -42,10 +81,13 @@ export async function handleTokenRefresh(req: Request) {
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text();
       logger.error('Token refresh failed', { errorText });
-      return new Response(`Token refresh failed: ${errorText}`, {
-        status: 400,
-        headers: { ...corsHeaders },
-      });
+      return new Response(
+        JSON.stringify({ error: `Token refresh failed: ${errorText}` }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     }
 
     const tokenData = await tokenResponse.json();
@@ -55,27 +97,27 @@ export async function handleTokenRefresh(req: Request) {
     });
 
     // Update user's tokens in Supabase
-    const { data: user, error: userError } =
-      await supabase.auth.admin.updateUserById(
-        req.headers.get('x-user-id') || '',
-        {
-          user_metadata: {
-            yahoo_access_token: tokenData.access_token,
-            yahoo_refresh_token: tokenData.refresh_token,
-            yahoo_token_expires_at: new Date(
-              Date.now() + tokenData.expires_in * 1000
-            ).toISOString(),
-          },
-        }
-      );
+    const { data: updatedUser, error: updateError } =
+      await supabase.auth.admin.updateUserById(user_id, {
+        user_metadata: {
+          ...userMetadata,
+          yahoo_access_token: tokenData.access_token,
+          yahoo_refresh_token: tokenData.refresh_token,
+          yahoo_token_expires_at: new Date(
+            Date.now() + tokenData.expires_in * 1000
+          ).toISOString(),
+        },
+      });
 
-    if (userError) {
-      logger.error('Failed to update user tokens', { error: userError });
+    if (updateError) {
+      logger.error('Failed to update user tokens', { error: updateError });
       return new Response(
-        `Failed to update user tokens: ${userError.message}`,
+        JSON.stringify({
+          error: `Failed to update user tokens: ${updateError.message}`,
+        }),
         {
           status: 400,
-          headers: { ...corsHeaders },
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
       );
     }
