@@ -1,8 +1,9 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import { logger, performance } from '../oauth/utils/logger.ts';
-import { edgeTokenManager } from '../oauth/utils/tokenManager.ts';
-import { corsHeaders } from '../oauth/utils/constants.ts';
+import { logger, performance } from '../utils/logger.ts';
+import { makeYahooApiCall } from '../utils/yahooApi.ts';
+import { corsHeaders } from '../utils/constants.ts';
+import { authenticateRequest, createErrorResponse } from '../utils/auth.ts';
 
 Deno.serve(async (req) => {
   const timer = performance.start('leagues_request');
@@ -18,20 +19,29 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get user ID from request headers
-    const userId = req.headers.get('x-user-id');
-    if (!userId) {
-      logger.warn('Missing user ID in request headers');
+    // Get Yahoo token from custom header
+    const yahooAccessToken = req.headers.get('x-yahoo-token');
+
+    if (!yahooAccessToken) {
+      logger.warn('No Yahoo access token provided');
       timer.end();
-      return new Response(JSON.stringify({ error: 'User ID is required' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return createErrorResponse('Yahoo access token required', 401);
     }
 
-    // Make Yahoo API call to get leagues (this will handle token refresh automatically)
-    const response = await edgeTokenManager.makeYahooApiCall(
-      userId,
+    // Authenticate the request using the Yahoo token
+    const { user, error: authError } = await authenticateRequest(
+      req,
+      yahooAccessToken
+    );
+    if (!user || authError) {
+      logger.warn('Authentication failed', { error: authError });
+      timer.end();
+      return createErrorResponse(authError || 'Authentication required', 401);
+    }
+
+    // Make Yahoo API call to get leagues
+    const response = await makeYahooApiCall(
+      yahooAccessToken,
       'https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/games;game_keys=nfl/leagues?format=json'
     );
 
@@ -41,7 +51,7 @@ Deno.serve(async (req) => {
         status: response.status,
         statusText: response.statusText,
         errorText,
-        userId,
+        userId: user.id,
       });
       timer.end();
       return new Response(
@@ -86,7 +96,7 @@ Deno.serve(async (req) => {
         );
       }
     }
-    logger.info('Successfully fetched leagues', { userId });
+    logger.info('Successfully fetched leagues', { userId: user.id });
 
     timer.end();
     return new Response(

@@ -1,9 +1,6 @@
-import { logger } from '../utils/logger.ts';
-import {
-  corsHeaders,
-  YAHOO_CLIENT_ID,
-  REDIRECT_URI,
-} from '../utils/constants.ts';
+import { logger } from '../../utils/logger.ts';
+import { YAHOO_CLIENT_ID, REDIRECT_URI } from '../utils/constants.ts';
+import { corsHeaders } from '../../utils/constants.ts';
 import { generateNonce } from '../utils/nonce.ts';
 
 // Handle OAuth initiation

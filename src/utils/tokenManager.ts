@@ -86,16 +86,25 @@ class TokenManager {
     refreshToken: string
   ): Promise<TokenData | null> {
     try {
+      // Get user ID from local storage for the refresh call
+      const result = await chrome.storage.local.get(['yahoo_user']);
+      const user = result.yahoo_user;
+
+      if (!user || !user.id) {
+        console.error('No user ID found in local storage for token refresh');
+        return null;
+      }
+
       const response = await fetch(
         'https://gauanzpirzdhbfbctlkg.supabase.co/functions/v1/oauth/refresh',
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
           },
           body: JSON.stringify({
             refresh_token: refreshToken,
+            user_id: user.id,
           }),
         }
       );
