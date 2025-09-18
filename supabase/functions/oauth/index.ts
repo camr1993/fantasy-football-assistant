@@ -1,5 +1,5 @@
-import { logger, performance } from './utils/logger.ts';
-import { corsHeaders } from './utils/constants.ts';
+import { logger, performance } from '../utils/logger.ts';
+import { corsHeaders } from '../utils/constants.ts';
 import { handleOAuthCallback } from './handlers/oauth-callback.ts';
 import { handleOAuthInitiation } from './handlers/oauth-initiation.ts';
 import { handleTokenRefresh } from './handlers/token-refresh.ts';

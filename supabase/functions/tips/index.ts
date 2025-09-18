@@ -1,11 +1,8 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import { logger, performance } from '../oauth/utils/logger.ts';
-import { corsHeaders } from '../oauth/utils/constants.ts';
-import {
-  authenticateRequest,
-  createErrorResponse,
-} from '../oauth/utils/auth.ts';
+import { logger, performance } from '../utils/logger.ts';
+import { corsHeaders } from '../utils/constants.ts';
+import { authenticateRequest, createErrorResponse } from '../utils/auth.ts';
 
 Deno.serve(async (req) => {
   const timer = performance.start('tips_request');

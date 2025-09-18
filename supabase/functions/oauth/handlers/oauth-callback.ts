@@ -1,12 +1,12 @@
-import { logger, performance } from '../utils/logger.ts';
+import { logger, performance } from '../../utils/logger.ts';
 import { parseJwt } from '../utils/jwt.ts';
-import { supabase } from '../utils/supabase.ts';
+import { supabase } from '../../utils/supabase.ts';
 import {
-  corsHeaders,
   YAHOO_CLIENT_ID,
   YAHOO_CLIENT_SECRET,
   REDIRECT_URI,
 } from '../utils/constants.ts';
+import { corsHeaders } from '../../utils/constants.ts';
 // Nonce validation now done by comparing Chrome storage nonce with ID token nonce
 
 // Handle OAuth callback from Yahoo

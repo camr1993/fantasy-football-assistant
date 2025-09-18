@@ -1,10 +1,7 @@
-import { logger, performance } from '../utils/logger.ts';
-import { supabase } from '../utils/supabase.ts';
-import {
-  corsHeaders,
-  YAHOO_CLIENT_ID,
-  YAHOO_CLIENT_SECRET,
-} from '../utils/constants.ts';
+import { logger, performance } from '../../utils/logger.ts';
+import { supabase } from '../../utils/supabase.ts';
+import { YAHOO_CLIENT_ID, YAHOO_CLIENT_SECRET } from '../utils/constants.ts';
+import { corsHeaders } from '../../utils/constants.ts';
 
 // Handle token refresh
 export async function handleTokenRefresh(req: Request) {
