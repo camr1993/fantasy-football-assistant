@@ -193,6 +193,60 @@ function Popup() {
     }
   }
 
+  async function testTokenRefresh() {
+    try {
+      setLoading(true);
+      setError(null);
+
+      console.log('Testing token refresh...');
+
+      // Get current token info before refresh
+      const result = await chrome.storage.local.get(['yahoo_user']);
+      const user = result.yahoo_user;
+
+      if (!user) {
+        setError('No user found. Please sign in first.');
+        return;
+      }
+
+      console.log('Current token expires at:', user.yahoo_token_expires_at);
+      console.log(
+        'Current access token (first 20 chars):',
+        user.yahoo_access_token?.substring(0, 20) + '...'
+      );
+
+      // Force token refresh by calling getValidAccessToken
+      const newAccessToken = await tokenManager.getValidAccessToken();
+
+      if (newAccessToken) {
+        // Get updated user data to show the new token
+        const updatedResult = await chrome.storage.local.get(['yahoo_user']);
+        const updatedUser = updatedResult.yahoo_user;
+
+        console.log(
+          'New token expires at:',
+          updatedUser.yahoo_token_expires_at
+        );
+        console.log(
+          'New access token (first 20 chars):',
+          updatedUser.yahoo_access_token?.substring(0, 20) + '...'
+        );
+
+        setError('Token refresh successful! Check console for details.');
+
+        // Update the user state to reflect any changes
+        setUser(updatedUser);
+      } else {
+        setError('Token refresh failed. Check console for details.');
+      }
+    } catch (error) {
+      console.error('Token refresh test error:', error);
+      setError('Failed to test token refresh');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div style={{ padding: '1rem', width: '300px' }}>
       <h3>Fantasy Assistant</h3>
@@ -281,22 +335,41 @@ function Popup() {
 
       <div style={{ marginTop: '16px' }}>
         {isAuthenticated && (
-          <button
-            onClick={testYahooApi}
-            disabled={loading}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: '#10b981',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              marginBottom: '8px',
-              width: '100%',
-            }}
-          >
-            {loading ? 'Testing...' : 'Test Yahoo API'}
-          </button>
+          <>
+            <button
+              onClick={testYahooApi}
+              disabled={loading}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#10b981',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                marginBottom: '8px',
+                width: '100%',
+              }}
+            >
+              {loading ? 'Testing...' : 'Test Yahoo API'}
+            </button>
+
+            <button
+              onClick={testTokenRefresh}
+              disabled={loading}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#f59e0b',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                marginBottom: '8px',
+                width: '100%',
+              }}
+            >
+              {loading ? 'Refreshing...' : 'Test Token Refresh'}
+            </button>
+          </>
         )}
 
         <button onClick={() => alert('Test tip!')}>Test Tip</button>
