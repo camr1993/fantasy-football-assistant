@@ -30,18 +30,34 @@ export async function handleTokenRefresh(req: Request) {
     }
 
     // Verify the user exists and has the provided refresh token
-    const { data: user, error: userError } =
+    // First try to get user by ID (in case it's a Supabase user ID)
+    let { data: user, error: userError } =
       await supabase.auth.admin.getUserById(user_id);
 
+    // If not found by ID, try to find by yahoo_id
     if (userError || !user) {
-      logger.warn('User not found for token refresh', {
+      logger.info('User not found by ID, trying to find by yahoo_id', {
         user_id,
         error: userError,
       });
-      return new Response(JSON.stringify({ error: 'User not found' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+
+      const { data: yahooUserData, error: yahooSearchError } =
+        await supabase.rpc('get_user_by_yahoo_id', {
+          yahoo_user_id: user_id,
+        });
+
+      if (yahooSearchError || !yahooUserData || yahooUserData.length === 0) {
+        logger.warn('User not found for token refresh', {
+          user_id,
+          yahoo_error: yahooSearchError,
+        });
+        return new Response(JSON.stringify({ error: 'User not found' }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      user = yahooUserData[0];
     }
 
     // Verify the refresh token matches what we have stored
@@ -94,8 +110,9 @@ export async function handleTokenRefresh(req: Request) {
     });
 
     // Update user's tokens in Supabase
+    const actualUserId = user.user?.id || user_id;
     const { data: updatedUser, error: updateError } =
-      await supabase.auth.admin.updateUserById(user_id, {
+      await supabase.auth.admin.updateUserById(actualUserId, {
         user_metadata: {
           ...userMetadata,
           yahoo_access_token: tokenData.access_token,

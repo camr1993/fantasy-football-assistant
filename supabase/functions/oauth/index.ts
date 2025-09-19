@@ -64,21 +64,9 @@ Deno.serve(async (req) => {
     return handleOAuthCallback(req);
   }
 
-  // Handle token refresh (requires auth header)
+  // Handle token refresh (no auth header required - uses refresh token for auth)
   if (path.endsWith('/refresh')) {
     logger.info('Handling token refresh');
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader) {
-      logger.warn('Missing authorization header for /refresh route');
-      timer.end();
-      return new Response(
-        JSON.stringify({ code: 401, message: 'Missing authorization header' }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
-    }
     return handleTokenRefresh(req);
   }
 
