@@ -251,14 +251,14 @@ function Popup() {
       }
 
       const teams =
-        teamsResponse.data?.fantasy_content?.users?.[0]?.user?.[1]?.games?.[0]
-          ?.game?.[1]?.teams;
+        teamsResponse?.data?.data?.fantasy_content?.users?.[0]?.user?.[1]
+          ?.games?.[0]?.game?.[1]?.teams;
       if (!teams || teams.length === 0) {
         setError('No teams found');
         return;
       }
 
-      const teamKey = teams[0].team?.[0]?.team_key;
+      const teamKey = teams[0].team?.[0]?.[0]?.team_key;
       if (!teamKey) {
         setError('No team key found');
         return;
