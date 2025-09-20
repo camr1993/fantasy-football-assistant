@@ -52,13 +52,31 @@ Deno.serve(async (req) => {
       return createErrorResponse('league_key is required in request body', 400);
     }
 
-    // Build the API URL for transactions
-    let transactionsUrl = `https://fantasysports.yahooapis.com/fantasy/v2/league/${leagueKey}/transactions;count=${count}`;
+    // Build the API URL for transactions - start with basic endpoint
+    let transactionsUrl = `https://fantasysports.yahooapis.com/fantasy/v2/league/${leagueKey}/transactions`;
 
-    if (transactionType !== 'all') {
-      transactionsUrl += `;type=${transactionType}`;
+    // Add count parameter
+    if (count && count !== '25') {
+      transactionsUrl += `;count=${count}`;
     }
 
+    // Add type filter - use 'types' parameter for multiple types
+    if (transactionType !== 'all') {
+      // Map single type to valid Yahoo API types
+      const typeMapping: { [key: string]: string } = {
+        add: 'add',
+        drop: 'drop',
+        trade: 'trade',
+        commish: 'commish',
+        waiver: 'waiver',
+      };
+
+      if (typeMapping[transactionType]) {
+        transactionsUrl += `;type=${typeMapping[transactionType]}`;
+      }
+    }
+
+    // Add team filter
     if (teamKey) {
       transactionsUrl += `;team_key=${teamKey}`;
     }
@@ -66,9 +84,10 @@ Deno.serve(async (req) => {
     transactionsUrl += '?format=json';
 
     // Also fetch pending trades if transaction type includes trades
+    // Note: pending_trade requires a team_key parameter
     let pendingTradesUrl = '';
-    if (transactionType === 'all' || transactionType === 'trade') {
-      pendingTradesUrl = `https://fantasysports.yahooapis.com/fantasy/v2/league/${leagueKey}/transactions;type=pending_trade?format=json`;
+    if ((transactionType === 'all' || transactionType === 'trade') && teamKey) {
+      pendingTradesUrl = `https://fantasysports.yahooapis.com/fantasy/v2/league/${leagueKey}/transactions;type=pending_trade;team_key=${teamKey}?format=json`;
     }
 
     // Make API calls
@@ -82,15 +101,26 @@ Deno.serve(async (req) => {
     // Check if any API call failed
     const failedResponses = responses.filter((response) => !response.ok);
     if (failedResponses.length > 0) {
-      const errors = failedResponses.map(
-        (response, index) =>
-          `API call ${index + 1}: ${response.status} ${response.statusText}`
-      );
+      const errors = [];
+      for (let i = 0; i < failedResponses.length; i++) {
+        const response = failedResponses[i];
+        let errorText = '';
+        try {
+          errorText = await response.text();
+        } catch (e) {
+          errorText = 'Could not read error response';
+        }
+        errors.push(
+          `API call ${i + 1}: ${response.status} ${response.statusText} - ${errorText}`
+        );
+      }
 
       logger.error('Yahoo API calls failed', {
         errors,
         userId: user.id,
         leagueKey,
+        transactionsUrl,
+        pendingTradesUrl,
       });
       timer.end();
       return new Response(
@@ -114,8 +144,12 @@ Deno.serve(async (req) => {
       userId: user.id,
       leagueKey,
       transactionType,
+      teamKey,
       transactionsCount:
         transactionsData?.fantasy_content?.league?.[1]?.transactions?.length ||
+        0,
+      pendingTradesCount:
+        pendingTradesData?.fantasy_content?.league?.[1]?.transactions?.length ||
         0,
     });
 
