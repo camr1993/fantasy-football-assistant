@@ -60,30 +60,20 @@ Deno.serve(async (req) => {
 
     statsUrl += '?format=json';
 
-    // Also fetch injury data
-    const injuryUrl = `https://fantasysports.yahooapis.com/fantasy/v2/league/${leagueKey}/players;out=injury;week=${week}?format=json`;
+    // Make single API call to get all player data including injury/status info
+    const statsResponse = await makeYahooApiCall(yahooAccessToken, statsUrl);
 
-    // Make parallel API calls
-    const [statsResponse, injuryResponse] = await Promise.all([
-      makeYahooApiCall(yahooAccessToken, statsUrl),
-      makeYahooApiCall(yahooAccessToken, injuryUrl),
-    ]);
-
-    // Check if any API call failed
-    if (!statsResponse.ok || !injuryResponse.ok) {
-      const errors = [];
-      if (!statsResponse.ok) errors.push(`Stats: ${statsResponse.status}`);
-      if (!injuryResponse.ok) errors.push(`Injury: ${injuryResponse.status}`);
-
-      logger.error('Yahoo API calls failed', {
-        errors,
+    // Check if API call failed
+    if (!statsResponse.ok) {
+      logger.error('Yahoo API call failed', {
+        error: `Stats: ${statsResponse.status}`,
         userId: user.id,
         leagueKey,
       });
       timer.end();
       return new Response(
         JSON.stringify({
-          error: `Yahoo API errors: ${errors.join(', ')}`,
+          error: `Yahoo API error: Stats: ${statsResponse.status}`,
         }),
         {
           status: 500,
@@ -92,13 +82,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Parse responses
-    const [statsData, injuryData] = await Promise.all([
-      statsResponse.json(),
-      injuryResponse.json(),
-    ]);
+    // Parse response
+    const statsData = await statsResponse.json();
 
-    logger.info('Successfully fetched player stats and injury data', {
+    logger.info('Successfully fetched player stats data', {
       userId: user.id,
       leagueKey,
       week,
@@ -112,9 +99,8 @@ Deno.serve(async (req) => {
         success: true,
         data: {
           stats: statsData,
-          injuries: injuryData,
         },
-        message: 'Player stats and injury data fetched successfully',
+        message: 'Player stats data fetched successfully',
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
