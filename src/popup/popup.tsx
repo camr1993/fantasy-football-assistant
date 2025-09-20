@@ -193,6 +193,262 @@ function Popup() {
     }
   }
 
+  async function testLeagueDetails() {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // First get leagues to find a league key
+      const leaguesResponse = await apiClient.getLeagues();
+      if (!leaguesResponse.success) {
+        setError('Failed to get leagues first');
+        return;
+      }
+      console.log('Leagues response:', leaguesResponse.data);
+
+      const leagues =
+        leaguesResponse.data?.data?.fantasy_content?.users?.[0]?.user?.[1]
+          ?.games?.[0]?.game?.[1]?.leagues;
+
+      if (!leagues || leagues.length === 0) {
+        setError('No leagues found');
+        return;
+      }
+
+      const leagueKey = leagues[0].league?.[0]?.league_key;
+      if (!leagueKey) {
+        setError('No league key found');
+        return;
+      }
+
+      const response = await apiClient.getLeagueDetails(leagueKey);
+      if (response.success) {
+        console.log('League details response:', response.data);
+        setError(
+          'League details fetched successfully! Check console for data.'
+        );
+      } else {
+        setError(response.error?.error || 'League details call failed');
+      }
+    } catch (error) {
+      console.error('League details test error:', error);
+      setError('Failed to test league details');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function testRoster() {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // First get teams to find a team key
+      const teamsResponse = await apiClient.getTeams();
+      if (!teamsResponse.success) {
+        setError('Failed to get teams first');
+        return;
+      }
+
+      const teams =
+        teamsResponse?.data?.data?.fantasy_content?.users?.[0]?.user?.[1]
+          ?.games?.[0]?.game?.[1]?.teams;
+      if (!teams || teams.length === 0) {
+        setError('No teams found');
+        return;
+      }
+
+      const teamKey = teams[0].team?.[0]?.[0]?.team_key;
+      if (!teamKey) {
+        setError('No team key found');
+        return;
+      }
+
+      const response = await apiClient.getRoster(teamKey);
+      if (response.success) {
+        console.log('Roster response:', response.data);
+        setError('Roster fetched successfully! Check console for data.');
+      } else {
+        setError(response.error?.error || 'Roster call failed');
+      }
+    } catch (error) {
+      console.error('Roster test error:', error);
+      setError('Failed to test roster');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function testPlayerStats() {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // First get leagues to find a league key
+      const leaguesResponse = await apiClient.getLeagues();
+      if (!leaguesResponse.success) {
+        setError('Failed to get leagues first');
+        return;
+      }
+
+      const leagues =
+        leaguesResponse.data?.data?.fantasy_content?.users?.[0]?.user?.[1]
+          ?.games?.[0]?.game?.[1]?.leagues;
+      if (!leagues || leagues.length === 0) {
+        setError('No leagues found');
+        return;
+      }
+
+      const leagueKey = leagues[0].league?.[0]?.league_key;
+      if (!leagueKey) {
+        setError('No league key found');
+        return;
+      }
+
+      const response = await apiClient.getPlayerStats(leagueKey, { week: '1' });
+      if (response.success) {
+        console.log('Player stats response:', response.data);
+        setError('Player stats fetched successfully! Check console for data.');
+      } else {
+        setError(response.error?.error || 'Player stats call failed');
+      }
+    } catch (error) {
+      console.error('Player stats test error:', error);
+      setError('Failed to test player stats');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function testWaiverWire() {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // First get leagues to find a league key
+      const leaguesResponse = await apiClient.getLeagues();
+      if (!leaguesResponse.success) {
+        setError('Failed to get leagues first');
+        return;
+      }
+
+      const leagues =
+        leaguesResponse.data?.data?.fantasy_content?.users?.[0]?.user?.[1]
+          ?.games?.[0]?.game?.[1]?.leagues;
+      if (!leagues || leagues.length === 0) {
+        setError('No leagues found');
+        return;
+      }
+
+      const leagueKey = leagues[0].league?.[0]?.league_key;
+      if (!leagueKey) {
+        setError('No league key found');
+        return;
+      }
+
+      const response = await apiClient.getWaiverWire(leagueKey, {
+        status: 'A',
+        count: '10',
+      });
+      if (response.success) {
+        console.log('Waiver wire response:', response.data);
+        setError('Waiver wire fetched successfully! Check console for data.');
+      } else {
+        setError(response.error?.error || 'Waiver wire call failed');
+      }
+    } catch (error) {
+      console.error('Waiver wire test error:', error);
+      setError('Failed to test waiver wire');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function testTransactions() {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // First get leagues to find a league key
+      const leaguesResponse = await apiClient.getLeagues();
+      if (!leaguesResponse.success) {
+        setError('Failed to get leagues first');
+        return;
+      }
+
+      const leagues =
+        leaguesResponse.data?.data?.fantasy_content?.users?.[0]?.user?.[1]
+          ?.games?.[0]?.game?.[1]?.leagues;
+      if (!leagues || leagues.length === 0) {
+        setError('No leagues found');
+        return;
+      }
+
+      const leagueKey = leagues[0].league?.[0]?.league_key;
+      if (!leagueKey) {
+        setError('No league key found');
+        return;
+      }
+
+      const response = await apiClient.getTransactions(leagueKey, {
+        type: 'all',
+        count: '10',
+      });
+      if (response.success) {
+        console.log('Transactions response:', response.data);
+        setError('Transactions fetched successfully! Check console for data.');
+      } else {
+        setError(response.error?.error || 'Transactions call failed');
+      }
+    } catch (error) {
+      console.error('Transactions test error:', error);
+      setError('Failed to test transactions');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function testMatchups() {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // First get leagues to find a league key
+      const leaguesResponse = await apiClient.getLeagues();
+      if (!leaguesResponse.success) {
+        setError('Failed to get leagues first');
+        return;
+      }
+
+      const leagues =
+        leaguesResponse.data?.data?.fantasy_content?.users?.[0]?.user?.[1]
+          ?.games?.[0]?.game?.[1]?.leagues;
+      if (!leagues || leagues.length === 0) {
+        setError('No leagues found');
+        return;
+      }
+
+      const leagueKey = leagues[0].league?.[0]?.league_key;
+      if (!leagueKey) {
+        setError('No league key found');
+        return;
+      }
+
+      const response = await apiClient.getMatchups(leagueKey, { week: '1' });
+      if (response.success) {
+        console.log('Matchups response:', response.data);
+        setError('Matchups fetched successfully! Check console for data.');
+      } else {
+        setError(response.error?.error || 'Matchups call failed');
+      }
+    } catch (error) {
+      console.error('Matchups test error:', error);
+      setError('Failed to test matchups');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function testTokenRefresh() {
     try {
       setLoading(true);
@@ -336,43 +592,201 @@ function Popup() {
       <div style={{ marginTop: '16px' }}>
         {isAuthenticated && (
           <>
-            <button
-              onClick={testYahooApi}
-              disabled={loading}
+            <div
               style={{
-                padding: '8px 16px',
-                backgroundColor: '#10b981',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                marginBottom: '8px',
-                width: '100%',
+                marginBottom: '16px',
+                borderBottom: '1px solid #e5e7eb',
+                paddingBottom: '8px',
               }}
             >
-              {loading ? 'Testing...' : 'Test Yahoo API'}
-            </button>
+              <h4
+                style={{
+                  margin: '0 0 8px 0',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                }}
+              >
+                Basic API Tests
+              </h4>
+              <button
+                onClick={testYahooApi}
+                disabled={loading}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: '#10b981',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  marginBottom: '4px',
+                  width: '100%',
+                  fontSize: '12px',
+                }}
+              >
+                {loading ? 'Testing...' : 'Test Leagues API'}
+              </button>
 
-            <button
-              onClick={testTokenRefresh}
-              disabled={loading}
+              <button
+                onClick={testTokenRefresh}
+                disabled={loading}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: '#f59e0b',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  marginBottom: '4px',
+                  width: '100%',
+                  fontSize: '12px',
+                }}
+              >
+                {loading ? 'Refreshing...' : 'Test Token Refresh'}
+              </button>
+            </div>
+
+            <div
               style={{
-                padding: '8px 16px',
-                backgroundColor: '#f59e0b',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                marginBottom: '8px',
-                width: '100%',
+                marginBottom: '16px',
+                borderBottom: '1px solid #e5e7eb',
+                paddingBottom: '8px',
               }}
             >
-              {loading ? 'Refreshing...' : 'Test Token Refresh'}
-            </button>
+              <h4
+                style={{
+                  margin: '0 0 8px 0',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                }}
+              >
+                Fantasy Data Tests
+              </h4>
+              <button
+                onClick={testLeagueDetails}
+                disabled={loading}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  marginBottom: '4px',
+                  width: '100%',
+                  fontSize: '12px',
+                }}
+              >
+                {loading ? 'Testing...' : 'Test League Details'}
+              </button>
+
+              <button
+                onClick={testRoster}
+                disabled={loading}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: '#8b5cf6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  marginBottom: '4px',
+                  width: '100%',
+                  fontSize: '12px',
+                }}
+              >
+                {loading ? 'Testing...' : 'Test Team Roster'}
+              </button>
+
+              <button
+                onClick={testPlayerStats}
+                disabled={loading}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: '#06b6d4',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  marginBottom: '4px',
+                  width: '100%',
+                  fontSize: '12px',
+                }}
+              >
+                {loading ? 'Testing...' : 'Test Player Stats'}
+              </button>
+
+              <button
+                onClick={testWaiverWire}
+                disabled={loading}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: '#10b981',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  marginBottom: '4px',
+                  width: '100%',
+                  fontSize: '12px',
+                }}
+              >
+                {loading ? 'Testing...' : 'Test Waiver Wire'}
+              </button>
+
+              <button
+                onClick={testTransactions}
+                disabled={loading}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: '#f59e0b',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  marginBottom: '4px',
+                  width: '100%',
+                  fontSize: '12px',
+                }}
+              >
+                {loading ? 'Testing...' : 'Test Transactions'}
+              </button>
+
+              <button
+                onClick={testMatchups}
+                disabled={loading}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: '#ef4444',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  marginBottom: '4px',
+                  width: '100%',
+                  fontSize: '12px',
+                }}
+              >
+                {loading ? 'Testing...' : 'Test Matchups'}
+              </button>
+            </div>
           </>
         )}
 
-        <button onClick={() => alert('Test tip!')}>Test Tip</button>
+        <button
+          onClick={() => alert('Test tip!')}
+          style={{
+            padding: '6px 12px',
+            backgroundColor: '#6b7280',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            width: '100%',
+            fontSize: '12px',
+          }}
+        >
+          Test Tip (Coming Soon)
+        </button>
       </div>
     </div>
   );
