@@ -315,6 +315,78 @@ export async function handleOAuthCallback(req: Request) {
       });
     }
 
+    // Ensure user profile exists (create if new user, update if existing)
+    const userId = user.user?.id;
+    if (userId) {
+      const { data: existingProfile, error: profileSearchError } =
+        await supabase
+          .from('user_profiles')
+          .select('id')
+          .eq('id', userId)
+          .single();
+
+      if (profileSearchError && profileSearchError.code !== 'PGRST116') {
+        // PGRST116 is "not found" error, which is expected for new users
+        logger.error('Error checking for existing user profile', {
+          error: profileSearchError,
+        });
+        return new Response(
+          `Profile check failed: ${profileSearchError.message}`,
+          {
+            status: 400,
+            headers: { ...corsHeaders },
+          }
+        );
+      }
+
+      if (!existingProfile) {
+        // Create new user profile
+        logger.info('Creating new user profile', { userId });
+        const { error: profileCreateError } = await supabase
+          .from('user_profiles')
+          .insert({
+            id: userId,
+            name: user.user?.user_metadata?.name || 'Yahoo User',
+          });
+
+        if (profileCreateError) {
+          logger.error('Error creating user profile', {
+            error: profileCreateError,
+          });
+          return new Response(
+            `Profile creation failed: ${profileCreateError.message}`,
+            {
+              status: 400,
+              headers: { ...corsHeaders },
+            }
+          );
+        }
+
+        logger.info('User profile created successfully', { userId });
+      } else {
+        // Update existing user profile name if it changed
+        const currentName = user.user?.user_metadata?.name || 'Yahoo User';
+        if (existingProfile.name !== currentName) {
+          logger.info('Updating user profile name', {
+            userId,
+            newName: currentName,
+          });
+          const { error: profileUpdateError } = await supabase
+            .from('user_profiles')
+            .update({ name: currentName })
+            .eq('id', userId);
+
+          if (profileUpdateError) {
+            logger.error('Error updating user profile', {
+              error: profileUpdateError,
+            });
+            // Don't fail the entire request for profile update errors
+            logger.warn('Continuing despite profile update error');
+          }
+        }
+      }
+    }
+
     // Return success response with user info and tokens
     timer.end();
     return new Response(
