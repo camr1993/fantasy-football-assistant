@@ -97,7 +97,6 @@ Deno.serve(async (req) => {
     // Log completion
     logger.info('Yahoo API data sync process completed', {
       timestamp: new Date().toISOString(),
-      duration: timer.getElapsedTime(),
     });
 
     timer.end();
@@ -108,7 +107,6 @@ Deno.serve(async (req) => {
         message: 'Data sync process completed successfully',
         timestamp: new Date().toISOString(),
         syncId: crypto.randomUUID(),
-        duration: timer.getElapsedTime(),
       }),
       {
         status: 200,
