@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
     });
 
     // Simulate some work being done
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     // Log completion
     logger.info('Yahoo API data sync process completed', {
@@ -115,7 +115,6 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
-
   } catch (error) {
     logger.error('Error in sync-data function', {
       error: error.message,
@@ -138,25 +137,23 @@ Deno.serve(async (req) => {
   }
 });
 
-/* To invoke locally:
+// To invoke locally:
+//
+//  1. Run `supabase start` (see: https://supabase.com/docs/reference/cli/supabase-start)
+//  2. Set the CRON_JOB_SECRET environment variable
+//  3. Make an HTTP request:
+//
+//   curl -i --location --request POST 'http://127.0.0.1:54321/functions/v1/sync-data' \
+//    --header 'x-cron-secret: your-secret-here' \
+//    --header 'Content-Type: application/json'
+//
+//   To set up the cron job in Supabase:
 
-  1. Run `supabase start` (see: https://supabase.com/docs/reference/cli/supabase-start)
-  2. Set the CRON_JOB_SECRET environment variable
-  3. Make an HTTP request:
-
-  curl -i --location --request POST 'http://127.0.0.1:54321/functions/v1/sync-data' \
-    --header 'x-cron-secret: your-secret-here' \
-    --header 'Content-Type: application/json'
-
-  To set up the cron job in Supabase:
-
-  SELECT cron.schedule(
-    'sync-yahoo-data',
-    '0 */6 * * *', -- Every 6 hours
-    'SELECT net.http_post(
-      url:=''https://your-project.supabase.co/functions/v1/sync-data'',
-      headers:=''{"x-cron-secret": "your-secret-here", "Content-Type": "application/json"}''::jsonb
-    );'
-  );
-
-*/
+//   SELECT cron.schedule(
+//    'sync-yahoo-data',
+//    '0 */6 * * *', -- Every 6 hours
+//    'SELECT net.http_post(
+//      url:=''https://your-project.supabase.co/functions/v1/sync-data'',
+//      headers:=''{"x-cron-secret": "your-secret-here", "Content-Type": "application/json"}''::jsonb
+//    );'
+//  );
