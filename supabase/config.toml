@@ -425,8 +425,26 @@ verify_jwt = true
 import_map = "./functions/waiver-wire/deno.json"
 entrypoint = "./functions/waiver-wire/index.ts"
 
-[functions.sync-data]
+[functions.sync-players]
 enabled = true
 verify_jwt = false
-import_map = "./functions/sync-data/deno.json"
-entrypoint = "./functions/sync-data/index.ts"
+import_map = "./functions/sync-players/deno.json"
+entrypoint = "./functions/sync-players/index.ts"
+
+[functions.sync-injuries]
+enabled = true
+verify_jwt = false
+import_map = "./functions/sync-injuries/deno.json"
+entrypoint = "./functions/sync-injuries/index.ts"
+
+[functions.sync-user-login]
+enabled = true
+verify_jwt = true
+import_map = "./functions/sync-user-login/deno.json"
+entrypoint = "./functions/sync-user-login/index.ts"
+
+[functions.sync-transactions]
+enabled = true
+verify_jwt = true
+import_map = "./functions/sync-transactions/deno.json"
+entrypoint = "./functions/sync-transactions/index.ts"
