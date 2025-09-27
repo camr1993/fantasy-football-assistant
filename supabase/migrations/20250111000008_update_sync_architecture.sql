@@ -8,7 +8,7 @@ CREATE TABLE sync_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   sync_type TEXT NOT NULL, -- 'weekly_players', 'daily_injuries', 'user_login', 'transactions'
   league_id UUID REFERENCES leagues(id),
-  user_id UUID REFERENCES userProfiles(id),
+  user_id UUID REFERENCES user_profiles(id),
   status TEXT NOT NULL, -- 'started', 'completed', 'failed'
   started_at TIMESTAMPTZ DEFAULT NOW(),
   completed_at TIMESTAMPTZ,
@@ -44,9 +44,9 @@ CREATE INDEX idx_waiver_wire_transaction_date ON waiver_wire(transaction_date);
 -- Add function to log sync operations
 CREATE OR REPLACE FUNCTION log_sync_operation(
   p_sync_type TEXT,
+  p_status TEXT,
   p_league_id UUID DEFAULT NULL,
   p_user_id UUID DEFAULT NULL,
-  p_status TEXT,
   p_error_message TEXT DEFAULT NULL,
   p_records_processed INT DEFAULT 0
 )

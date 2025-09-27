@@ -68,9 +68,9 @@ export async function logSyncStart(
 ): Promise<string> {
   const { data, error } = await supabase.rpc('log_sync_operation', {
     p_sync_type: syncType,
+    p_status: 'started',
     p_league_id: leagueId,
     p_user_id: userId,
-    p_status: 'started',
   });
 
   if (error) {
