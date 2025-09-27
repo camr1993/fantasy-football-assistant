@@ -17,10 +17,30 @@ Deno.serve(async (req) => {
   const timer = performance.start('sync-injuries');
 
   try {
-    // Verify this is a cron job request
-    const authHeader = req.headers.get('authorization');
-    if (authHeader !== `Bearer ${Deno.env.get('CRON_SECRET')}`) {
-      logger.error('Unauthorized cron job request');
+    // Authenticate using cron job secret
+    const cronSecret = req.headers.get('x-supabase-webhook-source');
+    const expectedSecret = Deno.env.get('CRON_JOB_SECRET');
+
+    if (!expectedSecret) {
+      logger.error('CRON_JOB_SECRET environment variable not set');
+      timer.end();
+      return new Response(
+        JSON.stringify({
+          error: 'Server configuration error',
+          message: 'Cron job secret not configured',
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    if (!cronSecret || cronSecret !== expectedSecret) {
+      logger.warn('Invalid or missing cron job secret', {
+        hasSecret: !!cronSecret,
+        secretLength: cronSecret?.length || 0,
+      });
       timer.end();
       return new Response(
         JSON.stringify({
