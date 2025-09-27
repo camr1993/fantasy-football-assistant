@@ -2,10 +2,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { logger, performance } from '../utils/logger.ts';
 import { corsHeaders } from '../utils/constants.ts';
-import {
-  getYahooCredentials,
-  getYahooAccessToken,
-} from '../utils/yahooAuth.ts';
+import { getUserTokens } from '../utils/userTokenManager.ts';
 import { syncMasterPlayerInjuries } from './syncMasterInjuries.ts';
 
 Deno.serve(async (req) => {
@@ -60,14 +57,15 @@ Deno.serve(async (req) => {
       timestamp: new Date().toISOString(),
     });
 
-    // Get Yahoo API credentials from environment variables
-    const credentials = getYahooCredentials();
-    if (!credentials) {
+    // Get user's Yahoo tokens (using your email)
+    const userTokens = await getUserTokens('cam1079@yahoo.com');
+    if (!userTokens) {
+      logger.error('Failed to get user tokens for injury sync');
       timer.end();
       return new Response(
         JSON.stringify({
-          error: 'Server configuration error',
-          message: 'Yahoo API credentials not configured',
+          error: 'Authentication error',
+          message: 'Failed to get user Yahoo tokens',
         }),
         {
           status: 500,
@@ -76,30 +74,16 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get a valid Yahoo access token using client credentials
-    const yahooToken = await getYahooAccessToken(
-      credentials.clientId,
-      credentials.clientSecret
-    );
-    if (!yahooToken) {
-      logger.error('Failed to obtain Yahoo access token');
-      timer.end();
-      return new Response(
-        JSON.stringify({
-          error: 'API authentication error',
-          message: 'Failed to obtain Yahoo access token',
-        }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
-    }
+    logger.info('Using user tokens for injury sync', {
+      userId: userTokens.user_id,
+      email: userTokens.email,
+      hasAccessToken: !!userTokens.access_token,
+    });
 
     logger.info('Starting master player injury data sync');
 
     // Sync master player injury data (not league-specific)
-    const result = await syncMasterPlayerInjuries(yahooToken);
+    const result = await syncMasterPlayerInjuries(userTokens.access_token);
 
     const duration = timer.end();
     logger.info('Completed injury sync process', {

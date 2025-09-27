@@ -9,7 +9,7 @@ export async function getYahooAccessToken(
 ): Promise<string | null> {
   try {
     const response = await fetch(
-      'https://api.login.yahoo.com/oauth2/request_auth',
+      'https://api.login.yahoo.com/oauth2/token?format=json',
       {
         method: 'POST',
         headers: {
@@ -24,15 +24,27 @@ export async function getYahooAccessToken(
     );
 
     if (!response.ok) {
+      const responseText = await response.text();
       logger.error('Failed to get Yahoo access token', {
         status: response.status,
         statusText: response.statusText,
+        responseBody: responseText.substring(0, 500), // Log first 500 chars
       });
       return null;
     }
 
-    const data = await response.json();
-    return data.access_token;
+    const responseText = await response.text();
+    try {
+      const data = JSON.parse(responseText);
+      return data.access_token;
+    } catch (parseError) {
+      logger.error('Failed to parse Yahoo API response as JSON', {
+        parseError: parseError.message,
+        responseBody: responseText.substring(0, 500), // Log first 500 chars
+        contentType: response.headers.get('content-type'),
+      });
+      return null;
+    }
   } catch (error) {
     logger.error('Error getting Yahoo access token', { error: error.message });
     return null;
