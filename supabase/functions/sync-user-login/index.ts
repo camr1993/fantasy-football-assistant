@@ -11,7 +11,7 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  const timer = performance.startTimer('sync-user-login');
+  const timer = performance.start('sync-user-login');
 
   try {
     // Authenticate the request
@@ -30,11 +30,11 @@ Deno.serve(async (req) => {
     // Sync user login data (leagues and teams)
     const result = await syncUserLoginData(user.id, yahooToken);
 
-    timer.end();
+    const duration = timer.end();
     logger.info('Completed user login sync process', {
       syncId,
       userId: user.id,
-      duration: timer.duration,
+      duration: `${duration}ms`,
       result,
     });
 

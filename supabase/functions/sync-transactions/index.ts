@@ -12,7 +12,7 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  const timer = performance.startTimer('sync-transactions');
+  const timer = performance.start('sync-transactions');
 
   try {
     // Authenticate the request
@@ -84,11 +84,11 @@ Deno.serve(async (req) => {
       }
     }
 
-    timer.end();
+    const duration = timer.end();
     logger.info('Completed transaction sync process', {
       syncId,
       userId: user.id,
-      duration: timer.duration,
+      duration: `${duration}ms`,
       totalTransactions,
       results,
     });

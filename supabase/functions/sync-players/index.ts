@@ -14,7 +14,7 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  const timer = performance.startTimer('sync-players');
+  const timer = performance.start('sync-players');
 
   try {
     // Verify this is a cron job request
@@ -81,10 +81,10 @@ Deno.serve(async (req) => {
     // Sync master player data (not league-specific)
     const result = await syncMasterPlayerData(yahooToken);
 
-    timer.end();
+    const duration = timer.end();
     logger.info('Completed player sync process', {
       syncId,
-      duration: timer.duration,
+      duration: `${duration}ms`,
       result,
     });
 
