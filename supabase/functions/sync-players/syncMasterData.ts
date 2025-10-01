@@ -4,7 +4,7 @@ import {
   logSyncComplete,
   logSyncError,
 } from '../utils/syncHelpers.ts';
-import { syncAllPlayers, syncAllPlayerStats } from './playerSync.ts';
+import { syncAllPlayerStats } from './playerSync.ts';
 
 /**
  * Sync master player data (not league-specific)
@@ -17,8 +17,8 @@ export async function syncMasterPlayerData(yahooToken: string) {
     logger.info('Starting master player data sync');
 
     // Sync all NFL players (master data)
-    const playersProcessed = await syncAllPlayers(yahooToken);
-    recordsProcessed += playersProcessed;
+    // const playersProcessed = await syncAllPlayers(yahooToken);
+    // recordsProcessed += playersProcessed;
 
     // Sync player stats for current week (master data)
     const statsProcessed = await syncAllPlayerStats(yahooToken);
@@ -26,20 +26,21 @@ export async function syncMasterPlayerData(yahooToken: string) {
 
     await logSyncComplete(syncLogId, recordsProcessed);
     logger.info('Completed master player data sync', {
-      playersProcessed,
+      // playersProcessed,
       statsProcessed,
       totalProcessed: recordsProcessed,
     });
 
     return {
-      playersProcessed,
+      // playersProcessed,
       statsProcessed,
       totalProcessed: recordsProcessed,
     };
-  } catch (error) {
-    await logSyncError(syncLogId, error.message);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    await logSyncError(syncLogId, errorMessage);
     logger.error('Failed to sync master player data', {
-      error: error.message,
+      error: errorMessage,
     });
     throw error;
   }

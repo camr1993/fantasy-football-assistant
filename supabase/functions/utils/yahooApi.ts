@@ -19,8 +19,6 @@ export async function makeYahooApiCall(
     ...options.headers,
   };
 
-  logger.info('Making Yahoo API call', { url });
-
   return fetch(url, {
     ...options,
     headers,

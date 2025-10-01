@@ -1,6 +1,6 @@
 import { logger } from '../utils/logger.ts';
 import { supabase } from '../utils/supabase.ts';
-import { getCurrentNFLWeek } from '../utils/syncHelpers.ts';
+import { getMostRecentNFLWeek } from '../utils/syncHelpers.ts';
 import {
   YahooTransaction,
   getTeamIdByYahooKey,
@@ -22,7 +22,7 @@ export async function processTransactions(
 
   let rosterUpdates = 0;
   const currentYear = new Date().getFullYear();
-  const currentWeek = getCurrentNFLWeek();
+  const currentWeek = getMostRecentNFLWeek();
 
   for (const transaction of transactions) {
     const transactionData = transaction.transaction[0];
@@ -137,7 +137,7 @@ export async function updateWaiverWireFromTransactions(
         ? await getTeamIdByYahooKey(transactionData.destination_team_key)
         : null;
 
-      const currentWeek = getCurrentNFLWeek();
+      const currentWeek = getMostRecentNFLWeek();
       const transactionDate = new Date(transactionData.timestamp);
 
       // Update waiver wire entry

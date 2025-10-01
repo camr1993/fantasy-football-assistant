@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "lib": ["deno.window"],
+    "strict": false,
+    "noImplicitAny": false,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "imports": {
+    "jsr:@supabase/functions-js/edge-runtime.d.ts": "https://esm.sh/@supabase/functions-js@2.4.1/src/edge-runtime.d.ts",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js"
+  },
+  "tasks": {
+    "start": "deno run --allow-net --allow-env --allow-read --allow-write supabase/functions/sync-players/index.ts"
+  }
+}

@@ -1,5 +1,4 @@
 // Setup type definitions for built-in Supabase Runtime APIs
-import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { logger, performance } from '../utils/logger.ts';
 import { corsHeaders } from '../utils/constants.ts';
 import { getUserTokens } from '../utils/userTokenManager.ts';
@@ -104,7 +103,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
-  } catch (error) {
+  } catch (error: any) {
     timer.end();
     logger.error('Player sync process failed', {
       error: error.message,
