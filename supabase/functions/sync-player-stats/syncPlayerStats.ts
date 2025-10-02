@@ -7,14 +7,24 @@ import {
 } from '../utils/syncHelpers.ts';
 import { mapYahooStatsToColumns } from './statMapper.ts';
 
+interface PlayerStatsData {
+  player?: Array<unknown>;
+}
+
 /**
  * Sync all player stats (master data)
  * Gets player stats from user's leagues since global players endpoint requires specific player keys
  */
-export async function syncAllPlayerStats(yahooToken: string): Promise<number> {
-  logger.info('Syncing all player stats from admin league');
+export async function syncAllPlayerStats(
+  yahooToken: string,
+  week?: number
+): Promise<number> {
+  const currentWeek = week ?? getMostRecentNFLWeek();
 
-  const currentWeek = getMostRecentNFLWeek();
+  logger.info('Syncing all player stats from admin league', {
+    week: currentWeek,
+    isCustomWeek: week !== undefined,
+  });
   const currentYear = new Date().getFullYear();
 
   // Get the admin user's league directly from the database
@@ -172,27 +182,29 @@ export async function syncAllPlayerStats(yahooToken: string): Promise<number> {
       const statsInserts = [];
 
       for (let playerIndex = 0; playerIndex < batch.length; playerIndex++) {
-        const player = batch[playerIndex] as any;
+        const player = batch[playerIndex] as PlayerStatsData;
 
         // Each player has a player array with the actual data
-        const playerData = player.player?.[0];
-        if (!playerData) {
+        const playerData = player.player?.[0] as unknown[];
+        if (!playerData || !Array.isArray(playerData)) {
           continue;
         }
 
         // Player data is structured as an array with numeric indices
         // Search through the array to find the correct data
-        let playerKey = null;
+        let playerKey: string | null = null;
 
         for (let i = 0; i < playerData.length; i++) {
-          const item = playerData[i];
+          const item = playerData[i] as Record<string, unknown>;
           if (item && typeof item === 'object') {
-            if (item.player_key) playerKey = item.player_key;
+            if (item.player_key) playerKey = item.player_key as string;
           }
         }
 
         // Stats are in the player_stats object
-        const stats = player.player?.[1]?.player_stats?.stats;
+        const playerStats = player.player?.[1] as Record<string, unknown>;
+        const stats = (playerStats?.player_stats as Record<string, unknown>)
+          ?.stats as Array<Record<string, unknown>>;
 
         if (!stats || stats.length === 0) {
           logger.debug('Player has no stats, skipping', {
@@ -214,10 +226,16 @@ export async function syncAllPlayerStats(yahooToken: string): Promise<number> {
         if (!playerRecord) continue;
 
         // Map Yahoo stats to individual columns
-        const mappedStats = mapYahooStatsToColumns(stats, playerKey);
+        const yahooStats = stats.map((stat) => ({
+          stat: {
+            stat_id: (stat as any).stat?.stat_id as string,
+            value: (stat as any).stat?.value as string | number,
+          },
+        }));
+        const mappedStats = mapYahooStatsToColumns(yahooStats, playerKey || '');
 
         // Calculate points using the old method for now (can be updated later)
-        const points = calculatePointsFromStats(stats);
+        const points = calculatePointsFromStats(yahooStats);
         const currentTime = new Date().toISOString();
 
         statsInserts.push({

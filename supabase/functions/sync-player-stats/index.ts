@@ -13,6 +13,32 @@ Deno.serve(async (req) => {
   const timer = performance.start('sync-player-stats');
 
   try {
+    // Parse request body for optional week parameter
+    let week: number | undefined;
+    try {
+      const body = await req.json();
+      week = body.week;
+      if (
+        week !== undefined &&
+        (typeof week !== 'number' || week < 1 || week > 18)
+      ) {
+        logger.warn('Invalid week parameter provided', { week });
+        return new Response(
+          JSON.stringify({
+            error: 'Invalid week parameter',
+            message: 'Week must be a number between 1 and 18',
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+    } catch (_parseError) {
+      // If JSON parsing fails, continue without week parameter (for cron jobs)
+      logger.debug('No request body or invalid JSON, using default week');
+    }
+
     // Authenticate using cron job secret
     const cronSecret = req.headers.get('x-supabase-webhook-source');
     const expectedSecret = Deno.env.get('CRON_JOB_SECRET');
@@ -79,16 +105,20 @@ Deno.serve(async (req) => {
       hasAccessToken: !!userTokens.access_token,
     });
 
-    logger.info('Starting player stats sync');
+    logger.info('Starting player stats sync', { week });
 
     // Sync player stats
-    const statsProcessed = await syncAllPlayerStats(userTokens.access_token);
+    const statsProcessed = await syncAllPlayerStats(
+      userTokens.access_token,
+      week
+    );
 
     const duration = timer.end();
     logger.info('Completed player stats sync process', {
       syncId,
       duration: `${duration}ms`,
       statsProcessed,
+      week,
     });
 
     return new Response(
@@ -97,24 +127,27 @@ Deno.serve(async (req) => {
         message: 'Player stats sync completed successfully',
         syncId,
         statsProcessed,
+        week,
       }),
       {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     timer.end();
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
     logger.error('Player stats sync process failed', {
-      error: error.message,
-      stack: error.stack,
+      error: errorMessage,
+      stack: errorStack,
     });
 
     return new Response(
       JSON.stringify({
         error: 'Internal server error',
         message: 'Player stats sync process failed',
-        details: error.message,
+        details: errorMessage,
       }),
       {
         status: 500,
