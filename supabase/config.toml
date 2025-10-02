@@ -431,6 +431,12 @@ verify_jwt = false
 import_map = "./functions/sync-players/deno.json"
 entrypoint = "./functions/sync-players/index.ts"
 
+[functions.sync-player-stats]
+enabled = true
+verify_jwt = false
+import_map = "./functions/sync-player-stats/deno.json"
+entrypoint = "./functions/sync-player-stats/index.ts"
+
 [functions.sync-injuries]
 enabled = true
 verify_jwt = false

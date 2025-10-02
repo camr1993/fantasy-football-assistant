@@ -2,7 +2,7 @@
 import { logger, performance } from '../utils/logger.ts';
 import { corsHeaders } from '../utils/constants.ts';
 import { getUserTokens } from '../utils/userTokenManager.ts';
-import { syncAllPlayers } from './playerSync.ts';
+import { syncAllPlayerStats } from './syncPlayerStats.ts';
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
@@ -10,7 +10,7 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  const timer = performance.start('sync-players');
+  const timer = performance.start('sync-player-stats');
 
   try {
     // Authenticate using cron job secret
@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
     }
 
     const syncId = crypto.randomUUID();
-    logger.info('Starting player sync process', {
+    logger.info('Starting player stats sync process', {
       syncId,
       timestamp: new Date().toISOString(),
     });
@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
     // Get user's Yahoo tokens (using your email)
     const userTokens = await getUserTokens('cam1079@yahoo.com');
     if (!userTokens) {
-      logger.error('Failed to get user tokens for player sync');
+      logger.error('Failed to get user tokens for player stats sync');
       timer.end();
       return new Response(
         JSON.stringify({
@@ -73,50 +73,48 @@ Deno.serve(async (req) => {
       );
     }
 
-    logger.info('Using user tokens for player sync', {
+    logger.info('Using user tokens for player stats sync', {
       userId: userTokens.user_id,
       email: userTokens.email,
       hasAccessToken: !!userTokens.access_token,
     });
 
-    logger.info('Starting player sync');
+    logger.info('Starting player stats sync');
 
-    // Sync all NFL players (master data)
-    const playersProcessed = await syncAllPlayers(userTokens.access_token);
+    // Sync player stats
+    const statsProcessed = await syncAllPlayerStats(userTokens.access_token);
 
     const duration = timer.end();
-    logger.info('Completed player sync process', {
+    logger.info('Completed player stats sync process', {
       syncId,
       duration: `${duration}ms`,
-      playersProcessed,
+      statsProcessed,
     });
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Player sync completed successfully',
+        message: 'Player stats sync completed successfully',
         syncId,
-        playersProcessed,
+        statsProcessed,
       }),
       {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
-  } catch (error: unknown) {
+  } catch (error: any) {
     timer.end();
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const errorStack = error instanceof Error ? error.stack : undefined;
-    logger.error('Player sync process failed', {
-      error: errorMessage,
-      stack: errorStack,
+    logger.error('Player stats sync process failed', {
+      error: error.message,
+      stack: error.stack,
     });
 
     return new Response(
       JSON.stringify({
         error: 'Internal server error',
-        message: 'Player sync process failed',
-        details: errorMessage,
+        message: 'Player stats sync process failed',
+        details: error.message,
       }),
       {
         status: 500,
