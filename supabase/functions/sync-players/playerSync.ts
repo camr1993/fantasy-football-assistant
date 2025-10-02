@@ -23,16 +23,7 @@ export async function syncAllPlayers(yahooToken: string): Promise<number> {
 
   // Get the admin user's league directly from the database
   // First, get the admin user's ID
-  const { data: adminUser, error: userError } = await supabase
-    .from('user_profiles')
-    .select('id')
-    .eq('name', 'Cameron Ratliff')
-    .single();
-
-  if (userError || !adminUser) {
-    logger.error('Failed to find admin user', { error: userError?.message });
-    throw new Error('Admin user not found');
-  }
+  const superAdminUserId = Deno.env.get('SUPER_ADMIN_USER_ID');
 
   // // Get a league that the admin user is part of
   const { data: leagueData, error: leagueError } = await supabase
@@ -45,7 +36,7 @@ export async function syncAllPlayers(yahooToken: string): Promise<number> {
       teams!inner(id, user_id)
     `
     )
-    .eq('teams.user_id', adminUser.id)
+    .eq('teams.user_id', superAdminUserId)
     .eq('season_year', new Date().getFullYear())
     .limit(1)
     .single();
@@ -53,6 +44,7 @@ export async function syncAllPlayers(yahooToken: string): Promise<number> {
   if (leagueError || !leagueData) {
     logger.error('Failed to find admin user league', {
       error: leagueError?.message,
+      superAdminUserId,
     });
     throw new Error('Admin user league not found');
   }
@@ -272,6 +264,7 @@ export async function syncAllPlayers(yahooToken: string): Promise<number> {
   logger.info('Completed syncing all players from admin league', {
     totalProcessed,
     leagueKey,
+    adminUserId: superAdminUserId,
   });
   return totalProcessed;
 }

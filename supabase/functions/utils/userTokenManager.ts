@@ -17,46 +17,28 @@ export interface UserTokens {
  * Get user's Yahoo tokens by email or user ID
  */
 export async function getUserTokens(
-  identifier: string
+  userId: string
 ): Promise<UserTokens | null> {
   try {
-    // Try to find user by email first
-    let { data: userData, error: userError } = await supabase.rpc(
-      'get_user_by_email',
-      { user_email: identifier }
-    );
+    const { data: userData, error: userError } =
+      await supabase.auth.admin.getUserById(userId);
 
-    // If not found by email, try by user ID
-    if (userError || !userData || userData.length === 0) {
-      logger.info('User not found by email, trying by user ID', {
-        identifier,
-        error: userError,
+    if (userError || !userData) {
+      logger.error('User not found by ID', {
+        userId,
+        idError: userError,
       });
-
-      const { data: userById, error: userByIdError } =
-        await supabase.auth.admin.getUserById(identifier);
-
-      if (userByIdError || !userById) {
-        logger.error('User not found by ID either', {
-          identifier,
-          emailError: userError,
-          idError: userByIdError,
-        });
-        return null;
-      }
-
-      userData = [userById];
+      return null;
     }
 
-    const user = userData[0];
-    const userMetadata = user.user_metadata;
+    const userMetadata = userData?.user?.user_metadata;
 
     if (
       !userMetadata?.yahoo_access_token ||
       !userMetadata?.yahoo_refresh_token
     ) {
       logger.error('User has no Yahoo tokens', {
-        userId: user.id,
+        userId,
         hasAccessToken: !!userMetadata?.yahoo_access_token,
         hasRefreshToken: !!userMetadata?.yahoo_refresh_token,
       });
@@ -64,23 +46,23 @@ export async function getUserTokens(
     }
 
     // Check if token is expired and refresh if needed
-    const expiresAt = new Date(userMetadata.yahoo_token_expires_at);
+    const expiresAt = new Date(userMetadata?.yahoo_token_expires_at);
     const now = new Date();
     const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
 
     if (expiresAt <= fiveMinutesFromNow) {
       logger.info('Token is expired or about to expire, refreshing...', {
-        userId: user.id,
-        expiresAt: userMetadata.yahoo_token_expires_at,
+        userId,
+        expiresAt: userMetadata?.yahoo_token_expires_at,
       });
 
       const refreshedTokens = await refreshUserTokens(
-        user.id,
-        userMetadata.yahoo_refresh_token
+        userId,
+        userMetadata?.yahoo_refresh_token
       );
 
       if (!refreshedTokens) {
-        logger.error('Failed to refresh tokens for user', { userId: user.id });
+        logger.error('Failed to refresh tokens for user', { userId });
         return null;
       }
 
@@ -88,22 +70,22 @@ export async function getUserTokens(
         access_token: refreshedTokens.access_token,
         refresh_token: refreshedTokens.refresh_token,
         expires_at: refreshedTokens.expires_at,
-        user_id: user.id,
-        email: user.email,
+        user_id: userId,
+        email: userMetadata?.user?.email,
       };
     }
 
     return {
-      access_token: userMetadata.yahoo_access_token,
-      refresh_token: userMetadata.yahoo_refresh_token,
-      expires_at: userMetadata.yahoo_token_expires_at,
-      user_id: user.id,
-      email: user.email,
+      access_token: userMetadata?.yahoo_access_token,
+      refresh_token: userMetadata?.yahoo_refresh_token,
+      expires_at: userMetadata?.yahoo_token_expires_at,
+      user_id: userId,
+      email: userMetadata?.user?.email,
     };
   } catch (error) {
     logger.error('Error getting user tokens', {
-      identifier,
-      error: error.message,
+      userId,
+      error: error instanceof Error ? error.message : String(error),
     });
     return null;
   }
@@ -185,7 +167,7 @@ async function refreshUserTokens(
   } catch (error) {
     logger.error('Error refreshing user tokens', {
       userId,
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
     });
     return null;
   }

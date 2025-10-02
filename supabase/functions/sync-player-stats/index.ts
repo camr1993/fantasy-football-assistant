@@ -82,8 +82,9 @@ Deno.serve(async (req) => {
       timestamp: new Date().toISOString(),
     });
 
-    // Get user's Yahoo tokens (using your email)
-    const userTokens = await getUserTokens('cam1079@yahoo.com');
+    // Get user's Yahoo tokens (using super admin user id)
+    const superAdminUserId = Deno.env.get('SUPER_ADMIN_USER_ID') ?? '';
+    const userTokens = await getUserTokens(superAdminUserId);
     if (!userTokens) {
       logger.error('Failed to get user tokens for player stats sync');
       timer.end();

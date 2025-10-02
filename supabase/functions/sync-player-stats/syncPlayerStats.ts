@@ -29,21 +29,7 @@ export async function syncAllPlayerStats(
 
   // Get the admin user's league directly from the database
   // First, get the admin user's ID
-  const { data: adminUser, error: userError } = await supabase
-    .from('user_profiles')
-    .select('id')
-    .eq('name', 'Cameron Ratliff')
-    .single();
-
-  if (userError || !adminUser) {
-    logger.error('Failed to find admin user', {
-      error: userError,
-      name: 'Cameron Ratliff',
-    });
-    throw new Error(
-      `Admin user not found: ${userError?.message || 'No user found'}`
-    );
-  }
+  const superAdminUserId = Deno.env.get('SUPER_ADMIN_USER_ID');
 
   // Get a league where the admin user has a team
   const { data: leagueData, error: leagueError } = await supabase
@@ -57,7 +43,7 @@ export async function syncAllPlayerStats(
     `
     )
     .eq('season_year', currentYear)
-    .eq('teams.user_id', adminUser.id)
+    .eq('teams.user_id', superAdminUserId)
     .limit(1)
     .single();
 
@@ -65,7 +51,7 @@ export async function syncAllPlayerStats(
     logger.error('Failed to fetch admin user league from database', {
       error: leagueError,
       currentYear,
-      adminUserId: adminUser.id,
+      adminUserId: superAdminUserId,
     });
     throw new Error(
       `Failed to fetch admin user league: ${
@@ -289,8 +275,7 @@ export async function syncAllPlayerStats(
   logger.info('Completed syncing all player stats from admin user league', {
     totalProcessed,
     leagueKey,
-    adminUserId: adminUser.id,
-    adminName: 'Cameron Ratliff',
+    adminUserId: superAdminUserId,
   });
   return totalProcessed;
 }
