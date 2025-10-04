@@ -2,7 +2,7 @@ import { logger } from '../utils/logger.ts';
 import { supabase } from '../utils/supabase.ts';
 import {
   makeYahooApiCallWithRetry,
-  getCurrentNFLWeek,
+  getMostRecentNFLWeek,
 } from '../utils/syncHelpers.ts';
 
 /**
@@ -33,7 +33,7 @@ export async function syncAllPlayerInjuries(
 
   let processed = 0;
   const currentYear = new Date().getFullYear();
-  const currentWeek = getCurrentNFLWeek();
+  const currentWeek = getMostRecentNFLWeek();
   const currentTime = new Date().toISOString();
 
   // Process injuries in batches of 200

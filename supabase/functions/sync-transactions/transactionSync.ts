@@ -2,7 +2,7 @@ import { logger } from '../utils/logger.ts';
 import { supabase } from '../utils/supabase.ts';
 import {
   makeYahooApiCallWithRetry,
-  getCurrentNFLWeek,
+  getMostRecentNFLWeek,
 } from '../utils/syncHelpers.ts';
 
 export interface YahooTransaction {

@@ -1,9 +1,8 @@
 // Setup type definitions for built-in Supabase Runtime APIs
-import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { logger, performance } from '../utils/logger.ts';
 import { corsHeaders } from '../utils/constants.ts';
 import { getUserTokens } from '../utils/userTokenManager.ts';
-import { syncMasterPlayerData } from './syncMasterData.ts';
+import { syncAllPlayers } from './playerSync.ts';
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
@@ -57,8 +56,9 @@ Deno.serve(async (req) => {
       timestamp: new Date().toISOString(),
     });
 
-    // Get user's Yahoo tokens (using your email)
-    const userTokens = await getUserTokens('cam1079@yahoo.com');
+    // Get user's Yahoo tokens (using super admin user id)
+    const superAdminUserId = Deno.env.get('SUPER_ADMIN_USER_ID') ?? '';
+    const userTokens = await getUserTokens(superAdminUserId);
     if (!userTokens) {
       logger.error('Failed to get user tokens for player sync');
       timer.end();
@@ -80,16 +80,16 @@ Deno.serve(async (req) => {
       hasAccessToken: !!userTokens.access_token,
     });
 
-    logger.info('Starting master player data sync');
+    logger.info('Starting player sync');
 
-    // Sync master player data (not league-specific)
-    const result = await syncMasterPlayerData(userTokens.access_token);
+    // Sync all NFL players (master data)
+    const playersProcessed = await syncAllPlayers(userTokens.access_token);
 
     const duration = timer.end();
     logger.info('Completed player sync process', {
       syncId,
       duration: `${duration}ms`,
-      result,
+      playersProcessed,
     });
 
     return new Response(
@@ -97,25 +97,27 @@ Deno.serve(async (req) => {
         success: true,
         message: 'Player sync completed successfully',
         syncId,
-        result,
+        playersProcessed,
       }),
       {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
-  } catch (error) {
+  } catch (error: unknown) {
     timer.end();
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
     logger.error('Player sync process failed', {
-      error: error.message,
-      stack: error.stack,
+      error: errorMessage,
+      stack: errorStack,
     });
 
     return new Response(
       JSON.stringify({
         error: 'Internal server error',
         message: 'Player sync process failed',
-        details: error.message,
+        details: errorMessage,
       }),
       {
         status: 500,

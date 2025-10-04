@@ -11,7 +11,6 @@ export async function makeYahooApiCallWithRetry(
   maxRetries: number = 3
 ): Promise<Response> {
   let lastError: Error | null = null;
-
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const response = await makeYahooApiCall(accessToken, url);
@@ -40,7 +39,7 @@ export async function makeYahooApiCallWithRetry(
       lastError = new Error(
         `API call failed: ${response.status} ${response.statusText}`
       );
-    } catch (error) {
+    } catch (error: any) {
       lastError = error;
     }
 
@@ -115,13 +114,13 @@ export async function logSyncError(syncLogId: string, errorMessage: string) {
 /**
  * Get current NFL week
  */
-export function getCurrentNFLWeek(): number {
+export function getMostRecentNFLWeek(): number {
   const now = new Date();
   const seasonStart = new Date(now.getFullYear(), 8, 1); // September 1st
   const weeksSinceStart = Math.floor(
     (now.getTime() - seasonStart.getTime()) / (7 * 24 * 60 * 60 * 1000)
   );
-  return Math.max(1, Math.min(18, weeksSinceStart + 1));
+  return Math.max(1, Math.min(18, weeksSinceStart));
 }
 
 /**

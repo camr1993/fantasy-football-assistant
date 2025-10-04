@@ -1,9 +1,8 @@
 // Setup type definitions for built-in Supabase Runtime APIs
-import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { logger, performance } from '../utils/logger.ts';
 import { corsHeaders } from '../utils/constants.ts';
 import { getUserTokens } from '../utils/userTokenManager.ts';
-import { syncMasterPlayerInjuries } from './syncMasterInjuries.ts';
+import { syncAllPlayerStats } from './syncPlayerStats.ts';
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
@@ -11,9 +10,35 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  const timer = performance.start('sync-injuries');
+  const timer = performance.start('sync-player-stats');
 
   try {
+    // Parse request body for optional week parameter
+    let week: number | undefined;
+    try {
+      const body = await req.json();
+      week = body.week;
+      if (
+        week !== undefined &&
+        (typeof week !== 'number' || week < 1 || week > 18)
+      ) {
+        logger.warn('Invalid week parameter provided', { week });
+        return new Response(
+          JSON.stringify({
+            error: 'Invalid week parameter',
+            message: 'Week must be a number between 1 and 18',
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+    } catch (_parseError) {
+      // If JSON parsing fails, continue without week parameter (for cron jobs)
+      logger.debug('No request body or invalid JSON, using default week');
+    }
+
     // Authenticate using cron job secret
     const cronSecret = req.headers.get('x-supabase-webhook-source');
     const expectedSecret = Deno.env.get('CRON_JOB_SECRET');
@@ -52,7 +77,7 @@ Deno.serve(async (req) => {
     }
 
     const syncId = crypto.randomUUID();
-    logger.info('Starting injury sync process', {
+    logger.info('Starting player stats sync process', {
       syncId,
       timestamp: new Date().toISOString(),
     });
@@ -61,7 +86,7 @@ Deno.serve(async (req) => {
     const superAdminUserId = Deno.env.get('SUPER_ADMIN_USER_ID') ?? '';
     const userTokens = await getUserTokens(superAdminUserId);
     if (!userTokens) {
-      logger.error('Failed to get user tokens for injury sync');
+      logger.error('Failed to get user tokens for player stats sync');
       timer.end();
       return new Response(
         JSON.stringify({
@@ -75,48 +100,55 @@ Deno.serve(async (req) => {
       );
     }
 
-    logger.info('Using user tokens for injury sync', {
+    logger.info('Using user tokens for player stats sync', {
       userId: userTokens.user_id,
       email: userTokens.email,
       hasAccessToken: !!userTokens.access_token,
     });
 
-    logger.info('Starting master player injury data sync');
+    logger.info('Starting player stats sync', { week });
 
-    // Sync master player injury data (not league-specific)
-    const result = await syncMasterPlayerInjuries(userTokens.access_token);
+    // Sync player stats
+    const statsProcessed = await syncAllPlayerStats(
+      userTokens.access_token,
+      week
+    );
 
     const duration = timer.end();
-    logger.info('Completed injury sync process', {
+    logger.info('Completed player stats sync process', {
       syncId,
       duration: `${duration}ms`,
-      result,
+      statsProcessed,
+      week,
     });
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Injury sync completed successfully',
+        message: 'Player stats sync completed successfully',
         syncId,
-        result,
+        statsProcessed,
+        week,
       }),
       {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
-  } catch (error) {
+  } catch (error: unknown) {
     timer.end();
-    logger.error('Injury sync process failed', {
-      error: error.message,
-      stack: error.stack,
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    logger.error('Player stats sync process failed', {
+      error: errorMessage,
+      stack: errorStack,
     });
 
     return new Response(
       JSON.stringify({
         error: 'Internal server error',
-        message: 'Injury sync process failed',
-        details: error.message,
+        message: 'Player stats sync process failed',
+        details: errorMessage,
       }),
       {
         status: 500,
