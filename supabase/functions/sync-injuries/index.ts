@@ -1,9 +1,13 @@
 // Setup type definitions for built-in Supabase Runtime APIs
-import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { logger, performance } from '../utils/logger.ts';
 import { corsHeaders } from '../utils/constants.ts';
 import { getUserTokens } from '../utils/userTokenManager.ts';
-import { syncMasterPlayerInjuries } from './syncMasterInjuries.ts';
+import { syncAllPlayerInjuries } from './injurySync.ts';
+import {
+  logSyncStart,
+  logSyncComplete,
+  logSyncError,
+} from '../utils/syncHelpers.ts';
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
@@ -81,42 +85,70 @@ Deno.serve(async (req) => {
       hasAccessToken: !!userTokens.access_token,
     });
 
-    logger.info('Starting master player injury data sync');
+    // Start sync logging
+    const syncLogId = await logSyncStart('injury_sync', null);
+    let recordsProcessed = 0;
 
-    // Sync master player injury data (not league-specific)
-    const result = await syncMasterPlayerInjuries(userTokens.access_token);
+    try {
+      logger.info('Starting master player injury data sync');
 
-    const duration = timer.end();
-    logger.info('Completed injury sync process', {
-      syncId,
-      duration: `${duration}ms`,
-      result,
-    });
+      // Sync all NFL player injuries (master data)
+      const injuriesProcessed = await syncAllPlayerInjuries(
+        userTokens.access_token
+      );
+      recordsProcessed += injuriesProcessed;
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: 'Injury sync completed successfully',
+      await logSyncComplete(syncLogId, recordsProcessed);
+      logger.info('Completed master player injury data sync', {
+        injuriesProcessed,
+        totalProcessed: recordsProcessed,
+      });
+
+      const result = {
+        injuriesProcessed,
+        totalProcessed: recordsProcessed,
+      };
+
+      const duration = timer.end();
+      logger.info('Completed injury sync process', {
         syncId,
+        duration: `${duration}ms`,
         result,
-      }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
-    );
-  } catch (error) {
+      });
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Injury sync completed successfully',
+          syncId,
+          result,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    } catch (syncError: unknown) {
+      const errorMessage =
+        syncError instanceof Error ? syncError.message : String(syncError);
+      await logSyncError(syncLogId, errorMessage);
+      logger.error('Failed to sync master player injury data', {
+        error: errorMessage,
+      });
+      throw syncError;
+    }
+  } catch (error: unknown) {
     timer.end();
     logger.error('Injury sync process failed', {
-      error: error.message,
-      stack: error.stack,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
     });
 
     return new Response(
       JSON.stringify({
         error: 'Internal server error',
         message: 'Injury sync process failed',
-        details: error.message,
+        details: error instanceof Error ? error.message : String(error),
       }),
       {
         status: 500,
