@@ -187,7 +187,6 @@ export async function syncAllPlayers(yahooToken: string): Promise<number> {
           let playerKey = null;
           let name = null;
           let position = null;
-          let status = null;
           let team = null;
 
           // Search through the array to find the correct data
@@ -197,7 +196,6 @@ export async function syncAllPlayers(yahooToken: string): Promise<number> {
               if (item.player_key) playerKey = item.player_key;
               if (item.name?.full) name = item.name.full;
               if (item.display_position) position = item.display_position;
-              if (item.status) status = item.status;
               if (item.editorial_team_abbr) team = item.editorial_team_abbr;
             }
           }
@@ -218,7 +216,6 @@ export async function syncAllPlayers(yahooToken: string): Promise<number> {
             yahoo_player_id: playerKey,
             name,
             position,
-            status,
             team,
             last_updated: currentTime,
           };
