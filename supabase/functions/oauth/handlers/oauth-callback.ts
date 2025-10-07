@@ -7,6 +7,7 @@ import {
   REDIRECT_URI,
 } from '../utils/constants.ts';
 import { corsHeaders } from '../../utils/constants.ts';
+import { syncUserLeagues } from '../../utils/leagueSync.ts';
 // Nonce validation now done by comparing Chrome storage nonce with ID token nonce
 
 // Handle OAuth callback from Yahoo
@@ -321,7 +322,7 @@ export async function handleOAuthCallback(req: Request) {
       const { data: existingProfile, error: profileSearchError } =
         await supabase
           .from('user_profiles')
-          .select('id')
+          .select('id, name')
           .eq('id', userId)
           .single();
 
@@ -387,6 +388,27 @@ export async function handleOAuthCallback(req: Request) {
       }
     }
 
+    // Sync user's leagues and teams
+    let syncResult = null;
+    if (userId && tokenData.access_token) {
+      try {
+        logger.info('Starting league and team sync for user', { userId });
+        syncResult = await syncUserLeagues(userId, tokenData.access_token);
+        logger.info('League and team sync completed successfully', {
+          userId,
+          leaguesCount: syncResult.leagues.length,
+          teamsCount: syncResult.teams.length,
+        });
+      } catch (syncError) {
+        logger.error('League and team sync failed', {
+          userId,
+          error: syncError,
+        });
+        // Don't fail the entire OAuth flow if sync fails
+        logger.warn('Continuing OAuth flow despite sync failure');
+      }
+    }
+
     // Return success response with user info and tokens
     timer.end();
     return new Response(
@@ -402,6 +424,12 @@ export async function handleOAuthCallback(req: Request) {
           yahoo_token_expires_at:
             user.user?.user_metadata?.yahoo_token_expires_at,
         },
+        sync: syncResult
+          ? {
+              leagues_synced: syncResult.leagues.length,
+              teams_synced: syncResult.teams.length,
+            }
+          : null,
       }),
       {
         headers: {
@@ -413,9 +441,12 @@ export async function handleOAuthCallback(req: Request) {
   } catch (error) {
     logger.error('OAuth callback error', error);
     timer.end();
-    return new Response(`Internal server error: ${error.message}`, {
-      status: 500,
-      headers: { ...corsHeaders },
-    });
+    return new Response(
+      `Internal server error: ${error instanceof Error ? error.message : String(error)}`,
+      {
+        status: 500,
+        headers: { ...corsHeaders },
+      }
+    );
   }
 }
