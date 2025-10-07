@@ -1,6 +1,6 @@
-import { logger } from './logger.ts';
-import { makeYahooApiCall } from './yahooApi.ts';
-import { supabase } from './supabase.ts';
+import { logger } from '../../utils/logger.ts';
+import { makeYahooApiCall } from '../../utils/yahooApi.ts';
+import { supabase } from '../../utils/supabase.ts';
 
 export interface YahooLeague {
   league_key: string;
@@ -17,6 +17,17 @@ export interface YahooTeam {
   name: string;
   league_key: string;
   is_owned_by_current_login: boolean;
+}
+
+export interface YahooStatModifier {
+  stat_id: number;
+  value: number;
+  display_name: string;
+}
+
+export interface YahooLeagueSettings {
+  league_key: string;
+  stat_modifiers: YahooStatModifier[];
 }
 
 /**
@@ -108,6 +119,96 @@ export async function fetchUserLeagues(
 }
 
 /**
+ * Fetch league settings including stat modifiers from Yahoo Fantasy Sports API
+ */
+export async function fetchLeagueSettings(
+  accessToken: string,
+  leagueKey: string
+): Promise<YahooLeagueSettings | null> {
+  try {
+    const url = `https://fantasysports.yahooapis.com/fantasy/v2/league/${leagueKey}/settings?format=json`;
+
+    logger.info('Fetching league settings from Yahoo API', { leagueKey });
+    const response = await makeYahooApiCall(accessToken, url);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      logger.error('Failed to fetch league settings', {
+        leagueKey,
+        status: response.status,
+        error: errorText,
+      });
+      return null;
+    }
+
+    const data = await response.json();
+    const settings = data?.fantasy_content?.league?.[1]?.settings?.[0];
+
+    if (!settings) {
+      logger.warn('No settings found in Yahoo API response', { leagueKey });
+      return null;
+    }
+
+    // Extract stat modifiers from the settings
+    const statModifiers: YahooStatModifier[] = [];
+    const statModifiersData = settings.stat_modifiers?.stats;
+
+    if (statModifiersData && Array.isArray(statModifiersData)) {
+      // Get all valid stat_ids from stat_definitions table
+      const { data: statDefinitions, error: statDefError } = await supabase
+        .from('stat_definitions')
+        .select('stat_id');
+
+      if (statDefError) {
+        logger.warn('Error fetching stat definitions', {
+          error: statDefError,
+        });
+        // Continue without stat modifiers if we can't fetch definitions
+      } else {
+        const validStatIds = new Set(
+          statDefinitions?.map((def) => def.stat_id) || []
+        );
+
+        for (const statWrapper of statModifiersData) {
+          const stat = statWrapper?.stat;
+
+          if (stat && stat.stat_id && stat.value !== undefined) {
+            const statId = parseInt(stat.stat_id);
+
+            // Only include stat modifiers for stats that exist in our definitions
+            if (validStatIds.has(statId)) {
+              statModifiers.push({
+                stat_id: statId,
+                value: parseFloat(stat.value),
+                display_name: `Stat ${statId}`,
+              });
+            } else {
+              logger.debug('Skipping stat modifier for undefined stat_id', {
+                statId,
+                value: stat.value,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    logger.info('Successfully fetched league settings', {
+      leagueKey,
+      statModifiersCount: statModifiers.length,
+    });
+
+    return {
+      league_key: leagueKey,
+      stat_modifiers: statModifiers,
+    };
+  } catch (error) {
+    logger.error('Error fetching league settings', { leagueKey, error });
+    return null;
+  }
+}
+
+/**
  * Fetch teams for a specific league from Yahoo Fantasy Sports API
  */
 export async function fetchLeagueTeams(
@@ -179,6 +280,53 @@ export async function fetchLeagueTeams(
     return teamList;
   } catch (error) {
     logger.error('Error fetching league teams', { leagueKey, error });
+    throw error;
+  }
+}
+
+/**
+ * Sync league stat modifiers to the database
+ */
+export async function syncLeagueStatModifiers(
+  leagueId: string,
+  statModifiers: YahooStatModifier[]
+): Promise<void> {
+  try {
+    logger.info('Syncing league stat modifiers', {
+      leagueId,
+      modifiersCount: statModifiers.length,
+    });
+
+    if (statModifiers.length > 0) {
+      const modifiersToUpsert = statModifiers.map((modifier) => ({
+        league_id: leagueId,
+        stat_id: modifier.stat_id,
+        value: modifier.value,
+      }));
+
+      const { error: upsertError } = await supabase
+        .from('league_stat_modifiers')
+        .upsert(modifiersToUpsert, {
+          onConflict: 'league_id,stat_id',
+        });
+
+      if (upsertError) {
+        logger.error('Error upserting stat modifiers', {
+          leagueId,
+          error: upsertError,
+        });
+        throw upsertError;
+      }
+
+      logger.info('Successfully synced stat modifiers', {
+        leagueId,
+        count: modifiersToUpsert.length,
+      });
+    } else {
+      logger.info('No stat modifiers to sync for league', { leagueId });
+    }
+  } catch (error) {
+    logger.error('Error syncing league stat modifiers', { leagueId, error });
     throw error;
   }
 }
@@ -277,6 +425,28 @@ export async function syncUserLeagues(
 
         leagueId = newLeague.id;
         syncedLeagues.push(newLeague);
+      }
+
+      // Fetch and sync league settings (including stat modifiers)
+      try {
+        const leagueSettings = await fetchLeagueSettings(
+          accessToken,
+          yahooLeague.league_key
+        );
+
+        if (leagueSettings && leagueSettings.stat_modifiers.length > 0) {
+          await syncLeagueStatModifiers(
+            leagueId,
+            leagueSettings.stat_modifiers
+          );
+        }
+      } catch (settingsError) {
+        logger.error('Error syncing league settings', {
+          leagueId,
+          leagueKey: yahooLeague.league_key,
+          error: settingsError,
+        });
+        // Continue with team sync even if settings sync fails
       }
 
       // Now fetch and sync teams for this league

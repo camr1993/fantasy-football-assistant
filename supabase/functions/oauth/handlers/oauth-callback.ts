@@ -7,7 +7,7 @@ import {
   REDIRECT_URI,
 } from '../utils/constants.ts';
 import { corsHeaders } from '../../utils/constants.ts';
-import { syncUserLeagues } from '../../utils/leagueSync.ts';
+import { syncUserLeagues } from '../utils/leagueSync.ts';
 // Nonce validation now done by comparing Chrome storage nonce with ID token nonce
 
 // Handle OAuth callback from Yahoo
