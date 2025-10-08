@@ -370,6 +370,61 @@ class ApiClient {
   }
 
   /**
+   * Sync league data (leagues, teams, rosters) via edge function
+   */
+  async syncLeagueData(): Promise<ApiResponse<any>> {
+    try {
+      const yahooToken = await this.getYahooAccessToken();
+      if (!yahooToken) {
+        return {
+          success: false,
+          error: { error: 'No valid Yahoo access token' },
+        };
+      }
+
+      // Get user ID from Chrome storage
+      const result = await chrome.storage.local.get(['yahoo_user']);
+      const user = result.yahoo_user;
+
+      if (!user || !user.id) {
+        return {
+          success: false,
+          error: { error: 'No user found' },
+        };
+      }
+
+      const { data, error } = await supabase.functions.invoke(
+        'sync-league-data',
+        {
+          body: {
+            userId: user.id,
+            yahooAccessToken: yahooToken,
+          },
+        }
+      );
+
+      if (error) {
+        return {
+          success: false,
+          error: { error: error.message || 'League data sync failed' },
+        };
+      }
+
+      return {
+        success: true,
+        data: data,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+      };
+    }
+  }
+
+  /**
    * Get Yahoo access token from Chrome storage
    */
   private async getYahooAccessToken(): Promise<string | null> {

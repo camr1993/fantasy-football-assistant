@@ -373,3 +373,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/sync-injuries/deno.json"
 entrypoint = "./functions/sync-injuries/index.ts"
+
+[functions.sync-league-data]
+enabled = true
+verify_jwt = true
+import_map = "./functions/sync-league-data/deno.json"
+entrypoint = "./functions/sync-league-data/index.ts"
