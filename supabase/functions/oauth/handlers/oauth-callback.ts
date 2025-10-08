@@ -7,7 +7,6 @@ import {
   REDIRECT_URI,
 } from '../utils/constants.ts';
 import { corsHeaders } from '../../utils/constants.ts';
-import { syncUserLeagues } from '../utils/leagueSync.ts';
 // Nonce validation now done by comparing Chrome storage nonce with ID token nonce
 
 // Handle OAuth callback from Yahoo
@@ -388,26 +387,8 @@ export async function handleOAuthCallback(req: Request) {
       }
     }
 
-    // Sync user's leagues and teams
-    let syncResult = null;
-    if (userId && tokenData.access_token) {
-      try {
-        logger.info('Starting league and team sync for user', { userId });
-        syncResult = await syncUserLeagues(userId, tokenData.access_token);
-        logger.info('League and team sync completed successfully', {
-          userId,
-          leaguesCount: syncResult.leagues.length,
-          teamsCount: syncResult.teams.length,
-        });
-      } catch (syncError) {
-        logger.error('League and team sync failed', {
-          userId,
-          error: syncError,
-        });
-        // Don't fail the entire OAuth flow if sync fails
-        logger.warn('Continuing OAuth flow despite sync failure');
-      }
-    }
+    // Note: All data syncing (leagues, teams, rosters) is now handled
+    // by the comprehensive sync function triggered from the popup
 
     // Return success response with user info and tokens
     timer.end();
@@ -424,12 +405,6 @@ export async function handleOAuthCallback(req: Request) {
           yahoo_token_expires_at:
             user.user?.user_metadata?.yahoo_token_expires_at,
         },
-        sync: syncResult
-          ? {
-              leagues_synced: syncResult.leagues.length,
-              teams_synced: syncResult.teams.length,
-            }
-          : null,
       }),
       {
         headers: {

@@ -153,6 +153,9 @@ function Popup() {
         chrome.storage.local.set({ yahoo_user: data.user });
         // Clean up OAuth session data
         chrome.storage.local.remove(['oauth_nonce', 'oauth_timestamp']);
+
+        // Trigger league data sync in the background
+        triggerLeagueDataSync(data.user);
       } else {
         setError(data.error || 'Token exchange failed');
         // Clean up OAuth session data on error too
@@ -170,6 +173,24 @@ function Popup() {
     tokenManager.clearTokens();
     setUser(null);
     setIsAuthenticated(false);
+  }
+
+  // Function to trigger league data sync after successful authentication
+  async function triggerLeagueDataSync(user: any) {
+    try {
+      console.log('Starting league data sync for user:', user.id);
+
+      // Call the league data sync API via client
+      const result = await apiClient.syncLeagueData();
+
+      if (result.success) {
+        console.log('League data sync completed successfully:', result.data);
+      } else {
+        console.error('League data sync failed:', result.error?.error);
+      }
+    } catch (error) {
+      console.error('Error during league data sync:', error);
+    }
   }
 
   async function testYahooApi() {

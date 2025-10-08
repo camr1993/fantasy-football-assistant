@@ -1,6 +1,6 @@
-import { logger } from '../../utils/logger.ts';
-import { makeYahooApiCall } from '../../utils/yahooApi.ts';
-import { supabase } from '../../utils/supabase.ts';
+import { logger } from '../utils/logger.ts';
+import { makeYahooApiCall } from '../utils/yahooApi.ts';
+import { supabase } from '../utils/supabase.ts';
 
 export interface YahooLeague {
   league_key: string;
