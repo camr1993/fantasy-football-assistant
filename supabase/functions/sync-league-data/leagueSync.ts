@@ -592,6 +592,174 @@ export async function syncLeagueStatModifiers(
 }
 
 /**
+ * Sync only roster data for all teams in user's leagues
+ */
+export async function syncTeamRosterOnly(
+  userId: string,
+  accessToken: string
+): Promise<{
+  leagues: Record<string, unknown>[];
+  teams: Record<string, unknown>[];
+}> {
+  try {
+    logger.info('Starting roster-only sync for all teams in user leagues', {
+      userId,
+    });
+
+    // Get all leagues that the user is a member of (through teams)
+    const { data: userTeams, error: teamsError } = await supabase
+      .from('teams')
+      .select('league_id, leagues!inner(id, yahoo_league_id)')
+      .eq('user_id', userId);
+
+    if (teamsError) {
+      logger.error('Error fetching user teams', { userId, error: teamsError });
+      throw new Error(`Failed to fetch user teams: ${teamsError.message}`);
+    }
+
+    if (!userTeams || userTeams.length === 0) {
+      logger.warn('No teams found for user', { userId });
+      return {
+        leagues: [],
+        teams: [],
+      };
+    }
+
+    // Extract unique leagues from the teams
+    const uniqueLeagues: Array<{ id: string; yahoo_league_id: string }> = [];
+    for (const team of userTeams) {
+      const leagues = team.leagues as Array<{
+        id: string;
+        yahoo_league_id: string;
+      }>;
+      for (const league of leagues) {
+        if (!uniqueLeagues.find((l) => l.id === league.id)) {
+          uniqueLeagues.push(league);
+        }
+      }
+    }
+
+    logger.info('Found user leagues', {
+      userId,
+      leagueCount: uniqueLeagues.length,
+      leagueIds: uniqueLeagues.map((l) => l.yahoo_league_id),
+    });
+
+    const syncedTeams = [];
+    const syncedLeagues = [];
+
+    // For each league, get ALL teams and sync their rosters
+    for (const league of uniqueLeagues) {
+      try {
+        logger.info('Processing league', {
+          leagueId: league.id,
+          yahooLeagueId: league.yahoo_league_id,
+        });
+
+        // Get ALL teams in this league (not just user's teams)
+        const { data: leagueTeams, error: teamsError } = await supabase
+          .from('teams')
+          .select('id, yahoo_team_id, name')
+          .eq('league_id', league.id);
+
+        if (teamsError) {
+          logger.error('Error fetching teams for league', {
+            leagueId: league.id,
+            error: teamsError,
+          });
+          continue; // Skip this league and continue with others
+        }
+
+        if (!leagueTeams || leagueTeams.length === 0) {
+          logger.warn('No teams found in league', {
+            leagueId: league.id,
+            yahooLeagueId: league.yahoo_league_id,
+          });
+          continue;
+        }
+
+        logger.info('Found teams in league', {
+          leagueId: league.id,
+          teamCount: leagueTeams.length,
+        });
+
+        // Sync roster for each team in this league
+        for (const team of leagueTeams) {
+          try {
+            logger.info('Syncing roster for team', {
+              teamId: team.id,
+              yahooTeamId: team.yahoo_team_id,
+              teamName: team.name,
+            });
+
+            // Fetch and sync roster for this team
+            const roster = await fetchTeamRoster(
+              accessToken,
+              team.yahoo_team_id
+            );
+            if (roster) {
+              await syncTeamRoster(team.id, roster);
+              logger.info('Successfully synced roster for team', {
+                teamId: team.id,
+                yahooTeamId: team.yahoo_team_id,
+                teamName: team.name,
+              });
+              syncedTeams.push({
+                id: team.id,
+                yahoo_team_id: team.yahoo_team_id,
+                name: team.name,
+              });
+            } else {
+              logger.warn('No roster data found for team', {
+                yahooTeamId: team.yahoo_team_id,
+                teamName: team.name,
+              });
+            }
+          } catch (teamError) {
+            logger.error('Error syncing roster for team', {
+              teamId: team.id,
+              yahooTeamId: team.yahoo_team_id,
+              teamName: team.name,
+              error: teamError,
+            });
+            // Continue with other teams even if one fails
+          }
+        }
+
+        syncedLeagues.push({
+          id: league.id,
+          yahoo_league_id: league.yahoo_league_id,
+        });
+      } catch (leagueError) {
+        logger.error('Error processing league', {
+          leagueId: league.id,
+          yahooLeagueId: league.yahoo_league_id,
+          error: leagueError,
+        });
+        // Continue with other leagues even if one fails
+      }
+    }
+
+    logger.info('Roster-only sync completed', {
+      userId,
+      leaguesProcessed: syncedLeagues.length,
+      teamsSynced: syncedTeams.length,
+    });
+
+    return {
+      leagues: syncedLeagues,
+      teams: syncedTeams,
+    };
+  } catch (error) {
+    logger.error('Error syncing team rosters only', {
+      userId,
+      error,
+    });
+    throw error;
+  }
+}
+
+/**
  * Sync user's leagues to the database
  */
 export async function syncUserLeagues(

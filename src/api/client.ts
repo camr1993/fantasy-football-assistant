@@ -399,6 +399,7 @@ class ApiClient {
           body: {
             userId: user.id,
             yahooAccessToken: yahooToken,
+            syncType: 'full',
           },
         }
       );

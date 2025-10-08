@@ -1,6 +1,6 @@
 import { logger, performance } from '../utils/logger.ts';
 import { corsHeaders } from '../utils/constants.ts';
-import { syncUserLeagues } from './leagueSync.ts';
+import { syncUserLeagues, syncTeamRosterOnly } from './leagueSync.ts';
 
 Deno.serve(async (req) => {
   const timer = performance.start('sync_league_data_request');
@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
 
     // Get user data from request body
     const body = await req.json();
-    const { userId, yahooAccessToken } = body;
+    const { userId, yahooAccessToken, syncType = 'full' } = body;
 
     if (!userId || !yahooAccessToken) {
       logger.error('Missing userId or yahooAccessToken in request body');
@@ -63,11 +63,19 @@ Deno.serve(async (req) => {
       );
     }
 
-    logger.info('League data sync request for user', { userId });
+    logger.info('League data sync request for user', { userId, syncType });
 
-    // Sync all league data (leagues, teams, rosters)
-    logger.info('Starting comprehensive league data sync', { userId });
-    const syncResult = await syncUserLeagues(userId, yahooAccessToken);
+    let syncResult;
+
+    if (syncType === 'roster') {
+      // Sync only rosters for all user's teams
+      logger.info('Starting roster-only sync for all user teams', { userId });
+      syncResult = await syncTeamRosterOnly(userId, yahooAccessToken);
+    } else {
+      // Sync all league data (leagues, teams, rosters)
+      logger.info('Starting comprehensive league data sync', { userId });
+      syncResult = await syncUserLeagues(userId, yahooAccessToken);
+    }
 
     logger.info('League data sync completed successfully', {
       userId,
