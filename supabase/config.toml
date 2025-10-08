@@ -334,17 +334,6 @@ s3_access_key = "env(S3_ACCESS_KEY)"
 # Configures AWS_SECRET_ACCESS_KEY for S3 bucket
 s3_secret_key = "env(S3_SECRET_KEY)"
 
-[functions.users]
-enabled = true
-verify_jwt = true
-import_map = "./functions/users/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
-entrypoint = "./functions/users/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/users/*.html" ]
-
 [functions.tips]
 enabled = true
 verify_jwt = true
@@ -356,28 +345,6 @@ entrypoint = "./functions/tips/index.ts"
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/tips/*.html" ]
 
-[functions.leagues]
-enabled = true
-verify_jwt = true
-import_map = "./functions/leagues/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
-entrypoint = "./functions/leagues/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/leagues/*.html" ]
-
-[functions.teams]
-enabled = true
-verify_jwt = true
-import_map = "./functions/teams/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
-entrypoint = "./functions/teams/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/teams/*.html" ]
-
 [functions.oauth]
 enabled = true
 verify_jwt = false
@@ -388,42 +355,6 @@ entrypoint = "./functions/oauth/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/oauth/*.html" ]
-
-[functions.league-details]
-enabled = true
-verify_jwt = true
-import_map = "./functions/league-details/deno.json"
-entrypoint = "./functions/league-details/index.ts"
-
-[functions.matchups]
-enabled = true
-verify_jwt = true
-import_map = "./functions/matchups/deno.json"
-entrypoint = "./functions/matchups/index.ts"
-
-[functions.player-stats]
-enabled = true
-verify_jwt = true
-import_map = "./functions/player-stats/deno.json"
-entrypoint = "./functions/player-stats/index.ts"
-
-[functions.roster]
-enabled = true
-verify_jwt = true
-import_map = "./functions/roster/deno.json"
-entrypoint = "./functions/roster/index.ts"
-
-[functions.transactions]
-enabled = true
-verify_jwt = true
-import_map = "./functions/transactions/deno.json"
-entrypoint = "./functions/transactions/index.ts"
-
-[functions.waiver-wire]
-enabled = true
-verify_jwt = true
-import_map = "./functions/waiver-wire/deno.json"
-entrypoint = "./functions/waiver-wire/index.ts"
 
 [functions.sync-players]
 enabled = true
@@ -442,15 +373,3 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/sync-injuries/deno.json"
 entrypoint = "./functions/sync-injuries/index.ts"
-
-[functions.sync-user-login]
-enabled = true
-verify_jwt = true
-import_map = "./functions/sync-user-login/deno.json"
-entrypoint = "./functions/sync-user-login/index.ts"
-
-[functions.sync-transactions]
-enabled = true
-verify_jwt = true
-import_map = "./functions/sync-transactions/deno.json"
-entrypoint = "./functions/sync-transactions/index.ts"
