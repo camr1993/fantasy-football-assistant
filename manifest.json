@@ -11,6 +11,7 @@
     "alarms",
     "webRequest"
   ],
+  "host_permissions": ["https://football.fantasysports.yahoo.com/*"],
   "background": {
     "service_worker": "background.js",
     "type": "module"
