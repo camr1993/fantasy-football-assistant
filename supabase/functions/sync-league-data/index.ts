@@ -1,6 +1,7 @@
 import { logger, performance } from '../utils/logger.ts';
 import { corsHeaders } from '../utils/constants.ts';
-import { syncUserLeagues } from './leagueSync.ts';
+import { syncUserLeagues, syncTeamRosterOnly } from './leagueSync.ts';
+import { getUserTokens } from '../utils/userTokenManager.ts';
 
 Deno.serve(async (req) => {
   const timer = performance.start('sync_league_data_request');
@@ -46,15 +47,15 @@ Deno.serve(async (req) => {
 
     // Get user data from request body
     const body = await req.json();
-    const { userId, yahooAccessToken } = body;
+    const { userId, syncType = 'full' } = body;
 
-    if (!userId || !yahooAccessToken) {
-      logger.error('Missing userId or yahooAccessToken in request body');
+    if (!userId) {
+      logger.error('Missing userId in request body');
       timer.end();
       return new Response(
         JSON.stringify({
           code: 400,
-          message: 'Missing userId or yahooAccessToken',
+          message: 'Missing userId',
         }),
         {
           status: 400,
@@ -63,11 +64,36 @@ Deno.serve(async (req) => {
       );
     }
 
-    logger.info('League data sync request for user', { userId });
+    // Get user's tokens (with automatic refresh if needed)
+    const userTokens = await getUserTokens(userId);
+    if (!userTokens) {
+      logger.error('Failed to get user tokens', { userId });
+      timer.end();
+      return new Response(
+        JSON.stringify({
+          code: 401,
+          message: 'Failed to get user tokens. Please re-authenticate.',
+        }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
 
-    // Sync all league data (leagues, teams, rosters)
-    logger.info('Starting comprehensive league data sync', { userId });
-    const syncResult = await syncUserLeagues(userId, yahooAccessToken);
+    logger.info('League data sync request for user', { userId, syncType });
+
+    let syncResult;
+
+    if (syncType === 'roster') {
+      // Sync only rosters for all user's teams
+      logger.info('Starting roster-only sync for all user teams', { userId });
+      syncResult = await syncTeamRosterOnly(userId, userTokens.access_token);
+    } else {
+      // Sync all league data (leagues, teams, rosters)
+      logger.info('Starting comprehensive league data sync', { userId });
+      syncResult = await syncUserLeagues(userId, userTokens.access_token);
+    }
 
     logger.info('League data sync completed successfully', {
       userId,
