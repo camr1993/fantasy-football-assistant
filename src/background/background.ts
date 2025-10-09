@@ -6,10 +6,6 @@ chrome.runtime.onInstalled.addListener(() => {
 
   // Set up periodic roster sync (every 30 minutes)
   chrome.alarms.create('roster-sync', { periodInMinutes: 30 });
-
-  // For testing: create a test alarm that fires in 10 seconds
-  chrome.alarms.create('test-roster-sync', { delayInMinutes: 0.17 }); // ~10 seconds
-  console.log('Test alarm created - will fire in ~10 seconds');
 });
 
 // Listen for tab updates to detect when user navigates to Yahoo Fantasy Football
@@ -53,8 +49,5 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'roster-sync') {
     console.log('Periodic roster sync triggered');
     await apiClient.triggerRosterSync('periodic');
-  } else if (alarm.name === 'test-roster-sync') {
-    console.log('TEST: Roster sync alarm triggered!');
-    await apiClient.triggerRosterSync('test');
   }
 });

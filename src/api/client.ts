@@ -428,7 +428,7 @@ class ApiClient {
    * Trigger roster sync for all user teams
    */
   async triggerRosterSync(
-    syncType: 'manual' | 'periodic' | 'test' | 'post-triggered' = 'manual'
+    syncType: 'manual' | 'periodic' | 'post-triggered' = 'manual'
   ): Promise<ApiResponse<any>> {
     try {
       // Check if this is a periodic sync and if we've synced too recent
@@ -481,7 +481,7 @@ class ApiClient {
       console.log(data);
 
       // Store the last sync time for periodic syncs
-      if (syncType === 'periodic' || syncType === 'test') {
+      if (syncType === 'periodic') {
         await chrome.storage.local.set({
           lastPeriodicSync: Date.now(),
         });
