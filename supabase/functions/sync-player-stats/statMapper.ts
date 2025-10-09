@@ -15,6 +15,8 @@ export interface MappedStats {
   passing_yards: number;
   passing_touchdowns: number;
   interceptions: number;
+  passes_attempted: number;
+  passes_completed: number;
 
   // Rushing
   rushing_yards: number;
@@ -34,6 +36,7 @@ export interface MappedStats {
   // Misc
   two_point_conversions: number;
   offensive_fumble_return_td: number;
+  played: boolean;
 
   // Kicking
   fg_made_0_19: number;
@@ -54,6 +57,7 @@ export interface MappedStats {
   defensive_touchdowns: number;
   safeties: number;
   block_kicks: number;
+  total_yards_given_up: number;
 
   // Points Allowed Ranges (mutually exclusive)
   points_allowed_0: number;
@@ -70,7 +74,7 @@ export interface MappedStats {
  */
 export function mapYahooStatsToColumns(
   yahooStats: YahooStat[],
-  playerKey?: string
+  _playerKey?: string
 ): MappedStats {
   // Initialize all stats to 0
   const mappedStats: MappedStats = {
@@ -78,6 +82,8 @@ export function mapYahooStatsToColumns(
     passing_yards: 0,
     passing_touchdowns: 0,
     interceptions: 0,
+    passes_attempted: 0,
+    passes_completed: 0,
 
     // Rushing
     rushing_yards: 0,
@@ -97,6 +103,7 @@ export function mapYahooStatsToColumns(
     // Misc
     two_point_conversions: 0,
     offensive_fumble_return_td: 0,
+    played: false,
 
     // Kicking
     fg_made_0_19: 0,
@@ -117,6 +124,7 @@ export function mapYahooStatsToColumns(
     defensive_touchdowns: 0,
     safeties: 0,
     block_kicks: 0,
+    total_yards_given_up: 0,
 
     // Points Allowed Ranges (mutually exclusive)
     points_allowed_0: 0,
@@ -154,6 +162,15 @@ export function mapYahooStatsToColumns(
 
     switch (statId) {
       // Passing
+      case 0:
+        mappedStats.played = value === 1;
+        break;
+      case 1:
+        mappedStats.passes_attempted = value;
+        break;
+      case 2:
+        mappedStats.passes_completed = value;
+        break;
       case 4:
         mappedStats.passing_yards = value;
         break;
@@ -258,6 +275,9 @@ export function mapYahooStatsToColumns(
       case 37:
         mappedStats.block_kicks = value;
         break;
+      case 69:
+        mappedStats.total_yards_given_up = value;
+        break;
 
       // Points Allowed Ranges (mutually exclusive)
       case 50:
@@ -328,6 +348,8 @@ export function calculateFantasyPoints(
   let totalPoints = 0;
 
   // Passing
+  totalPoints += mappedStats.passes_attempted * (leagueModifiers[1] || 0);
+  totalPoints += mappedStats.passes_completed * (leagueModifiers[2] || 0);
   totalPoints += mappedStats.passing_yards * (leagueModifiers[4] || 0);
   totalPoints += mappedStats.passing_touchdowns * (leagueModifiers[5] || 0);
   totalPoints += mappedStats.interceptions * (leagueModifiers[6] || 0);
@@ -369,6 +391,7 @@ export function calculateFantasyPoints(
   totalPoints += mappedStats.defensive_touchdowns * (leagueModifiers[35] || 0);
   totalPoints += mappedStats.safeties * (leagueModifiers[36] || 0);
   totalPoints += mappedStats.block_kicks * (leagueModifiers[37] || 0);
+  totalPoints += mappedStats.total_yards_given_up * (leagueModifiers[69] || 0);
 
   // Points Allowed Ranges (mutually exclusive)
   totalPoints += mappedStats.points_allowed_0 * (leagueModifiers[50] || 0);
