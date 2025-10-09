@@ -632,7 +632,11 @@ export async function syncTeamRosterOnly(
         id: string;
         yahoo_league_id: string;
       }>;
-      for (const league of leagues) {
+
+      // Handle both single object and array cases
+      const leagueArray = Array.isArray(leagues) ? leagues : [leagues];
+
+      for (const league of leagueArray) {
         if (!uniqueLeagues.find((l) => l.id === league.id)) {
           uniqueLeagues.push(league);
         }
