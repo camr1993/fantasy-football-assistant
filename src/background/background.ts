@@ -5,7 +5,7 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log('Fantasy Assistant installed!');
 
   // Set up periodic roster sync (every 30 minutes)
-  chrome.alarms.create('roster-sync', { periodInMinutes: 30 });
+  chrome.alarms.create('roster-sync', { periodInMinutes: 120 });
 });
 
 // Listen for tab updates to detect when user navigates to Yahoo Fantasy Football
