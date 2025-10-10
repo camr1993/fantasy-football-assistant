@@ -518,7 +518,7 @@ class ApiClient {
 
       const now = Date.now();
       const timeSinceLastSync = now - lastSync;
-      const minIntervalMs = 25 * 60 * 1000; // 25 minutes in milliseconds
+      const minIntervalMs = 110 * 60 * 1000; // 110 minutes in milliseconds
 
       if (timeSinceLastSync < minIntervalMs) {
         const remainingMinutes = Math.ceil(
