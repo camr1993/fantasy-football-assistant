@@ -194,12 +194,40 @@ BEGIN
       AND ps.source = 'actual'
       AND ps.played = true
   )
-  INSERT INTO league_calcs (league_id, player_id, season_year, week, fantasy_points, updated_at)
-  SELECT league_id, player_id, season_year, week, fantasy_points, NOW()
+  INSERT INTO league_calcs (league_id, player_id, season_year, week, fantasy_points, recent_mean, recent_std, updated_at)
+  SELECT
+    league_id,
+    player_id,
+    season_year,
+    week,
+    fantasy_points,
+    -- Calculate recent mean (including current week)
+    (
+      SELECT AVG(lc2.fantasy_points)
+      FROM league_calcs lc2
+      WHERE lc2.league_id = calculated_points.league_id
+        AND lc2.player_id = calculated_points.player_id
+        AND lc2.season_year = calculated_points.season_year
+        AND lc2.week <= calculated_points.week
+        AND lc2.week > calculated_points.week - 3  -- Last 3 weeks including current
+    ) as recent_mean,
+    -- Calculate recent standard deviation (including current week)
+    (
+      SELECT STDDEV(lc2.fantasy_points)
+      FROM league_calcs lc2
+      WHERE lc2.league_id = calculated_points.league_id
+        AND lc2.player_id = calculated_points.player_id
+        AND lc2.season_year = calculated_points.season_year
+        AND lc2.week <= calculated_points.week
+        AND lc2.week > calculated_points.week - 3  -- Last 3 weeks including current
+    ) as recent_std,
+    NOW()
   FROM calculated_points
   ON CONFLICT (league_id, player_id, season_year, week)
   DO UPDATE SET
     fantasy_points = EXCLUDED.fantasy_points,
+    recent_mean = EXCLUDED.recent_mean,
+    recent_std = EXCLUDED.recent_std,
     updated_at = NOW();
 
   GET DIAGNOSTICS updated_count = ROW_COUNT;
