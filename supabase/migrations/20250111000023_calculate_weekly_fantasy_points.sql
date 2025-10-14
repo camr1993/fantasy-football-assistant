@@ -59,6 +59,7 @@ BEGIN
         (ps.defensive_int * COALESCE(lsm_dint.value, 0)) +
         (ps.fumble_recoveries * COALESCE(lsm_fr.value, 0)) +
         (ps.defensive_touchdowns * COALESCE(lsm_dtd.value, 0)) +
+        (ps.defense_return_touchdowns * COALESCE(lsm_drtd.value, 0)) +
         (ps.safeties * COALESCE(lsm_saf.value, 0)) +
         (ps.block_kicks * COALESCE(lsm_bk.value, 0)) +
         (ps.total_yards_given_up * COALESCE(lsm_tygu.value, 0)) +
@@ -158,6 +159,9 @@ BEGIN
 
     LEFT JOIN stat_definitions sd_dtd ON sd_dtd.player_stats_column = 'defensive_touchdowns'
     LEFT JOIN league_stat_modifiers lsm_dtd ON lsm_dtd.stat_id = sd_dtd.stat_id AND lsm_dtd.league_id = p_league_id
+
+    LEFT JOIN stat_definitions sd_drtd ON sd_drtd.player_stats_column = 'defense_return_touchdowns'
+    LEFT JOIN league_stat_modifiers lsm_drtd ON lsm_drtd.stat_id = sd_drtd.stat_id AND lsm_drtd.league_id = p_league_id
 
     LEFT JOIN stat_definitions sd_saf ON sd_saf.player_stats_column = 'safeties'
     LEFT JOIN league_stat_modifiers lsm_saf ON lsm_saf.stat_id = sd_saf.stat_id AND lsm_saf.league_id = p_league_id
