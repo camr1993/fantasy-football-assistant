@@ -1,7 +1,6 @@
 import { logger } from '../utils/logger.ts';
 import { supabase } from '../utils/supabase.ts';
 import {
-  calculatePointsFromStats,
   getMostRecentNFLWeek,
   makeYahooApiCallWithRetry,
 } from '../utils/syncHelpers.ts';
@@ -212,16 +211,19 @@ export async function syncAllPlayerStats(
         if (!playerRecord) continue;
 
         // Map Yahoo stats to individual columns
-        const yahooStats = stats.map((stat) => ({
-          stat: {
-            stat_id: (stat as any).stat?.stat_id as string,
-            value: (stat as any).stat?.value as string | number,
-          },
-        }));
+        const yahooStats = stats.map((stat) => {
+          const statObj = stat as Record<string, unknown>;
+          const statData = statObj.stat as Record<string, unknown> | undefined;
+          return {
+            stat: {
+              stat_id: statData?.stat_id as string,
+              value: statData?.value as string | number,
+            },
+          };
+        });
         const mappedStats = mapYahooStatsToColumns(yahooStats, playerKey || '');
 
-        // Calculate points using the old method for now (can be updated later)
-        const points = calculatePointsFromStats(yahooStats);
+        // Store raw player stats (no points calculation here)
         const currentTime = new Date().toISOString();
 
         statsInserts.push({
@@ -229,7 +231,6 @@ export async function syncAllPlayerStats(
           season_year: currentYear,
           week: currentWeek,
           source: 'actual',
-          points,
           updated_at: currentTime,
           // Individual stat columns
           ...mappedStats,

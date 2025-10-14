@@ -55,6 +55,7 @@ export interface MappedStats {
   defensive_int: number;
   fumble_recoveries: number;
   defensive_touchdowns: number;
+  defense_return_touchdowns: number;
   safeties: number;
   block_kicks: number;
   total_yards_given_up: number;
@@ -122,6 +123,7 @@ export function mapYahooStatsToColumns(
     defensive_int: 0,
     fumble_recoveries: 0,
     defensive_touchdowns: 0,
+    defense_return_touchdowns: 0,
     safeties: 0,
     block_kicks: 0,
     total_yards_given_up: 0,
@@ -271,6 +273,9 @@ export function mapYahooStatsToColumns(
         break;
       case 36:
         mappedStats.safeties = value;
+        break;
+      case 49:
+        mappedStats.defense_return_touchdowns = value;
         break;
       case 37:
         mappedStats.block_kicks = value;
