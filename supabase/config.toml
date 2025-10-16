@@ -397,3 +397,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/sync-nfl-matchups/deno.json"
 entrypoint = "./functions/sync-nfl-matchups/index.ts"
+
+[functions.sync-opponents]
+enabled = true
+verify_jwt = false
+import_map = "./functions/sync-opponents/deno.json"
+entrypoint = "./functions/sync-opponents/index.ts"
