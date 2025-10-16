@@ -50,7 +50,7 @@ interface EspnEvent {
     competitors: Array<{
       homeAway: 'home' | 'away';
       team: {
-        abbreviation: string;
+        displayName: string;
       };
     }>;
   }>;
@@ -109,10 +109,10 @@ async function fetchNflMatchups(): Promise<NflMatchup[]> {
       // Extract home and away teams
       const homeTeam = event.competitions[0]?.competitors?.find(
         (c) => c.homeAway === 'home'
-      )?.team?.abbreviation;
+      )?.team?.displayName;
       const awayTeam = event.competitions[0]?.competitors?.find(
         (c) => c.homeAway === 'away'
-      )?.team?.abbreviation;
+      )?.team?.displayName;
 
       if (!homeTeam || !awayTeam) {
         logger.warn('Missing team data for event', {

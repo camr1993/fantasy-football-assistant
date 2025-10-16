@@ -1,5 +1,5 @@
 {
   "imports": {
-    "supabase": "npm:@supabase/supabase-js"
+    "@supabase/supabase-js": "npm:@supabase/supabase-js"
   }
 }
