@@ -385,3 +385,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/league-calcs/deno.json"
 entrypoint = "./functions/league-calcs/index.ts"
+
+[functions.sync-defense-points-against]
+enabled = true
+verify_jwt = false
+import_map = "./functions/sync-defense-points-against/deno.json"
+entrypoint = "./functions/sync-defense-points-against/index.ts"
