@@ -8,7 +8,7 @@ CREATE OR REPLACE FUNCTION get_defense_totals_by_position(
   p_defense_player_id UUID,
   p_week INT
 ) RETURNS TABLE(
-  position TEXT,
+  "position" TEXT,
   total_points NUMERIC
 ) AS $$
 BEGIN
