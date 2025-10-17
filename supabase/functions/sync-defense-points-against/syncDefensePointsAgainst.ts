@@ -7,11 +7,11 @@ interface DefensePointsAgainst {
   player_id: string;
   season_year: number;
   week: number;
-  QB_pts_against: number;
-  RB_pts_against: number;
-  WR_pts_against: number;
-  TE_pts_against: number;
-  K_pts_against: number;
+  qb_pts_against: number;
+  rb_pts_against: number;
+  wr_pts_against: number;
+  te_pts_against: number;
+  k_pts_against: number;
 }
 
 /**
@@ -124,13 +124,6 @@ async function calculateDefensePointsAgainst(
   seasonYear: number,
   week: number
 ): Promise<DefensePointsAgainst | null> {
-  logger.debug('Calculating defense points against', {
-    leagueId,
-    defensePlayerId,
-    seasonYear,
-    week,
-  });
-
   try {
     // Query to get fantasy points by position for players who faced this defense in the specific week
 
@@ -172,11 +165,11 @@ async function calculateDefensePointsAgainst(
       player_id: defensePlayerId,
       season_year: seasonYear,
       week: week,
-      QB_pts_against: 0,
-      RB_pts_against: 0,
-      WR_pts_against: 0,
-      TE_pts_against: 0,
-      K_pts_against: 0,
+      qb_pts_against: 0,
+      rb_pts_against: 0,
+      wr_pts_against: 0,
+      te_pts_against: 0,
+      k_pts_against: 0,
     };
 
     // Sum up points by position
@@ -186,30 +179,24 @@ async function calculateDefensePointsAgainst(
 
       switch (position) {
         case 'QB':
-          pointsAgainst.QB_pts_against += points;
+          pointsAgainst.qb_pts_against += points;
           break;
         case 'RB':
-          pointsAgainst.RB_pts_against += points;
+          pointsAgainst.rb_pts_against += points;
           break;
         case 'WR':
-          pointsAgainst.WR_pts_against += points;
+          pointsAgainst.wr_pts_against += points;
           break;
         case 'TE':
-          pointsAgainst.TE_pts_against += points;
+          pointsAgainst.te_pts_against += points;
           break;
         case 'K':
-          pointsAgainst.K_pts_against += points;
+          pointsAgainst.k_pts_against += points;
           break;
         default:
           logger.debug('Unknown position found', { position, points });
       }
     }
-
-    logger.debug('Calculated defense points against', {
-      leagueId,
-      defensePlayerId,
-      pointsAgainst,
-    });
 
     return pointsAgainst;
   } catch (error) {
@@ -237,11 +224,11 @@ async function upsertDefensePointsAgainst(
         player_id: pointsAgainst.player_id,
         season_year: pointsAgainst.season_year,
         week: pointsAgainst.week,
-        QB_pts_against: pointsAgainst.QB_pts_against,
-        RB_pts_against: pointsAgainst.RB_pts_against,
-        WR_pts_against: pointsAgainst.WR_pts_against,
-        TE_pts_against: pointsAgainst.TE_pts_against,
-        K_pts_against: pointsAgainst.K_pts_against,
+        qb_pts_against: pointsAgainst.qb_pts_against,
+        rb_pts_against: pointsAgainst.rb_pts_against,
+        wr_pts_against: pointsAgainst.wr_pts_against,
+        te_pts_against: pointsAgainst.te_pts_against,
+        k_pts_against: pointsAgainst.k_pts_against,
         updated_at: new Date().toISOString(),
       },
       {
@@ -258,13 +245,6 @@ async function upsertDefensePointsAgainst(
         `Failed to upsert defense points against: ${error.message}`
       );
     }
-
-    logger.debug('Successfully upserted defense points against', {
-      leagueId: pointsAgainst.league_id,
-      playerId: pointsAgainst.player_id,
-      seasonYear: pointsAgainst.season_year,
-      week: pointsAgainst.week,
-    });
   } catch (error) {
     logger.error('Error upserting defense points against', {
       error: error instanceof Error ? error.message : String(error),

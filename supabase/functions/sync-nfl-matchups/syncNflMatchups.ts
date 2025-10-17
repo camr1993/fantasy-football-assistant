@@ -1,10 +1,5 @@
-import { createClient } from 'supabase';
+import { supabase } from '../utils/supabase.ts';
 import { logger } from '../utils/logger.ts';
-
-// Initialize Supabase client
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // ESPN API endpoint - dynamically generate dates for current NFL season
 const getCurrentNflSeason = () => {
