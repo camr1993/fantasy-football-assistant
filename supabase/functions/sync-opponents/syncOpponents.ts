@@ -52,45 +52,71 @@ async function populateOpponentDefensePlayerIds(
       week,
     });
 
-    // Get all player stats that need opponent_defense_player_id populated
-    const { data: playerStats, error: statsError } = await supabase
-      .from('player_stats')
-      .select(
-        `
-        id,
-        player_id,
-        season_year,
-        week,
-        players!player_stats_player_id_fkey(team)
-      `
-      )
-      .eq('season_year', seasonYear)
-      .eq('week', week)
-      .is('opponent_defense_player_id', null)
-      .eq('source', 'actual');
+    // Get all player stats that need opponent_defense_player_id populated with pagination
+    const allPlayerStats = [];
+    let from = 0;
+    const pageSize = 1000;
+    let hasMore = true;
 
-    if (statsError) {
-      logger.error('Failed to fetch player stats', { error: statsError });
-      throw new Error(`Failed to fetch player stats: ${statsError.message}`);
+    while (hasMore) {
+      const { data: playerStats, error: statsError } = await supabase
+        .from('player_stats')
+        .select(
+          `
+          id,
+          player_id,
+          season_year,
+          week,
+          players!player_stats_player_id_fkey(team)
+        `
+        )
+        .eq('season_year', seasonYear)
+        .eq('week', week)
+        .is('opponent_defense_player_id', null)
+        .eq('source', 'actual')
+        .range(from, from + pageSize - 1);
+
+      if (statsError) {
+        logger.error('Failed to fetch player stats', {
+          error: statsError,
+          from,
+          pageSize,
+        });
+        throw new Error(`Failed to fetch player stats: ${statsError.message}`);
+      }
+
+      if (!playerStats || playerStats.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      allPlayerStats.push(...playerStats);
+
+      if (playerStats.length < pageSize) {
+        hasMore = false;
+      } else {
+        from += pageSize;
+      }
     }
 
-    if (!playerStats || playerStats.length === 0) {
+    if (allPlayerStats.length === 0) {
       logger.info('No player stats found that need opponent defense player ID');
       return 0;
     }
 
-    logger.info(`Found ${playerStats.length} player stats to update`);
+    logger.info(`Found ${allPlayerStats.length} player stats to update`);
 
     // Process in batches to avoid overwhelming the database
     const batchSize = 100;
     let updatedCount = 0;
 
-    for (let i = 0; i < playerStats.length; i += batchSize) {
-      const batch = playerStats.slice(i, i + batchSize);
+    for (let i = 0; i < allPlayerStats.length; i += batchSize) {
+      const batch = allPlayerStats.slice(i, i + batchSize);
       const updates = [];
 
       for (const stat of batch) {
-        const playerTeam = (stat as any).players?.team;
+        const playerTeam = (stat as unknown as { players: { team: string } })
+          .players?.team;
 
         if (!playerTeam) {
           logger.debug('Player has no team, skipping', {
@@ -177,7 +203,7 @@ async function populateOpponentDefensePlayerIds(
     }
 
     logger.info('Completed populating opponent defense player IDs', {
-      totalStats: playerStats.length,
+      totalStats: allPlayerStats.length,
       updatedCount,
     });
 

@@ -12,6 +12,11 @@ interface DefensePointsAgainst {
   wr_pts_against: number;
   te_pts_against: number;
   k_pts_against: number;
+  qb_rolling_3_week_avg: number;
+  rb_rolling_3_week_avg: number;
+  wr_rolling_3_week_avg: number;
+  te_rolling_3_week_avg: number;
+  k_rolling_3_week_avg: number;
 }
 
 /**
@@ -116,6 +121,136 @@ export async function syncDefensePointsAgainst(week?: number): Promise<number> {
 }
 
 /**
+ * Calculate rolling 3-week averages for a defense player
+ */
+async function calculateRollingAverages(
+  leagueId: string,
+  defensePlayerId: string,
+  seasonYear: number,
+  currentWeek: number,
+  currentWeekData: DefensePointsAgainst
+): Promise<{
+  qb_rolling_3_week_avg: number;
+  rb_rolling_3_week_avg: number;
+  wr_rolling_3_week_avg: number;
+  te_rolling_3_week_avg: number;
+  k_rolling_3_week_avg: number;
+}> {
+  try {
+    // Special case for week 1: rolling average is just the current week's data
+    if (currentWeek === 1) {
+      return {
+        qb_rolling_3_week_avg: currentWeekData.qb_pts_against,
+        rb_rolling_3_week_avg: currentWeekData.rb_pts_against,
+        wr_rolling_3_week_avg: currentWeekData.wr_pts_against,
+        te_rolling_3_week_avg: currentWeekData.te_pts_against,
+        k_rolling_3_week_avg: currentWeekData.k_pts_against,
+      };
+    }
+
+    // Get the previous weeks of data for this defense player
+    // For week 2: week 1
+    // For week 3+: weeks (currentWeek-2) to (currentWeek-1)
+    const startWeek = Math.max(1, currentWeek - 2);
+    const endWeek = currentWeek - 1;
+
+    const { data: recentData, error } = await supabase
+      .from('defense_points_against')
+      .select(
+        'week, qb_pts_against, rb_pts_against, wr_pts_against, te_pts_against, k_pts_against'
+      )
+      .eq('league_id', leagueId)
+      .eq('player_id', defensePlayerId)
+      .eq('season_year', seasonYear)
+      .gte('week', startWeek)
+      .lte('week', endWeek)
+      .order('week', { ascending: true });
+
+    if (error) {
+      logger.error('Failed to fetch recent defense data for rolling average', {
+        error,
+        leagueId,
+        defensePlayerId,
+        seasonYear,
+        currentWeek,
+      });
+      return {
+        qb_rolling_3_week_avg: 0,
+        rb_rolling_3_week_avg: 0,
+        wr_rolling_3_week_avg: 0,
+        te_rolling_3_week_avg: 0,
+        k_rolling_3_week_avg: 0,
+      };
+    }
+
+    if (!recentData || recentData.length === 0) {
+      logger.debug('No recent data found for rolling average calculation', {
+        leagueId,
+        defensePlayerId,
+        seasonYear,
+        currentWeek,
+      });
+      return {
+        qb_rolling_3_week_avg: 0,
+        rb_rolling_3_week_avg: 0,
+        wr_rolling_3_week_avg: 0,
+        te_rolling_3_week_avg: 0,
+        k_rolling_3_week_avg: 0,
+      };
+    }
+
+    // Calculate averages including current week's data
+    const totalWeeks = recentData.length + 1; // +1 for current week
+    const qbTotal =
+      recentData.reduce(
+        (sum, record) => sum + (record.qb_pts_against || 0),
+        0
+      ) + currentWeekData.qb_pts_against;
+    const rbTotal =
+      recentData.reduce(
+        (sum, record) => sum + (record.rb_pts_against || 0),
+        0
+      ) + currentWeekData.rb_pts_against;
+    const wrTotal =
+      recentData.reduce(
+        (sum, record) => sum + (record.wr_pts_against || 0),
+        0
+      ) + currentWeekData.wr_pts_against;
+    const teTotal =
+      recentData.reduce(
+        (sum, record) => sum + (record.te_pts_against || 0),
+        0
+      ) + currentWeekData.te_pts_against;
+    const kTotal =
+      recentData.reduce((sum, record) => sum + (record.k_pts_against || 0), 0) +
+      currentWeekData.k_pts_against;
+
+    return {
+      qb_rolling_3_week_avg: totalWeeks > 0 ? qbTotal / totalWeeks : 0,
+      rb_rolling_3_week_avg: totalWeeks > 0 ? rbTotal / totalWeeks : 0,
+      wr_rolling_3_week_avg: totalWeeks > 0 ? wrTotal / totalWeeks : 0,
+      te_rolling_3_week_avg: totalWeeks > 0 ? teTotal / totalWeeks : 0,
+      k_rolling_3_week_avg: totalWeeks > 0 ? kTotal / totalWeeks : 0,
+    };
+  } catch (error) {
+    logger.error('Error calculating rolling averages', {
+      error: error instanceof Error ? error.message : String(error),
+      leagueId,
+      defensePlayerId,
+      seasonYear,
+      currentWeek,
+    });
+    return {
+      qb_rolling_3_week_avg: 0,
+      rb_rolling_3_week_avg: 0,
+      wr_rolling_3_week_avg: 0,
+      te_rolling_3_week_avg: 0,
+      k_rolling_3_week_avg: 0,
+    };
+  }
+}
+
+/**
  * Calculate defense points against for a specific defense player in a specific league
  */
 async function calculateDefensePointsAgainst(
@@ -170,6 +305,11 @@ async function calculateDefensePointsAgainst(
       wr_pts_against: 0,
       te_pts_against: 0,
       k_pts_against: 0,
+      qb_rolling_3_week_avg: 0,
+      rb_rolling_3_week_avg: 0,
+      wr_rolling_3_week_avg: 0,
+      te_rolling_3_week_avg: 0,
+      k_rolling_3_week_avg: 0,
     };
 
     // Sum up points by position
@@ -197,6 +337,22 @@ async function calculateDefensePointsAgainst(
           logger.debug('Unknown position found', { position, points });
       }
     }
+
+    // Calculate rolling 3-week averages AFTER calculating current week's points
+    const rollingAverages = await calculateRollingAverages(
+      leagueId,
+      defensePlayerId,
+      seasonYear,
+      week,
+      pointsAgainst
+    );
+
+    // Update the pointsAgainst object with rolling averages
+    pointsAgainst.qb_rolling_3_week_avg = rollingAverages.qb_rolling_3_week_avg;
+    pointsAgainst.rb_rolling_3_week_avg = rollingAverages.rb_rolling_3_week_avg;
+    pointsAgainst.wr_rolling_3_week_avg = rollingAverages.wr_rolling_3_week_avg;
+    pointsAgainst.te_rolling_3_week_avg = rollingAverages.te_rolling_3_week_avg;
+    pointsAgainst.k_rolling_3_week_avg = rollingAverages.k_rolling_3_week_avg;
 
     return pointsAgainst;
   } catch (error) {
@@ -229,6 +385,11 @@ async function upsertDefensePointsAgainst(
         wr_pts_against: pointsAgainst.wr_pts_against,
         te_pts_against: pointsAgainst.te_pts_against,
         k_pts_against: pointsAgainst.k_pts_against,
+        qb_rolling_3_week_avg: pointsAgainst.qb_rolling_3_week_avg,
+        rb_rolling_3_week_avg: pointsAgainst.rb_rolling_3_week_avg,
+        wr_rolling_3_week_avg: pointsAgainst.wr_rolling_3_week_avg,
+        te_rolling_3_week_avg: pointsAgainst.te_rolling_3_week_avg,
+        k_rolling_3_week_avg: pointsAgainst.k_rolling_3_week_avg,
         updated_at: new Date().toISOString(),
       },
       {
