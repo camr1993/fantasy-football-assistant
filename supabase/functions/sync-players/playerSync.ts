@@ -9,7 +9,7 @@ interface PlayerData {
       name?: { full?: string };
       display_position?: string;
       status?: string;
-      editorial_team_abbr?: string;
+      editorial_team_full_name?: string;
       bye_weeks?: { week?: string };
     }>
   >;
@@ -138,9 +138,9 @@ export async function syncAllPlayers(yahooToken: string): Promise<number> {
         if (playerData) {
           for (let i = 0; i < playerData.length; i++) {
             const item = playerData[i];
-            if (item && item.editorial_team_abbr) {
-              teamCounts[item.editorial_team_abbr] =
-                (teamCounts[item.editorial_team_abbr] || 0) + 1;
+            if (item && item.editorial_team_full_name) {
+              teamCounts[item.editorial_team_full_name] =
+                (teamCounts[item.editorial_team_full_name] || 0) + 1;
               break;
             }
           }
@@ -198,7 +198,8 @@ export async function syncAllPlayers(yahooToken: string): Promise<number> {
               if (item.player_key) playerKey = item.player_key;
               if (item.name?.full) name = item.name.full;
               if (item.display_position) position = item.display_position;
-              if (item.editorial_team_abbr) team = item.editorial_team_abbr;
+              if (item.editorial_team_full_name)
+                team = item.editorial_team_full_name;
               if (item.bye_weeks?.week) {
                 const week = parseInt(item.bye_weeks.week, 10);
                 if (!isNaN(week)) {

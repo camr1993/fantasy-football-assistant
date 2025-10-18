@@ -385,3 +385,21 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/league-calcs/deno.json"
 entrypoint = "./functions/league-calcs/index.ts"
+
+[functions.sync-defense-points-against]
+enabled = true
+verify_jwt = false
+import_map = "./functions/sync-defense-points-against/deno.json"
+entrypoint = "./functions/sync-defense-points-against/index.ts"
+
+[functions.sync-nfl-matchups]
+enabled = true
+verify_jwt = false
+import_map = "./functions/sync-nfl-matchups/deno.json"
+entrypoint = "./functions/sync-nfl-matchups/index.ts"
+
+[functions.sync-opponents]
+enabled = true
+verify_jwt = false
+import_map = "./functions/sync-opponents/deno.json"
+entrypoint = "./functions/sync-opponents/index.ts"
