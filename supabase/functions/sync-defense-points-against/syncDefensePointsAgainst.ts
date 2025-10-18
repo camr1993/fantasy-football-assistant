@@ -17,6 +17,16 @@ interface DefensePointsAgainst {
   wr_rolling_3_week_avg: number;
   te_rolling_3_week_avg: number;
   k_rolling_3_week_avg: number;
+  qb_odi: number;
+  rb_odi: number;
+  wr_odi: number;
+  te_odi: number;
+  k_odi: number;
+  qb_normalized_odi: number;
+  rb_normalized_odi: number;
+  wr_normalized_odi: number;
+  te_normalized_odi: number;
+  k_normalized_odi: number;
 }
 
 /**
@@ -251,6 +261,194 @@ async function calculateRollingAverages(
 }
 
 /**
+ * Calculate position-specific ODI (Opponent Difficulty Index) for a defense player
+ */
+async function calculateODI(
+  leagueId: string,
+  seasonYear: number,
+  week: number,
+  currentTeamData: DefensePointsAgainst
+): Promise<{
+  qb_odi: number;
+  rb_odi: number;
+  wr_odi: number;
+  te_odi: number;
+  k_odi: number;
+  qb_normalized_odi: number;
+  rb_normalized_odi: number;
+  wr_normalized_odi: number;
+  te_normalized_odi: number;
+  k_normalized_odi: number;
+}> {
+  try {
+    // Get all defense teams' rolling averages for this league and week
+    const { data: allTeamData, error } = await supabase
+      .from('defense_points_against')
+      .select(
+        'qb_rolling_3_week_avg, rb_rolling_3_week_avg, wr_rolling_3_week_avg, te_rolling_3_week_avg, k_rolling_3_week_avg'
+      )
+      .eq('league_id', leagueId)
+      .eq('season_year', seasonYear)
+      .eq('week', week);
+
+    if (error) {
+      logger.error('Failed to fetch team data for ODI calculation', {
+        error,
+        leagueId,
+        seasonYear,
+        week,
+      });
+      return {
+        qb_odi: 0,
+        rb_odi: 0,
+        wr_odi: 0,
+        te_odi: 0,
+        k_odi: 0,
+        qb_normalized_odi: 0,
+        rb_normalized_odi: 0,
+        wr_normalized_odi: 0,
+        te_normalized_odi: 0,
+        k_normalized_odi: 0,
+      };
+    }
+
+    if (!allTeamData || allTeamData.length === 0) {
+      logger.debug('No team data found for ODI calculation', {
+        leagueId,
+        seasonYear,
+        week,
+      });
+      return {
+        qb_odi: 0,
+        rb_odi: 0,
+        wr_odi: 0,
+        te_odi: 0,
+        k_odi: 0,
+        qb_normalized_odi: 0,
+        rb_normalized_odi: 0,
+        wr_normalized_odi: 0,
+        te_normalized_odi: 0,
+        k_normalized_odi: 0,
+      };
+    }
+
+    // Calculate league average rolling averages for each position
+    const totalTeams = allTeamData.length;
+    const leagueAvgQB =
+      allTeamData.reduce(
+        (sum, team) => sum + (team.qb_rolling_3_week_avg || 0),
+        0
+      ) / totalTeams;
+    const leagueAvgRB =
+      allTeamData.reduce(
+        (sum, team) => sum + (team.rb_rolling_3_week_avg || 0),
+        0
+      ) / totalTeams;
+    const leagueAvgWR =
+      allTeamData.reduce(
+        (sum, team) => sum + (team.wr_rolling_3_week_avg || 0),
+        0
+      ) / totalTeams;
+    const leagueAvgTE =
+      allTeamData.reduce(
+        (sum, team) => sum + (team.te_rolling_3_week_avg || 0),
+        0
+      ) / totalTeams;
+    const leagueAvgK =
+      allTeamData.reduce(
+        (sum, team) => sum + (team.k_rolling_3_week_avg || 0),
+        0
+      ) / totalTeams;
+
+    // Calculate position-specific ODI values
+    const qb_odi =
+      leagueAvgQB > 0 ? currentTeamData.qb_rolling_3_week_avg / leagueAvgQB : 0;
+    const rb_odi =
+      leagueAvgRB > 0 ? currentTeamData.rb_rolling_3_week_avg / leagueAvgRB : 0;
+    const wr_odi =
+      leagueAvgWR > 0 ? currentTeamData.wr_rolling_3_week_avg / leagueAvgWR : 0;
+    const te_odi =
+      leagueAvgTE > 0 ? currentTeamData.te_rolling_3_week_avg / leagueAvgTE : 0;
+    const k_odi =
+      leagueAvgK > 0 ? currentTeamData.k_rolling_3_week_avg / leagueAvgK : 0;
+
+    // Calculate normalized ODI for each position (0-1)
+    const qbODIs = allTeamData.map((team) =>
+      leagueAvgQB > 0 ? (team.qb_rolling_3_week_avg || 0) / leagueAvgQB : 0
+    );
+    const rbODIs = allTeamData.map((team) =>
+      leagueAvgRB > 0 ? (team.rb_rolling_3_week_avg || 0) / leagueAvgRB : 0
+    );
+    const wrODIs = allTeamData.map((team) =>
+      leagueAvgWR > 0 ? (team.wr_rolling_3_week_avg || 0) / leagueAvgWR : 0
+    );
+    const teODIs = allTeamData.map((team) =>
+      leagueAvgTE > 0 ? (team.te_rolling_3_week_avg || 0) / leagueAvgTE : 0
+    );
+    const kODIs = allTeamData.map((team) =>
+      leagueAvgK > 0 ? (team.k_rolling_3_week_avg || 0) / leagueAvgK : 0
+    );
+
+    const qb_min = Math.min(...qbODIs);
+    const qb_max = Math.max(...qbODIs);
+    const qb_normalized_odi =
+      qb_max > qb_min ? (qb_odi - qb_min) / (qb_max - qb_min) : 0;
+
+    const rb_min = Math.min(...rbODIs);
+    const rb_max = Math.max(...rbODIs);
+    const rb_normalized_odi =
+      rb_max > rb_min ? (rb_odi - rb_min) / (rb_max - rb_min) : 0;
+
+    const wr_min = Math.min(...wrODIs);
+    const wr_max = Math.max(...wrODIs);
+    const wr_normalized_odi =
+      wr_max > wr_min ? (wr_odi - wr_min) / (wr_max - wr_min) : 0;
+
+    const te_min = Math.min(...teODIs);
+    const te_max = Math.max(...teODIs);
+    const te_normalized_odi =
+      te_max > te_min ? (te_odi - te_min) / (te_max - te_min) : 0;
+
+    const k_min = Math.min(...kODIs);
+    const k_max = Math.max(...kODIs);
+    const k_normalized_odi =
+      k_max > k_min ? (k_odi - k_min) / (k_max - k_min) : 0;
+
+    return {
+      qb_odi,
+      rb_odi,
+      wr_odi,
+      te_odi,
+      k_odi,
+      qb_normalized_odi,
+      rb_normalized_odi,
+      wr_normalized_odi,
+      te_normalized_odi,
+      k_normalized_odi,
+    };
+  } catch (error) {
+    logger.error('Error calculating position-specific ODI', {
+      error: error instanceof Error ? error.message : String(error),
+      leagueId,
+      seasonYear,
+      week,
+    });
+    return {
+      qb_odi: 0,
+      rb_odi: 0,
+      wr_odi: 0,
+      te_odi: 0,
+      k_odi: 0,
+      qb_normalized_odi: 0,
+      rb_normalized_odi: 0,
+      wr_normalized_odi: 0,
+      te_normalized_odi: 0,
+      k_normalized_odi: 0,
+    };
+  }
+}
+
+/**
  * Calculate defense points against for a specific defense player in a specific league
  */
 async function calculateDefensePointsAgainst(
@@ -310,6 +508,16 @@ async function calculateDefensePointsAgainst(
       wr_rolling_3_week_avg: 0,
       te_rolling_3_week_avg: 0,
       k_rolling_3_week_avg: 0,
+      qb_odi: 0,
+      rb_odi: 0,
+      wr_odi: 0,
+      te_odi: 0,
+      k_odi: 0,
+      qb_normalized_odi: 0,
+      rb_normalized_odi: 0,
+      wr_normalized_odi: 0,
+      te_normalized_odi: 0,
+      k_normalized_odi: 0,
     };
 
     // Sum up points by position
@@ -354,6 +562,24 @@ async function calculateDefensePointsAgainst(
     pointsAgainst.te_rolling_3_week_avg = rollingAverages.te_rolling_3_week_avg;
     pointsAgainst.k_rolling_3_week_avg = rollingAverages.k_rolling_3_week_avg;
 
+    // Calculate position-specific ODI (Opponent Difficulty Index)
+    const odiData = await calculateODI(
+      leagueId,
+      seasonYear,
+      week,
+      pointsAgainst
+    );
+    pointsAgainst.qb_odi = odiData.qb_odi;
+    pointsAgainst.rb_odi = odiData.rb_odi;
+    pointsAgainst.wr_odi = odiData.wr_odi;
+    pointsAgainst.te_odi = odiData.te_odi;
+    pointsAgainst.k_odi = odiData.k_odi;
+    pointsAgainst.qb_normalized_odi = odiData.qb_normalized_odi;
+    pointsAgainst.rb_normalized_odi = odiData.rb_normalized_odi;
+    pointsAgainst.wr_normalized_odi = odiData.wr_normalized_odi;
+    pointsAgainst.te_normalized_odi = odiData.te_normalized_odi;
+    pointsAgainst.k_normalized_odi = odiData.k_normalized_odi;
+
     return pointsAgainst;
   } catch (error) {
     logger.error('Error calculating defense points against', {
@@ -390,6 +616,16 @@ async function upsertDefensePointsAgainst(
         wr_rolling_3_week_avg: pointsAgainst.wr_rolling_3_week_avg,
         te_rolling_3_week_avg: pointsAgainst.te_rolling_3_week_avg,
         k_rolling_3_week_avg: pointsAgainst.k_rolling_3_week_avg,
+        qb_odi: pointsAgainst.qb_odi,
+        rb_odi: pointsAgainst.rb_odi,
+        wr_odi: pointsAgainst.wr_odi,
+        te_odi: pointsAgainst.te_odi,
+        k_odi: pointsAgainst.k_odi,
+        qb_normalized_odi: pointsAgainst.qb_normalized_odi,
+        rb_normalized_odi: pointsAgainst.rb_normalized_odi,
+        wr_normalized_odi: pointsAgainst.wr_normalized_odi,
+        te_normalized_odi: pointsAgainst.te_normalized_odi,
+        k_normalized_odi: pointsAgainst.k_normalized_odi,
         updated_at: new Date().toISOString(),
       },
       {
