@@ -403,3 +403,21 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/sync-opponents/deno.json"
 entrypoint = "./functions/sync-opponents/index.ts"
+
+[functions.daily-data-sync]
+enabled = true
+verify_jwt = false
+import_map = "./functions/daily-data-sync/deno.json"
+entrypoint = "./functions/daily-data-sync/index.ts"
+
+[functions.weekly-data-sync]
+enabled = true
+verify_jwt = false
+import_map = "./functions/weekly-data-sync/deno.json"
+entrypoint = "./functions/weekly-data-sync/index.ts"
+
+[functions.annual-data-sync]
+enabled = true
+verify_jwt = false
+import_map = "./functions/annual-data-sync/deno.json"
+entrypoint = "./functions/annual-data-sync/index.ts"

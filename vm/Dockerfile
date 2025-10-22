@@ -1,0 +1,37 @@
+# Use Node.js 20 with TypeScript support
+FROM node:20-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update -qq && \
+    apt-get install --no-install-recommends -y build-essential python3 make g++ && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy package files
+COPY package.json package-lock.json* ./
+
+# Install dependencies
+RUN npm ci --only=production
+
+# Install tsx for TypeScript execution
+RUN npm install -g tsx
+
+# Copy the VM source code
+COPY src/ ./src/
+
+# Copy the shared TypeScript files from supabase functions
+COPY ../supabase/functions/utils/ ./supabase/functions/utils/
+
+# Copy tsconfig
+COPY tsconfig.json ./
+
+# Set environment
+ENV NODE_ENV=production
+
+# Expose port for health checks
+EXPOSE 3000
+
+# Run the VM with health check server
+CMD ["tsx", "src/index.ts"]
