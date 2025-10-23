@@ -1,37 +1,19 @@
-# Use Node.js 20 with TypeScript support
-FROM node:20-slim
+# Use Deno with TypeScript support
+FROM denoland/deno:2.0.0
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y build-essential python3 make g++ && \
-    rm -rf /var/lib/apt/lists/*
-
-# Copy package files from root
-COPY package.json package-lock.json* ./
-
-# Install dependencies
-RUN npm ci --only=production
-
-# Install tsx for TypeScript execution
-RUN npm install -g tsx
-
-# Copy the VM source code
-COPY vm/src/ ./src/
-
-# Copy the shared TypeScript files from supabase functions
-COPY supabase/functions/utils/ ./supabase/functions/utils/
-
-# Copy tsconfig from root
-COPY tsconfig.json ./
+# Copy the entire project structure to maintain import paths
+COPY vm/ ./vm/
+COPY supabase/ ./supabase/
+COPY deno.json ./deno.json
 
 # Set environment
-ENV NODE_ENV=production
+ENV DENO_ENV=production
 
 # Expose port for health checks
 EXPOSE 3000
 
-# Run the VM with health check server
-CMD ["tsx", "src/index.ts"]
+# Run the VM with health check server using Deno
+CMD ["deno", "run", "--allow-net", "--allow-env", "--allow-read", "vm/src/index.ts"]
