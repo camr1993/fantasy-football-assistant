@@ -20,6 +20,86 @@ interface LeagueCalcsResult {
 }
 
 /**
+ * Calculate efficiency metrics for a player for a specific week
+ */
+async function calculateEfficiencyMetrics(
+  leagueId: string,
+  playerId: string,
+  seasonYear: number,
+  week: number
+): Promise<{
+  targets_per_game: number;
+  catch_rate: number;
+  yards_per_target: number;
+}> {
+  try {
+    // Get player stats for the specific week
+    const { data: playerStats, error } = await supabase
+      .from('player_stats')
+      .select(
+        `
+        receptions,
+        targets,
+        receiving_yards,
+        players!player_stats_player_id_fkey(position)
+      `
+      )
+      .eq('player_id', playerId)
+      .eq('season_year', seasonYear)
+      .eq('week', week)
+      .eq('source', 'actual')
+      .single();
+
+    if (error || !playerStats) {
+      logger.debug('No player stats found for efficiency metrics', {
+        leagueId,
+        playerId,
+        seasonYear,
+        week,
+        error: error?.message,
+      });
+      return {
+        targets_per_game: 0,
+        catch_rate: 0,
+        yards_per_target: 0,
+      };
+    }
+
+    const receptions = playerStats.receptions || 0;
+    const targets = playerStats.targets || 0;
+    const receivingYards = playerStats.receiving_yards || 0;
+
+    // Calculate targets per game (for this week, it's just the targets)
+    const targetsPerGame = targets;
+
+    // Calculate catch rate (receptions / targets)
+    const catchRate = targets > 0 ? receptions / targets : 0;
+
+    // Calculate yards per target
+    const yardsPerTarget = targets > 0 ? receivingYards / targets : 0;
+
+    return {
+      targets_per_game: Math.round(targetsPerGame * 100) / 100,
+      catch_rate: Math.round(catchRate * 1000) / 1000, // Round to 3 decimal places
+      yards_per_target: Math.round(yardsPerTarget * 100) / 100,
+    };
+  } catch (error) {
+    logger.error('Error calculating efficiency metrics', {
+      error: error instanceof Error ? error.message : String(error),
+      leagueId,
+      playerId,
+      seasonYear,
+      week,
+    });
+    return {
+      targets_per_game: 0,
+      catch_rate: 0,
+      yards_per_target: 0,
+    };
+  }
+}
+
+/**
  * Calculate recent statistics (mean and std) for a player over recent weeks
  */
 async function calculateRecentStats(
@@ -166,7 +246,7 @@ async function updateRecentStatsForLeague(
     return;
   }
 
-  // Update recent stats for each player
+  // Update recent stats and efficiency metrics for each player
   for (const player of players) {
     const { recent_mean, recent_std } = await calculateRecentStats(
       leagueId,
@@ -175,12 +255,23 @@ async function updateRecentStatsForLeague(
       week
     );
 
-    // Update the league_calcs record with recent statistics
+    const { targets_per_game, catch_rate, yards_per_target } =
+      await calculateEfficiencyMetrics(
+        leagueId,
+        player.player_id,
+        seasonYear,
+        week
+      );
+
+    // Update the league_calcs record with recent statistics and efficiency metrics
     const { error: updateError } = await supabase
       .from('league_calcs')
       .update({
         recent_mean,
         recent_std,
+        targets_per_game,
+        catch_rate,
+        yards_per_target,
         updated_at: new Date().toISOString(),
       })
       .eq('league_id', leagueId)
@@ -189,13 +280,16 @@ async function updateRecentStatsForLeague(
       .eq('week', week);
 
     if (updateError) {
-      logger.error('Failed to update recent stats for player', {
-        error: updateError,
-        leagueId,
-        playerId: player.player_id,
-        seasonYear,
-        week,
-      });
+      logger.error(
+        'Failed to update recent stats and efficiency metrics for player',
+        {
+          error: updateError,
+          leagueId,
+          playerId: player.player_id,
+          seasonYear,
+          week,
+        }
+      );
     }
   }
 
