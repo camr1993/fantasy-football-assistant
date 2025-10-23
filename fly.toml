@@ -1,8 +1,9 @@
 # VM configuration for fantasy football sync
-app = 'fantasy-football-sync-vm'
+app = 'fantasy-football-assistant-vm'
 primary_region = 'ewr'
 
 [build]
+  dockerfile = "Dockerfile.vm"
 
 [[vm]]
   memory = '512mb'

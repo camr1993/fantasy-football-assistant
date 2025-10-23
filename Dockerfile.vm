@@ -9,7 +9,7 @@ RUN apt-get update -qq && \
     apt-get install --no-install-recommends -y build-essential python3 make g++ && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy package files
+# Copy package files from root
 COPY package.json package-lock.json* ./
 
 # Install dependencies
@@ -19,12 +19,12 @@ RUN npm ci --only=production
 RUN npm install -g tsx
 
 # Copy the VM source code
-COPY src/ ./src/
+COPY vm/src/ ./src/
 
 # Copy the shared TypeScript files from supabase functions
-COPY ../supabase/functions/utils/ ./supabase/functions/utils/
+COPY supabase/functions/utils/ ./supabase/functions/utils/
 
-# Copy tsconfig
+# Copy tsconfig from root
 COPY tsconfig.json ./
 
 # Set environment

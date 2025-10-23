@@ -73,14 +73,14 @@ supabase db push
 
 ```bash
 cd vm
-fly apps create fantasy-football-sync-vm
+fly apps create fantasy-football-assistant-vm
 fly secrets set SUPABASE_URL=your_supabase_url
 fly secrets set SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 fly secrets set YAHOO_CLIENT_ID=your_yahoo_client_id
 fly secrets set YAHOO_CLIENT_SECRET=your_yahoo_client_secret
 fly secrets set SUPER_ADMIN_USER_ID=your_admin_user_id
 fly secrets set FLY_API_TOKEN=your_fly_api_token
-fly secrets set VM_APP_NAME=fantasy-football-sync-vm
+fly secrets set VM_APP_NAME=fantasy-football-assistant-vm
 fly deploy
 ```
 
