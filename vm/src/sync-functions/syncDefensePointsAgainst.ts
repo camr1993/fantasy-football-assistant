@@ -213,27 +213,29 @@ async function calculateRollingAverages(
     const totalWeeks = recentData.length + 1; // +1 for current week
     const qbTotal =
       recentData.reduce(
-        (sum, record) => sum + (record.qb_pts_against || 0),
+        (sum: number, record: any) => sum + (record.qb_pts_against || 0),
         0
       ) + currentWeekData.qb_pts_against;
     const rbTotal =
       recentData.reduce(
-        (sum, record) => sum + (record.rb_pts_against || 0),
+        (sum: number, record: any) => sum + (record.rb_pts_against || 0),
         0
       ) + currentWeekData.rb_pts_against;
     const wrTotal =
       recentData.reduce(
-        (sum, record) => sum + (record.wr_pts_against || 0),
+        (sum: number, record: any) => sum + (record.wr_pts_against || 0),
         0
       ) + currentWeekData.wr_pts_against;
     const teTotal =
       recentData.reduce(
-        (sum, record) => sum + (record.te_pts_against || 0),
+        (sum: number, record: any) => sum + (record.te_pts_against || 0),
         0
       ) + currentWeekData.te_pts_against;
     const kTotal =
-      recentData.reduce((sum, record) => sum + (record.k_pts_against || 0), 0) +
-      currentWeekData.k_pts_against;
+      recentData.reduce(
+        (sum: number, record: any) => sum + (record.k_pts_against || 0),
+        0
+      ) + currentWeekData.k_pts_against;
 
     return {
       qb_rolling_3_week_avg: totalWeeks > 0 ? qbTotal / totalWeeks : 0,
@@ -336,27 +338,27 @@ async function calculateODI(
     const totalTeams = allTeamData.length;
     const leagueAvgQB =
       allTeamData.reduce(
-        (sum, team) => sum + (team.qb_rolling_3_week_avg || 0),
+        (sum: number, team: any) => sum + (team.qb_rolling_3_week_avg || 0),
         0
       ) / totalTeams;
     const leagueAvgRB =
       allTeamData.reduce(
-        (sum, team) => sum + (team.rb_rolling_3_week_avg || 0),
+        (sum: number, team: any) => sum + (team.rb_rolling_3_week_avg || 0),
         0
       ) / totalTeams;
     const leagueAvgWR =
       allTeamData.reduce(
-        (sum, team) => sum + (team.wr_rolling_3_week_avg || 0),
+        (sum: number, team: any) => sum + (team.wr_rolling_3_week_avg || 0),
         0
       ) / totalTeams;
     const leagueAvgTE =
       allTeamData.reduce(
-        (sum, team) => sum + (team.te_rolling_3_week_avg || 0),
+        (sum: number, team: any) => sum + (team.te_rolling_3_week_avg || 0),
         0
       ) / totalTeams;
     const leagueAvgK =
       allTeamData.reduce(
-        (sum, team) => sum + (team.k_rolling_3_week_avg || 0),
+        (sum: number, team: any) => sum + (team.k_rolling_3_week_avg || 0),
         0
       ) / totalTeams;
 
@@ -373,19 +375,19 @@ async function calculateODI(
       leagueAvgK > 0 ? currentTeamData.k_rolling_3_week_avg / leagueAvgK : 0;
 
     // Calculate normalized ODI for each position (0-1)
-    const qbODIs = allTeamData.map((team) =>
+    const qbODIs = allTeamData.map((team: any) =>
       leagueAvgQB > 0 ? (team.qb_rolling_3_week_avg || 0) / leagueAvgQB : 0
     );
-    const rbODIs = allTeamData.map((team) =>
+    const rbODIs = allTeamData.map((team: any) =>
       leagueAvgRB > 0 ? (team.rb_rolling_3_week_avg || 0) / leagueAvgRB : 0
     );
-    const wrODIs = allTeamData.map((team) =>
+    const wrODIs = allTeamData.map((team: any) =>
       leagueAvgWR > 0 ? (team.wr_rolling_3_week_avg || 0) / leagueAvgWR : 0
     );
-    const teODIs = allTeamData.map((team) =>
+    const teODIs = allTeamData.map((team: any) =>
       leagueAvgTE > 0 ? (team.te_rolling_3_week_avg || 0) / leagueAvgTE : 0
     );
-    const kODIs = allTeamData.map((team) =>
+    const kODIs = allTeamData.map((team: any) =>
       leagueAvgK > 0 ? (team.k_rolling_3_week_avg || 0) / leagueAvgK : 0
     );
 

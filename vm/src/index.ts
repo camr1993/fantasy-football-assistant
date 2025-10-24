@@ -10,7 +10,9 @@ import { syncNflMatchups } from './sync-functions/syncNflMatchups.ts';
 import { syncOpponents } from './sync-functions/syncOpponents.ts';
 import { syncUserLeagues } from './sync-functions/leagueSync.ts';
 import { syncDefensePointsAgainst } from './sync-functions/syncDefensePointsAgainst.ts';
-import { handleLeagueCalculations } from './sync-functions/leagueCalcs.ts';
+import { calculateAllLeaguesFantasyPoints } from './sync-functions/fantasyPointsCalc.ts';
+import { calculateRecentStatsOnly } from './sync-functions/leagueCalcs.ts';
+import { getMostRecentNFLWeek } from '../../supabase/functions/utils/syncHelpers.ts';
 import { createServer } from 'node:http';
 
 interface Job {
@@ -53,6 +55,14 @@ const SYNC_FUNCTIONS: Record<string, SyncFunction> = {
     fn: (yahooToken: string) =>
       syncUserLeagues(Deno.env.get('SUPER_ADMIN_USER_ID') || '', yahooToken),
   },
+  'fantasy-points-calc': {
+    name: 'fantasy-points-calc',
+    fn: (_yahooToken: string, week?: number) =>
+      calculateAllLeaguesFantasyPoints(
+        new Date().getFullYear(),
+        week ?? getMostRecentNFLWeek()
+      ),
+  },
   'sync-defense-points-against': {
     name: 'sync-defense-points-against',
     fn: (_yahooToken: string, week?: number) => syncDefensePointsAgainst(week),
@@ -60,11 +70,7 @@ const SYNC_FUNCTIONS: Record<string, SyncFunction> = {
   'league-calcs': {
     name: 'league-calcs',
     fn: (_yahooToken: string, week?: number) =>
-      handleLeagueCalculations({
-        season_year: new Date().getFullYear(),
-        week: week,
-        recalculate_all: false,
-      }),
+      calculateRecentStatsOnly(undefined, new Date().getFullYear(), week),
   },
 };
 

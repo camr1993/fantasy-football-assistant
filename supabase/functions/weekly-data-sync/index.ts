@@ -89,21 +89,26 @@ Deno.serve(async (req) => {
       //   status: 'pending',
       //   week: null,
       // },
-      {
-        name: 'sync-player-stats',
-        status: 'pending',
-        week: week || null,
-      },
-      {
-        name: 'sync-opponents',
-        status: 'pending',
-        week: week || null,
-      },
       // {
-      //   name: 'sync-defense-points-against',
+      //   name: 'sync-player-stats',
       //   status: 'pending',
       //   week: week || null,
       // },
+      // {
+      //   name: 'sync-opponents',
+      //   status: 'pending',
+      //   week: week || null,
+      // },
+      {
+        name: 'fantasy-points-calc',
+        status: 'pending',
+        week: week || null,
+      },
+      {
+        name: 'sync-defense-points-against',
+        status: 'pending',
+        week: week || null,
+      },
       // {
       //   name: 'league-calcs',
       //   status: 'pending',

@@ -2,22 +2,16 @@ import { logger } from '../../../supabase/functions/utils/logger.ts';
 import { supabase } from '../../../supabase/functions/utils/supabase.ts';
 import { getMostRecentNFLWeek } from '../../../supabase/functions/utils/syncHelpers.ts';
 
+/**
+ * League Calculations - Recent Statistics Module
+ *
+ * This module handles the calculation of recent statistics (mean and standard deviation)
+ * for fantasy points over the last 3 weeks. It operates on existing fantasy points
+ * data in the league_calcs table.
+ */
+
 // Configuration for recent statistics calculation
 const RECENT_WEEKS = 3; // Number of recent weeks to include in mean/std calculations
-
-interface LeagueCalcsRequest {
-  league_id?: string;
-  season_year?: number;
-  week?: number;
-  recalculate_all?: boolean;
-}
-
-interface LeagueCalcsResult {
-  league_id: string;
-  season_year: number;
-  week: number;
-  updated_count: number;
-}
 
 /**
  * Calculate recent statistics (mean and std) for a player over recent weeks
@@ -56,72 +50,30 @@ async function calculateRecentStats(
   }
 
   const points = recentPoints
-    .map((r) => r.fantasy_points)
-    .filter((p) => p !== null);
+    .map((r: any) => r.fantasy_points)
+    .filter((p: any) => p !== null);
 
   if (points.length === 0) {
     return { recent_mean: null, recent_std: null };
   }
 
   // Calculate mean
-  const mean = points.reduce((sum, point) => sum + point, 0) / points.length;
+  const mean =
+    points.reduce((sum: number, point: number) => sum + point, 0) /
+    points.length;
 
   // Calculate standard deviation
   const variance =
-    points.reduce((sum, point) => sum + Math.pow(point - mean, 2), 0) /
-    points.length;
+    points.reduce(
+      (sum: number, point: number) => sum + Math.pow(point - mean, 2),
+      0
+    ) / points.length;
   const std = Math.sqrt(variance);
 
   return {
     recent_mean: Math.round(mean * 100) / 100, // Round to 2 decimal places
     recent_std: Math.round(std * 100) / 100, // Round to 2 decimal places
   };
-}
-
-/**
- * Calculate fantasy points for a specific league and week
- */
-export async function calculateLeagueFantasyPoints(
-  leagueId: string,
-  seasonYear: number,
-  week: number
-): Promise<number> {
-  logger.info('Calculating fantasy points for specific league', {
-    leagueId,
-    seasonYear,
-    week,
-  });
-
-  const { data: result, error } = await supabase.rpc(
-    'calculate_weekly_fantasy_points',
-    {
-      p_league_id: leagueId,
-      p_season_year: seasonYear,
-      p_week: week,
-    }
-  );
-
-  if (error) {
-    logger.error('Failed to calculate fantasy points for league', {
-      error,
-      leagueId,
-      seasonYear,
-      week,
-    });
-    throw new Error(`Failed to calculate fantasy points: ${error.message}`);
-  }
-
-  logger.info('Successfully calculated fantasy points for league', {
-    leagueId,
-    seasonYear,
-    week,
-    updated_count: result,
-  });
-
-  // Update recent statistics after main calculation
-  await updateRecentStatsForLeague(leagueId, seasonYear, week);
-
-  return result;
 }
 
 /**
@@ -208,157 +160,69 @@ async function updateRecentStatsForLeague(
 }
 
 /**
- * Calculate fantasy points for all leagues for a specific week
+ * Calculate only recent statistics for existing fantasy points
  */
-export async function calculateAllLeaguesFantasyPoints(
-  seasonYear: number,
-  week: number
-): Promise<LeagueCalcsResult[]> {
-  logger.info('Calculating fantasy points for all leagues', {
-    seasonYear,
-    week,
-  });
-
-  const { data: results, error } = await supabase.rpc(
-    'recalculate_all_fantasy_points',
-    {
-      p_season_year: seasonYear,
-      p_week: week,
-    }
-  );
-
-  if (error) {
-    logger.error('Failed to calculate fantasy points for all leagues', {
-      error,
-      seasonYear,
-      week,
-    });
-    throw new Error(`Failed to calculate fantasy points: ${error.message}`);
-  }
-
-  logger.info('Successfully calculated fantasy points for all leagues', {
-    results: results?.length || 0,
-    seasonYear,
-    week,
-  });
-
-  // Update recent statistics for all leagues
-  if (results && results.length > 0) {
-    for (const result of results) {
-      await updateRecentStatsForLeague(result.league_id, seasonYear, week);
-    }
-  }
-
-  return results || [];
-}
-
-/**
- * Calculate fantasy points for all leagues and all weeks
- */
-export async function recalculateAllFantasyPoints(
+export async function calculateRecentStatsOnly(
+  leagueId?: string,
   seasonYear?: number,
   week?: number
-): Promise<LeagueCalcsResult[]> {
-  const currentYear = seasonYear || new Date().getFullYear();
-
-  logger.info('Recalculating fantasy points for all leagues and weeks', {
-    seasonYear: currentYear,
-    week,
-  });
-
-  const { data: results, error } = await supabase.rpc(
-    'recalculate_all_fantasy_points',
-    {
-      p_season_year: currentYear,
-      p_week: week || null,
-    }
-  );
-
-  if (error) {
-    logger.error('Failed to recalculate all fantasy points', { error });
-    throw new Error(`Failed to recalculate fantasy points: ${error.message}`);
-  }
-
-  logger.info('Successfully recalculated fantasy points for all leagues', {
-    results: results?.length || 0,
-  });
-
-  // Update recent statistics for all leagues and weeks
-  if (results && results.length > 0) {
-    for (const result of results) {
-      await updateRecentStatsForLeague(
-        result.league_id,
-        result.season_year,
-        result.week
-      );
-    }
-  }
-
-  return results || [];
-}
-
-/**
- * Main function to handle league calculations based on request parameters
- */
-export async function handleLeagueCalculations(
-  request: LeagueCalcsRequest
 ): Promise<{
   success: boolean;
   message: string;
-  results?: LeagueCalcsResult[];
   league_id?: string;
   season_year?: number;
   week?: number;
   updated_count?: number;
 }> {
-  const currentYear = request.season_year || new Date().getFullYear();
-  const currentWeek = request.week || getMostRecentNFLWeek();
+  const currentYear = seasonYear || new Date().getFullYear();
+  const currentWeek = week || getMostRecentNFLWeek();
 
-  logger.info('Starting league calculations', {
-    league_id: request.league_id,
+  logger.info('Calculating recent statistics only', {
+    league_id: leagueId,
     season_year: currentYear,
     week: currentWeek,
-    recalculate_all: request.recalculate_all,
   });
 
-  if (request.recalculate_all) {
-    // Recalculate points for all leagues and weeks
-    const results = await recalculateAllFantasyPoints(currentYear, currentWeek);
+  if (leagueId) {
+    // Update recent stats for a specific league
+    await updateRecentStatsForLeague(leagueId, currentYear, currentWeek);
 
     return {
       success: true,
-      message: 'Fantasy points recalculated for all leagues',
-      results,
-    };
-  } else if (request.league_id) {
-    // Calculate points for a specific league
-    const updatedCount = await calculateLeagueFantasyPoints(
-      request.league_id,
-      currentYear,
-      currentWeek
-    );
-
-    return {
-      success: true,
-      message: 'Fantasy points calculated successfully',
-      league_id: request.league_id,
+      message: 'Recent statistics calculated for league',
+      league_id: leagueId,
       season_year: currentYear,
       week: currentWeek,
-      updated_count: updatedCount,
     };
   } else {
-    // Default behavior: calculate for all leagues for current week
-    const results = await calculateAllLeaguesFantasyPoints(
-      currentYear,
-      currentWeek
-    );
+    // Update recent stats for all leagues
+    const { data: leagues, error } = await supabase
+      .from('league_calcs')
+      .select('DISTINCT league_id')
+      .eq('season_year', currentYear)
+      .eq('week', currentWeek)
+      .not('fantasy_points', 'is', null);
+
+    if (error) {
+      logger.error('Failed to fetch leagues for recent stats', { error });
+      throw new Error(`Failed to fetch leagues: ${error.message}`);
+    }
+
+    if (leagues && leagues.length > 0) {
+      for (const league of leagues) {
+        await updateRecentStatsForLeague(
+          league.league_id,
+          currentYear,
+          currentWeek
+        );
+      }
+    }
 
     return {
       success: true,
-      message: 'Fantasy points calculated for all leagues',
+      message: 'Recent statistics calculated for all leagues',
       season_year: currentYear,
       week: currentWeek,
-      results,
     };
   }
 }
