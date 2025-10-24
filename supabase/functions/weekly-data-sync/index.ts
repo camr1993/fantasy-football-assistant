@@ -84,11 +84,11 @@ Deno.serve(async (req) => {
 
     // Create weekly sync jobs
     const weeklyJobs = [
-      {
-        name: 'sync-players',
-        status: 'pending',
-        week: null,
-      },
+      // {
+      //   name: 'sync-players',
+      //   status: 'pending',
+      //   week: null,
+      // },
       {
         name: 'sync-player-stats',
         status: 'pending',
@@ -99,21 +99,16 @@ Deno.serve(async (req) => {
         status: 'pending',
         week: week || null,
       },
-      {
-        name: 'sync-league-data',
-        status: 'pending',
-        week: week || null,
-      },
-      {
-        name: 'sync-defense-points-against',
-        status: 'pending',
-        week: week || null,
-      },
-      {
-        name: 'league-calcs',
-        status: 'pending',
-        week: week || null,
-      },
+      // {
+      //   name: 'sync-defense-points-against',
+      //   status: 'pending',
+      //   week: week || null,
+      // },
+      // {
+      //   name: 'league-calcs',
+      //   status: 'pending',
+      //   week: week || null,
+      // },
     ];
 
     // Insert jobs into the database

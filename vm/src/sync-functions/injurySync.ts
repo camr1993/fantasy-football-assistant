@@ -203,7 +203,8 @@ export async function syncAllPlayerInjuries(
         const injuryRecords = injuryInserts
           .map((injuryRecord, index) => {
             const playerRecord = playerRecords.find(
-              (p) => p.yahoo_player_id === injuryRecord?.yahoo_player_id
+              (p: { yahoo_player_id: string; id: string }) =>
+                p.yahoo_player_id === injuryRecord?.yahoo_player_id
             );
             if (!playerRecord) return null;
 

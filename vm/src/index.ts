@@ -25,45 +25,37 @@ interface Job {
 interface SyncFunction {
   name: string;
   fn: (yahooToken: string, week?: number) => Promise<any>;
-  requiresWeek: boolean;
 }
 
 const SYNC_FUNCTIONS: Record<string, SyncFunction> = {
   'sync-players': {
     name: 'sync-players',
     fn: syncAllPlayers,
-    requiresWeek: false,
   },
   'sync-injuries': {
     name: 'sync-injuries',
     fn: syncAllPlayerInjuries,
-    requiresWeek: false,
   },
   'sync-player-stats': {
     name: 'sync-player-stats',
     fn: syncAllPlayerStats,
-    requiresWeek: true,
   },
   'sync-nfl-matchups': {
     name: 'sync-nfl-matchups',
     fn: () => syncNflMatchups(),
-    requiresWeek: false,
   },
   'sync-opponents': {
     name: 'sync-opponents',
     fn: (_yahooToken: string, week?: number) => syncOpponents(week),
-    requiresWeek: true,
   },
   'sync-league-data': {
     name: 'sync-league-data',
     fn: (yahooToken: string) =>
       syncUserLeagues(Deno.env.get('SUPER_ADMIN_USER_ID') || '', yahooToken),
-    requiresWeek: false,
   },
   'sync-defense-points-against': {
     name: 'sync-defense-points-against',
     fn: (_yahooToken: string, week?: number) => syncDefensePointsAgainst(week),
-    requiresWeek: false,
   },
   'league-calcs': {
     name: 'league-calcs',
@@ -73,7 +65,6 @@ const SYNC_FUNCTIONS: Record<string, SyncFunction> = {
         week: week,
         recalculate_all: false,
       }),
-    requiresWeek: true,
   },
 };
 
@@ -154,15 +145,10 @@ async function runJob(job: Job): Promise<boolean> {
     let recordsProcessed = 0;
 
     let result: any;
-    if (syncFunction.requiresWeek && job.week) {
-      result = await syncFunction.fn(userTokens.access_token, job.week);
-    } else if (syncFunction.requiresWeek && !job.week) {
-      throw new Error(
-        `Job ${job.name} requires a week parameter but none was provided`
-      );
-    } else {
-      result = await syncFunction.fn(userTokens.access_token);
-    }
+    result = await syncFunction.fn(
+      userTokens.access_token,
+      job.week ?? undefined
+    );
 
     // Extract records processed from different return types
     if (typeof result === 'number') {

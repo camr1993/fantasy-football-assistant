@@ -210,7 +210,7 @@ export async function fetchLeagueSettings(
         // Continue without stat modifiers if we can't fetch definitions
       } else {
         const validStatIds = new Set(
-          statDefinitions?.map((def) => def.stat_id) || []
+          statDefinitions?.map((def: { stat_id: number }) => def.stat_id) || []
         );
 
         for (const statWrapper of statModifiersData) {
