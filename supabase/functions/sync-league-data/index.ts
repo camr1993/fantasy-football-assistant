@@ -32,19 +32,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader) {
-      logger.warn('Missing authorization header for league data sync');
-      timer.end();
-      return new Response(
-        JSON.stringify({ code: 401, message: 'Missing authorization header' }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
-    }
-
     // Get user data from request body
     const body = await req.json();
     const { userId, syncType = 'full' } = body;
@@ -81,17 +68,24 @@ Deno.serve(async (req) => {
       );
     }
 
-    logger.info('League data sync request for user', { userId, syncType });
+    logger.info('League data sync request for user', {
+      userId,
+      syncType,
+    });
 
     let syncResult;
 
     if (syncType === 'roster') {
       // Sync only rosters for all user's teams
-      logger.info('Starting roster-only sync for all user teams', { userId });
+      logger.info('Starting roster-only sync for all user teams', {
+        userId,
+      });
       syncResult = await syncTeamRosterOnly(userId, userTokens.access_token);
     } else {
       // Sync all league data (leagues, teams, rosters)
-      logger.info('Starting comprehensive league data sync', { userId });
+      logger.info('Starting comprehensive league data sync', {
+        userId,
+      });
       syncResult = await syncUserLeagues(userId, userTokens.access_token);
     }
 
