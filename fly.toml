@@ -1,0 +1,23 @@
+# VM configuration for fantasy football sync
+app = 'fantasy-football-assistant-vm'
+primary_region = 'ewr'
+
+[build]
+  dockerfile = "Dockerfile.vm"
+
+[[vm]]
+  memory = '512mb'
+  cpu_kind = 'shared'
+  cpus = 1
+
+# HTTP service for health checks and autostop
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+# Environment variables will be set via fly secrets
+[env]
+  NODE_ENV = 'production'

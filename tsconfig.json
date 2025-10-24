@@ -21,7 +21,8 @@
     "src",
     "src/types/**/*.d.ts",
     "vite.config.ts",
-    "supabase/functions/**/*.ts"
+    "supabase/functions/**/*.ts",
+    "vm/src/**/*.ts"
   ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

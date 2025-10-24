@@ -1,5 +1,5 @@
-import { supabase } from '../utils/supabase.ts';
-import { logger } from '../utils/logger.ts';
+import { supabase } from '../../../supabase/functions/utils/supabase.ts';
+import { logger } from '../../../supabase/functions/utils/logger.ts';
 
 // ESPN API endpoint - dynamically generate dates for current NFL season
 const getCurrentNflSeason = () => {
@@ -26,6 +26,7 @@ interface NflMatchup {
   away_team: string;
   season: number;
   week: number;
+  updated_at: string;
 }
 
 // Interface for ESPN API response
@@ -122,6 +123,7 @@ async function fetchNflMatchups(): Promise<NflMatchup[]> {
         away_team: awayTeam,
         season: event.season.year,
         week: event.week.number,
+        updated_at: new Date().toISOString(),
       });
     }
 

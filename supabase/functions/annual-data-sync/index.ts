@@ -1,7 +1,9 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 import { logger, performance } from '../utils/logger.ts';
 import { corsHeaders } from '../utils/constants.ts';
-import { syncDefensePointsAgainst } from './syncDefensePointsAgainst.ts';
+import { supabase } from '../utils/supabase.ts';
+import { startVM } from '../utils/vmManager.ts';
+import { JobData } from '../utils/types.ts';
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
@@ -9,35 +11,9 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  const timer = performance.start('sync-defense-points-against');
+  const timer = performance.start('annual-data-sync');
 
   try {
-    // Parse request body for optional week parameter
-    let week: number | undefined;
-    try {
-      const body = await req.json();
-      week = body.week;
-      if (
-        week !== undefined &&
-        (typeof week !== 'number' || week < 1 || week > 18)
-      ) {
-        logger.warn('Invalid week parameter provided', { week });
-        return new Response(
-          JSON.stringify({
-            error: 'Invalid week parameter',
-            message: 'Week must be a number between 1 and 18',
-          }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          }
-        );
-      }
-    } catch (_parseError) {
-      // If JSON parsing fails, continue without week parameter (for cron jobs)
-      logger.debug('No request body or invalid JSON, using default week');
-    }
-
     // Authenticate using cron job secret
     const cronSecret = req.headers.get('x-supabase-webhook-source');
     const expectedSecret = Deno.env.get('CRON_JOB_SECRET');
@@ -75,32 +51,61 @@ Deno.serve(async (req) => {
       );
     }
 
-    const syncId = crypto.randomUUID();
-    logger.info('Starting defense totals sync process', {
-      syncId,
+    logger.info('Starting annual data sync', {
       timestamp: new Date().toISOString(),
     });
 
-    logger.info('Starting defense points against sync', { week });
+    // Create annual sync jobs
+    const annualJobs = [
+      {
+        name: 'sync-nfl-matchups',
+        status: 'pending',
+        week: null,
+      },
+    ];
 
-    // Sync defense points against
-    const totalsProcessed = await syncDefensePointsAgainst(week);
+    // Insert jobs into the database
+    const { data: insertedJobs, error: insertError } = await supabase
+      .from('jobs')
+      .insert(annualJobs)
+      .select();
+
+    if (insertError) {
+      logger.error('Failed to insert annual sync jobs', { error: insertError });
+      timer.end();
+      return new Response(
+        JSON.stringify({
+          error: 'Database error',
+          message: 'Failed to create sync jobs',
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    logger.info('Created annual sync jobs', {
+      jobCount: insertedJobs?.length || 0,
+      jobs: insertedJobs?.map((j: JobData) => j.name) || [],
+    });
+
+    // Start the VM
+    await startVM();
 
     const duration = timer.end();
-    logger.info('Completed defense points against sync process', {
-      syncId,
+    logger.info('Completed annual data sync setup', {
       duration: `${duration}ms`,
-      totalsProcessed,
-      week,
+      jobsCreated: insertedJobs?.length || 0,
     });
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Defense points against sync completed successfully',
-        syncId,
-        totalsProcessed,
-        week,
+        message: 'Annual data sync jobs created successfully',
+        jobsCreated: insertedJobs?.length || 0,
+        jobs:
+          insertedJobs?.map((j: JobData) => ({ id: j.id, name: j.name })) || [],
       }),
       {
         status: 200,
@@ -111,7 +116,7 @@ Deno.serve(async (req) => {
     timer.end();
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorStack = error instanceof Error ? error.stack : undefined;
-    logger.error('Defense points against sync process failed', {
+    logger.error('Annual data sync process failed', {
       error: errorMessage,
       stack: errorStack,
     });
@@ -119,7 +124,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         error: 'Internal server error',
-        message: 'Defense points against sync process failed',
+        message: 'Annual data sync process failed',
         details: errorMessage,
       }),
       {

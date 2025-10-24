@@ -1,6 +1,6 @@
-import { logger } from '../utils/logger.ts';
-import { supabase } from '../utils/supabase.ts';
-import { makeYahooApiCallWithRetry } from '../utils/syncHelpers.ts';
+import { logger } from '../../../supabase/functions/utils/logger.ts';
+import { supabase } from '../../../supabase/functions/utils/supabase.ts';
+import { makeYahooApiCallWithRetry } from '../../../supabase/functions/utils/syncHelpers.ts';
 
 interface PlayerData {
   player?: Array<

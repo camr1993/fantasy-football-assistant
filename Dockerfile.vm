@@ -1,0 +1,19 @@
+# Use Deno with TypeScript support
+FROM denoland/deno:2.0.0
+
+# Set working directory
+WORKDIR /app
+
+# Copy the entire project structure to maintain import paths
+COPY vm/ ./vm/
+COPY supabase/ ./supabase/
+COPY deno.json ./deno.json
+
+# Set environment
+ENV DENO_ENV=production
+
+# Expose port for health checks
+EXPOSE 3000
+
+# Run the VM with health check server using Deno
+CMD ["deno", "run", "--allow-net", "--allow-env", "--allow-read", "vm/src/index.ts"]

@@ -1,6 +1,6 @@
-import { logger } from '../utils/logger.ts';
-import { supabase } from '../utils/supabase.ts';
-import { makeYahooApiCallWithRetry } from '../utils/syncHelpers.ts';
+import { logger } from '../../../supabase/functions/utils/logger.ts';
+import { supabase } from '../../../supabase/functions/utils/supabase.ts';
+import { makeYahooApiCallWithRetry } from '../../../supabase/functions/utils/syncHelpers.ts';
 
 interface PlayerData {
   player?: Array<
@@ -203,7 +203,8 @@ export async function syncAllPlayerInjuries(
         const injuryRecords = injuryInserts
           .map((injuryRecord, index) => {
             const playerRecord = playerRecords.find(
-              (p) => p.yahoo_player_id === injuryRecord?.yahoo_player_id
+              (p: { yahoo_player_id: string; id: string }) =>
+                p.yahoo_player_id === injuryRecord?.yahoo_player_id
             );
             if (!playerRecord) return null;
 

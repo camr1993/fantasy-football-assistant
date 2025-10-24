@@ -1,9 +1,9 @@
-import { logger } from '../utils/logger.ts';
-import { supabase } from '../utils/supabase.ts';
+import { logger } from '../../../supabase/functions/utils/logger.ts';
+import { supabase } from '../../../supabase/functions/utils/supabase.ts';
 import {
   getMostRecentNFLWeek,
   makeYahooApiCallWithRetry,
-} from '../utils/syncHelpers.ts';
+} from '../../../supabase/functions/utils/syncHelpers.ts';
 import { mapYahooStatsToColumns } from './statMapper.ts';
 
 interface PlayerStatsData {

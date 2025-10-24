@@ -1,6 +1,6 @@
-import { logger } from '../utils/logger.ts';
-import { supabase } from '../utils/supabase.ts';
-import { getMostRecentNFLWeek } from '../utils/syncHelpers.ts';
+import { logger } from '../../../supabase/functions/utils/logger.ts';
+import { supabase } from '../../../supabase/functions/utils/supabase.ts';
+import { getMostRecentNFLWeek } from '../../../supabase/functions/utils/syncHelpers.ts';
 
 /**
  * Sync opponents for all player stats
