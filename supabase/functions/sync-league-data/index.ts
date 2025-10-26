@@ -1,6 +1,6 @@
 import { logger, performance } from '../utils/logger.ts';
 import { corsHeaders } from '../utils/constants.ts';
-import { syncUserLeagues, syncTeamRosterOnly } from './leagueSync.ts';
+import { supabase } from '../utils/supabase.ts';
 import { getUserTokens } from '../utils/userTokenManager.ts';
 
 Deno.serve(async (req) => {
@@ -51,7 +51,12 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get user's tokens (with automatic refresh if needed)
+    logger.info('League data sync request for user', {
+      userId,
+      syncType,
+    });
+
+    // Get user's tokens (with automatic refresh if needed) to validate authentication
     const userTokens = await getUserTokens(userId);
     if (!userTokens) {
       logger.error('Failed to get user tokens', { userId });
@@ -68,39 +73,57 @@ Deno.serve(async (req) => {
       );
     }
 
-    logger.info('League data sync request for user', {
-      userId,
-      syncType,
-    });
+    logger.info('User authentication validated', { userId });
 
-    let syncResult;
+    // Create job in the database
+    const jobName =
+      syncType === 'roster' ? 'sync-team-roster-only' : 'sync-league-data';
 
-    if (syncType === 'roster') {
-      // Sync only rosters for all user's teams
-      logger.info('Starting roster-only sync for all user teams', {
+    const { data: job, error: jobError } = await supabase
+      .from('jobs')
+      .insert({
+        name: jobName,
+        status: 'pending',
+        user_id: userId,
+        priority: 100, // Normal priority for user-triggered jobs (default)
+      })
+      .select()
+      .single();
+
+    if (jobError) {
+      logger.error('Failed to create job', {
         userId,
+        syncType,
+        error: jobError,
       });
-      syncResult = await syncTeamRosterOnly(userId, userTokens.access_token);
-    } else {
-      // Sync all league data (leagues, teams, rosters)
-      logger.info('Starting comprehensive league data sync', {
-        userId,
-      });
-      syncResult = await syncUserLeagues(userId, userTokens.access_token);
+      timer.end();
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: 'Failed to create sync job',
+          error: jobError.message,
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     }
 
-    logger.info('League data sync completed successfully', {
+    logger.info('Job created successfully', {
+      jobId: job.id,
+      jobName: job.name,
       userId,
-      leaguesSynced: syncResult.leagues.length,
-      teamsSynced: syncResult.teams.length,
+      syncType,
     });
 
     timer.end();
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'League data sync completed successfully',
-        result: syncResult,
+        message: 'League data sync job created successfully',
+        jobId: job.id,
+        status: 'pending',
       }),
       {
         headers: {

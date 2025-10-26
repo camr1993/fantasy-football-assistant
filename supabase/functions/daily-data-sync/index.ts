@@ -60,6 +60,7 @@ Deno.serve(async (req) => {
       {
         name: 'sync-injuries',
         status: 'pending',
+        priority: 10, // High priority for scheduled jobs
         week: null,
       },
     ];

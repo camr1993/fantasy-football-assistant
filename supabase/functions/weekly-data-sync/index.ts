@@ -84,34 +84,40 @@ Deno.serve(async (req) => {
 
     // Create weekly sync jobs
     const weeklyJobs = [
-      // {
-      //   name: 'sync-players',
-      //   status: 'pending',
-      //   week: null,
-      // },
-      // {
-      //   name: 'sync-player-stats',
-      //   status: 'pending',
-      //   week: week || null,
-      // },
-      // {
-      //   name: 'sync-opponents',
-      //   status: 'pending',
-      //   week: week || null,
-      // },
-      // {
-      //   name: 'fantasy-points-calc',
-      //   status: 'pending',
-      //   week: week || null,
-      // },
-      // {
-      //   name: 'sync-defense-points-against',
-      //   status: 'pending',
-      //   week: week || null,
-      // },
+      {
+        name: 'sync-players',
+        status: 'pending',
+        week: null,
+        priority: 10, // High priority for scheduled jobs
+      },
+      {
+        name: 'sync-player-stats',
+        status: 'pending',
+        week: week || null,
+        priority: 10, // High priority for scheduled jobs
+      },
+      {
+        name: 'sync-opponents',
+        status: 'pending',
+        week: week || null,
+        priority: 10, // High priority for scheduled jobs
+      },
+      {
+        name: 'fantasy-points-calc',
+        status: 'pending',
+        week: week || null,
+        priority: 10, // High priority for scheduled jobs
+      },
+      {
+        name: 'sync-defense-points-against',
+        status: 'pending',
+        week: week || null,
+        priority: 10, // High priority for scheduled jobs
+      },
       {
         name: 'league-calcs',
         status: 'pending',
+        priority: 10, // High priority for scheduled jobs
         week: week || null,
       },
     ];
