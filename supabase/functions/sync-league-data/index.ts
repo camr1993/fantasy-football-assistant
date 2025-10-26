@@ -2,6 +2,7 @@ import { logger, performance } from '../utils/logger.ts';
 import { corsHeaders } from '../utils/constants.ts';
 import { supabase } from '../utils/supabase.ts';
 import { getUserTokens } from '../utils/userTokenManager.ts';
+import { startVM } from '../utils/vmManager.ts';
 
 Deno.serve(async (req) => {
   const timer = performance.start('sync_league_data_request');
@@ -117,7 +118,16 @@ Deno.serve(async (req) => {
       syncType,
     });
 
-    timer.end();
+    // Start the VM
+    await startVM();
+
+    const duration = timer.end();
+    logger.info('Completed league data sync setup', {
+      duration: `${duration}ms`,
+      userId,
+      syncType,
+    });
+
     return new Response(
       JSON.stringify({
         success: true,
