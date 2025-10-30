@@ -1,7 +1,7 @@
 import { logger } from '../../../../../supabase/functions/utils/logger.ts';
 import { supabase } from '../../../../../supabase/functions/utils/supabase.ts';
 import { POSITION_WEIGHTS } from '../constants.ts';
-import type { WeightedScoreResult, PositionWeights } from '../types.ts';
+import type { WeightedScoreResult } from '../types.ts';
 
 /**
  * Position-Specific Weighted Scoring Module
@@ -25,12 +25,12 @@ export async function calculateWeightedScoreWR(
       .from('league_calcs')
       .select(
         `
-        recent_mean,
-        recent_std,
+        recent_mean_norm,
+        recent_std_norm,
         targets_per_game_3wk_avg_norm,
         catch_rate_3wk_avg_norm,
         yards_per_target_3wk_avg_norm,
-        players!player_stats_player_id_fkey(position, team)
+        players!league_calcs_player_id_fkey(position, team)
       `
       )
       .eq('league_id', leagueId)
@@ -49,8 +49,8 @@ export async function calculateWeightedScoreWR(
       });
       return {
         weighted_score: null,
-        recent_mean: null,
-        recent_std: null,
+        recent_mean_norm: null,
+        recent_std_norm: null,
         targets_per_game_3wk_avg_norm: null,
         catch_rate_3wk_avg_norm: null,
         yards_per_target_3wk_avg_norm: null,
@@ -61,8 +61,8 @@ export async function calculateWeightedScoreWR(
     if (playerData.players?.position !== 'WR') {
       return {
         weighted_score: null,
-        recent_mean: playerData.recent_mean,
-        recent_std: playerData.recent_std,
+        recent_mean_norm: playerData.recent_mean_norm,
+        recent_std_norm: playerData.recent_std_norm,
         targets_per_game_3wk_avg_norm: playerData.targets_per_game_3wk_avg_norm,
         catch_rate_3wk_avg_norm: playerData.catch_rate_3wk_avg_norm,
         yards_per_target_3wk_avg_norm: playerData.yards_per_target_3wk_avg_norm,
@@ -70,34 +70,89 @@ export async function calculateWeightedScoreWR(
     }
 
     // Get opponent defensive difficulty index (WR-specific)
-    const { data: opponentData, error: opponentError } = await supabase
-      .from('defense_points_against')
-      .select('wr_normalized_odi')
-      .eq('season_year', seasonYear)
-      .eq('week', week)
-      .eq('team', playerData.players.team)
-      .single();
+    // First, find the opponent team from NFL matchups
+    const playerTeam = playerData.players.team;
+    let opponentDifficulty = 0;
 
-    if (opponentError || !opponentData) {
-      logger.debug(
-        'No opponent defensive data found for weighted score calculation',
-        {
-          leagueId,
-          playerId,
-          seasonYear,
-          week,
-          team: playerData.players.team,
-          error: opponentError?.message,
+    if (playerTeam) {
+      try {
+        // Find the matchup for this team in the current week
+        const { data: matchup } = await supabase
+          .from('nfl_matchups')
+          .select('home_team, away_team')
+          .eq('season', seasonYear)
+          .eq('week', week)
+          .or(`home_team.eq.${playerTeam},away_team.eq.${playerTeam}`)
+          .single();
+
+        if (matchup) {
+          // Determine the opposing team
+          const playerTeamLower = playerTeam.toLowerCase();
+          const homeTeamLower = matchup.home_team.toLowerCase();
+
+          const opposingTeam =
+            homeTeamLower === playerTeamLower
+              ? matchup.away_team
+              : matchup.home_team;
+
+          // Find the defense player for the opposing team
+          const { data: defensePlayer } = await supabase
+            .from('players')
+            .select('id')
+            .ilike('team', opposingTeam)
+            .eq('position', 'DEF')
+            .single();
+
+          if (defensePlayer) {
+            // Query defense_points_against by defense player ID
+            const { data: opponentData, error: opponentError } = await supabase
+              .from('defense_points_against')
+              .select('wr_normalized_odi')
+              .eq('league_id', leagueId)
+              .eq('player_id', defensePlayer.id)
+              .eq('season_year', seasonYear)
+              .eq('week', week)
+              .single();
+
+            if (!opponentError && opponentData) {
+              opponentDifficulty = opponentData.wr_normalized_odi || 0;
+            } else {
+              logger.debug(
+                'No opponent defensive data found for weighted score calculation',
+                {
+                  leagueId,
+                  playerId,
+                  seasonYear,
+                  week,
+                  team: playerTeam,
+                  opposingTeam,
+                  defensePlayerId: defensePlayer.id,
+                  error: opponentError?.message,
+                }
+              );
+            }
+          }
         }
-      );
+      } catch (error) {
+        logger.debug(
+          'Could not find opponent defensive data for weighted score calculation',
+          {
+            leagueId,
+            playerId,
+            seasonYear,
+            week,
+            team: playerTeam,
+            error: error instanceof Error ? error.message : String(error),
+          }
+        );
+      }
     }
 
-    const recentMean = playerData.recent_mean || 0;
-    const recentStd = playerData.recent_std || 0;
+    const recentMean = playerData.recent_mean_norm || 0;
+    const recentStd = playerData.recent_std_norm || 0;
     const targetsPerGameNorm = playerData.targets_per_game_3wk_avg_norm || 0;
     const catchRateNorm = playerData.catch_rate_3wk_avg_norm || 0;
     const yardsPerTargetNorm = playerData.yards_per_target_3wk_avg_norm || 0;
-    const opponentDifficulty = opponentData?.wr_normalized_odi || 0;
 
     // Calculate weighted score using the formula:
     // weighted_score = w_1*recent_mean + w_2*recent_std + w_3*targets_per_game_norm +
@@ -111,9 +166,9 @@ export async function calculateWeightedScoreWR(
       POSITION_WEIGHTS.WR.opponent_difficulty * opponentDifficulty;
 
     return {
-      weighted_score: Math.round(weightedScore * 1000) / 1000, // Round to 3 decimal places
-      recent_mean: recentMean,
-      recent_std: recentStd,
+      weighted_score: Math.round(weightedScore * 1000) / 1000,
+      recent_mean_norm: recentMean,
+      recent_std_norm: recentStd,
       targets_per_game_3wk_avg_norm: targetsPerGameNorm,
       catch_rate_3wk_avg_norm: catchRateNorm,
       yards_per_target_3wk_avg_norm: yardsPerTargetNorm,
@@ -128,8 +183,8 @@ export async function calculateWeightedScoreWR(
     });
     return {
       weighted_score: null,
-      recent_mean: null,
-      recent_std: null,
+      recent_mean_norm: null,
+      recent_std_norm: null,
       targets_per_game_3wk_avg_norm: null,
       catch_rate_3wk_avg_norm: null,
       yards_per_target_3wk_avg_norm: null,
@@ -156,8 +211,8 @@ export async function calculateWeightedScore(
   logger.warn(`Weighted scoring not implemented for position: ${position}`);
   return {
     weighted_score: null,
-    recent_mean: null,
-    recent_std: null,
+    recent_mean_norm: null,
+    recent_std_norm: null,
     targets_per_game_3wk_avg_norm: null,
     catch_rate_3wk_avg_norm: null,
     yards_per_target_3wk_avg_norm: null,

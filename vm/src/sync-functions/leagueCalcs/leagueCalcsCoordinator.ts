@@ -6,7 +6,10 @@ import {
   calculateEfficiencyMetrics3WeekAvg,
 } from './efficiencyMetrics.ts';
 import { calculateRecentStats } from './recentStats.ts';
-import { calculateNormalizedEfficiencyMetrics3WeekAvg } from './normalization.ts';
+import {
+  calculateNormalizedEfficiencyMetrics3WeekAvg,
+  calculateNormalizedRecentStats,
+} from './normalization.ts';
 import { calculateWeightedScoresForLeague } from './weightedScoring/leagueWeightedScoring.ts';
 import type { LeagueCalcsResult } from './types.ts';
 
@@ -131,6 +134,9 @@ async function updateRecentStatsForLeague(
     week
   );
 
+  // Normalize recent stats (mean and std) prior to weighted scoring
+  await calculateNormalizedRecentStats(leagueId, seasonYear, week);
+
   // Calculate weighted scores for WR players after normalization is complete
   await calculateWeightedScoresForLeague(leagueId, seasonYear, week);
 
@@ -174,7 +180,7 @@ export async function calculateRecentStatsOnly(
     // Update recent stats for all leagues
     const { data: leagues, error } = await supabase
       .from('league_calcs')
-      .select('DISTINCT league_id')
+      .select('league_id')
       .eq('season_year', currentYear)
       .eq('week', currentWeek)
       .not('fantasy_points', 'is', null);
@@ -185,12 +191,14 @@ export async function calculateRecentStatsOnly(
     }
 
     if (leagues && leagues.length > 0) {
-      for (const league of leagues) {
-        await updateRecentStatsForLeague(
-          league.league_id,
-          currentYear,
-          currentWeek
-        );
+      // Deduplicate league IDs since we can't use DISTINCT in Supabase select
+      const leagueIds = leagues.map(
+        (league: { league_id: string }) => league.league_id
+      );
+      const uniqueLeagueIds = [...new Set<string>(leagueIds)];
+
+      for (const leagueId of uniqueLeagueIds) {
+        await updateRecentStatsForLeague(leagueId, currentYear, currentWeek);
       }
     }
 

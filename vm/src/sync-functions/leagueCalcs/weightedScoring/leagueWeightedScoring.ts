@@ -29,7 +29,7 @@ export async function calculateWeightedScoresForLeague(
     .select(
       `
       player_id,
-      players!player_stats_player_id_fkey(position)
+      players!league_calcs_player_id_fkey(position)
     `
     )
     .eq('league_id', leagueId)
@@ -61,8 +61,8 @@ export async function calculateWeightedScoresForLeague(
   for (const player of wrPlayers) {
     const {
       weighted_score,
-      recent_mean,
-      recent_std,
+      recent_mean_norm,
+      recent_std_norm,
       targets_per_game_3wk_avg_norm,
       catch_rate_3wk_avg_norm,
       yards_per_target_3wk_avg_norm,
@@ -79,8 +79,8 @@ export async function calculateWeightedScoresForLeague(
       .from('league_calcs')
       .update({
         weighted_score,
-        recent_mean,
-        recent_std,
+        recent_mean_norm,
+        recent_std_norm,
         targets_per_game_3wk_avg_norm,
         catch_rate_3wk_avg_norm,
         yards_per_target_3wk_avg_norm,

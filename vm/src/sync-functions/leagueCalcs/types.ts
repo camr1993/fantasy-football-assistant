@@ -27,8 +27,8 @@ export interface RecentStats {
 
 export interface WeightedScoreResult {
   weighted_score: number | null;
-  recent_mean: number | null;
-  recent_std: number | null;
+  recent_mean_norm: number | null;
+  recent_std_norm: number | null;
   targets_per_game_3wk_avg_norm: number | null;
   catch_rate_3wk_avg_norm: number | null;
   yards_per_target_3wk_avg_norm: number | null;
