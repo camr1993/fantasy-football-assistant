@@ -8,10 +8,13 @@ import { syncAllPlayerInjuries } from './sync-functions/injurySync.ts';
 import { syncAllPlayerStats } from './sync-functions/syncPlayerStats.ts';
 import { syncNflMatchups } from './sync-functions/syncNflMatchups.ts';
 import { syncOpponents } from './sync-functions/syncOpponents.ts';
-import { syncUserLeagues } from './sync-functions/leagueSync.ts';
+import {
+  syncUserLeagues,
+  syncTeamRosterOnly,
+} from './sync-functions/leagueSync.ts';
 import { syncDefensePointsAgainst } from './sync-functions/syncDefensePointsAgainst.ts';
 import { calculateAllLeaguesFantasyPoints } from './sync-functions/fantasyPointsCalc.ts';
-import { calculateRecentStatsOnly } from './sync-functions/leagueCalcs.ts';
+import { calculateRecentStatsOnly } from './sync-functions/leagueCalcs/index.ts';
 import { getMostRecentNFLWeek } from '../../supabase/functions/utils/syncHelpers.ts';
 import { createServer } from 'node:http';
 
@@ -20,13 +23,16 @@ interface Job {
   name: string;
   status: string;
   week?: number;
+  user_id?: string;
+  priority?: number;
+  run_time?: number;
   created_at: string;
   updated_at: string;
 }
 
 interface SyncFunction {
   name: string;
-  fn: (yahooToken: string, week?: number) => Promise<any>;
+  fn: (yahooToken: string, week?: number, userId?: string) => Promise<any>;
 }
 
 const SYNC_FUNCTIONS: Record<string, SyncFunction> = {
@@ -52,8 +58,19 @@ const SYNC_FUNCTIONS: Record<string, SyncFunction> = {
   },
   'sync-league-data': {
     name: 'sync-league-data',
-    fn: (yahooToken: string) =>
-      syncUserLeagues(Deno.env.get('SUPER_ADMIN_USER_ID') || '', yahooToken),
+    fn: (yahooToken: string, _week?: number, userId?: string) =>
+      syncUserLeagues(
+        userId || Deno.env.get('SUPER_ADMIN_USER_ID') || '',
+        yahooToken
+      ),
+  },
+  'sync-team-roster-only': {
+    name: 'sync-team-roster-only',
+    fn: (yahooToken: string, _week?: number, userId?: string) =>
+      syncTeamRosterOnly(
+        userId || Deno.env.get('SUPER_ADMIN_USER_ID') || '',
+        yahooToken
+      ),
   },
   'fantasy-points-calc': {
     name: 'fantasy-points-calc',
@@ -79,6 +96,7 @@ async function getNextJob(): Promise<Job | null> {
     .from('jobs')
     .select('*')
     .eq('status', 'pending')
+    .order('priority', { ascending: true })
     .order('created_at', { ascending: true })
     .limit(1)
     .single();
@@ -95,7 +113,8 @@ async function getNextJob(): Promise<Job | null> {
 async function updateJobStatus(
   jobId: string,
   status: string,
-  errorMessage?: string
+  errorMessage?: string,
+  runTime?: number
 ) {
   const updateData: any = {
     status,
@@ -104,6 +123,10 @@ async function updateJobStatus(
 
   if (errorMessage) {
     updateData.error_message = errorMessage;
+  }
+
+  if (runTime !== undefined) {
+    updateData.run_time = runTime;
   }
 
   const { error } = await supabase
@@ -131,19 +154,36 @@ async function runJob(job: Job): Promise<boolean> {
     week: job.week,
   });
 
+  // Start timing for run_time tracking
+  const startTime = Date.now();
+
   // Update job status to running
   await updateJobStatus(job.id, 'running');
 
   try {
-    // Get Yahoo tokens
-    const superAdminUserId = Deno.env.get('SUPER_ADMIN_USER_ID');
-    if (!superAdminUserId) {
-      throw new Error('SUPER_ADMIN_USER_ID environment variable not set');
+    // Get Yahoo tokens - use job's user_id if present, otherwise use SUPER_ADMIN_USER
+    let userId: string;
+    if (job.user_id) {
+      userId = job.user_id;
+      logger.info('Using user-specific tokens for job', {
+        jobId: job.id,
+        userId: job.user_id,
+      });
+    } else {
+      const superAdminUserId = Deno.env.get('SUPER_ADMIN_USER_ID');
+      if (!superAdminUserId) {
+        throw new Error('SUPER_ADMIN_USER_ID environment variable not set');
+      }
+      userId = superAdminUserId;
+      logger.info('Using super admin tokens for job', {
+        jobId: job.id,
+        jobName: job.name,
+      });
     }
 
-    const userTokens = await getUserTokens(superAdminUserId);
+    const userTokens = await getUserTokens(userId);
     if (!userTokens) {
-      throw new Error('Failed to get user Yahoo tokens');
+      throw new Error(`Failed to get Yahoo tokens for user ${userId}`);
     }
 
     // Run the sync function
@@ -153,7 +193,8 @@ async function runJob(job: Job): Promise<boolean> {
     let result: any;
     result = await syncFunction.fn(
       userTokens.access_token,
-      job.week ?? undefined
+      job.week ?? undefined,
+      job.user_id
     );
 
     // Extract records processed from different return types
@@ -168,26 +209,31 @@ async function runJob(job: Job): Promise<boolean> {
     }
 
     const duration = timer.end();
+    const runTime = Date.now() - startTime; // Calculate run time in milliseconds
 
     logger.info('Job completed successfully', {
       jobId: job.id,
       jobName: job.name,
       recordsProcessed,
       duration: `${duration}ms`,
+      runTimeMs: runTime,
     });
 
-    // Update job status to completed
-    await updateJobStatus(job.id, 'completed');
+    // Update job status to completed with run_time
+    await updateJobStatus(job.id, 'completed', undefined, runTime);
     return true;
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+    const runTime = Date.now() - startTime; // Calculate run time even for failed jobs
+
     logger.error('Job failed', {
       jobId: job.id,
       jobName: job.name,
       error: errorMessage,
+      runTimeMs: runTime,
     });
 
-    await updateJobStatus(job.id, 'failed', errorMessage);
+    await updateJobStatus(job.id, 'failed', errorMessage, runTime);
     return false;
   }
 }

@@ -1,80 +1,28 @@
-import { logger } from '../../../supabase/functions/utils/logger.ts';
-import { supabase } from '../../../supabase/functions/utils/supabase.ts';
-import { getMostRecentNFLWeek } from '../../../supabase/functions/utils/syncHelpers.ts';
+import { logger } from '../../../../supabase/functions/utils/logger.ts';
+import { supabase } from '../../../../supabase/functions/utils/supabase.ts';
+import { getMostRecentNFLWeek } from '../../../../supabase/functions/utils/syncHelpers.ts';
+import {
+  calculateEfficiencyMetrics,
+  calculateEfficiencyMetrics3WeekAvg,
+} from './efficiencyMetrics.ts';
+import { calculateRecentStats } from './recentStats.ts';
+import {
+  calculateNormalizedEfficiencyMetrics3WeekAvg,
+  calculateNormalizedRecentStats,
+} from './normalization.ts';
+import { calculateWeightedScoresForLeague } from './weightedScoring/leagueWeightedScoring.ts';
+import type { LeagueCalcsResult } from './types.ts';
 
 /**
- * League Calculations - Recent Statistics Module
+ * League Calculations Coordinator
  *
- * This module handles the calculation of recent statistics (mean and standard deviation)
- * for fantasy points over the last 3 weeks. It operates on existing fantasy points
- * data in the league_calcs table.
+ * Main orchestrator for all league calculations including:
+ * 1. Recent statistics (mean and standard deviation) for fantasy points over the last 3 weeks
+ * 2. Efficiency metrics (targets per game, catch rate, yards per target) for players
+ * 3. 3-week rolling averages for efficiency metrics
+ * 4. Normalized values (0-1 scale) for 3-week rolling averages using min-max scaling
+ * 5. Weighted scores for players using position-specific weights
  */
-
-// Configuration for recent statistics calculation
-const RECENT_WEEKS = 3; // Number of recent weeks to include in mean/std calculations
-
-/**
- * Calculate recent statistics (mean and std) for a player over recent weeks
- */
-async function calculateRecentStats(
-  leagueId: string,
-  playerId: string,
-  seasonYear: number,
-  currentWeek: number
-): Promise<{ recent_mean: number | null; recent_std: number | null }> {
-  const startWeek = Math.max(1, currentWeek - RECENT_WEEKS + 1);
-
-  const { data: recentPoints, error } = await supabase
-    .from('league_calcs')
-    .select('fantasy_points')
-    .eq('league_id', leagueId)
-    .eq('player_id', playerId)
-    .eq('season_year', seasonYear)
-    .gte('week', startWeek)
-    .lte('week', currentWeek)
-    .order('week', { ascending: true });
-
-  if (error) {
-    logger.error('Failed to fetch recent points for statistics', {
-      error,
-      leagueId,
-      playerId,
-      seasonYear,
-      currentWeek,
-    });
-    return { recent_mean: null, recent_std: null };
-  }
-
-  if (!recentPoints || recentPoints.length === 0) {
-    return { recent_mean: null, recent_std: null };
-  }
-
-  const points = recentPoints
-    .map((r: any) => r.fantasy_points)
-    .filter((p: any) => p !== null);
-
-  if (points.length === 0) {
-    return { recent_mean: null, recent_std: null };
-  }
-
-  // Calculate mean
-  const mean =
-    points.reduce((sum: number, point: number) => sum + point, 0) /
-    points.length;
-
-  // Calculate standard deviation
-  const variance =
-    points.reduce(
-      (sum: number, point: number) => sum + Math.pow(point - mean, 2),
-      0
-    ) / points.length;
-  const std = Math.sqrt(variance);
-
-  return {
-    recent_mean: Math.round(mean * 100) / 100, // Round to 2 decimal places
-    recent_std: Math.round(std * 100) / 100, // Round to 2 decimal places
-  };
-}
 
 /**
  * Update recent statistics for all players in a league after main calculation
@@ -118,7 +66,7 @@ async function updateRecentStatsForLeague(
     return;
   }
 
-  // Update recent stats for each player
+  // Update recent stats and efficiency metrics for each player
   for (const player of players) {
     const { recent_mean, recent_std } = await calculateRecentStats(
       leagueId,
@@ -127,12 +75,37 @@ async function updateRecentStatsForLeague(
       week
     );
 
-    // Update the league_calcs record with recent statistics
+    const { targets_per_game, catch_rate, yards_per_target } =
+      await calculateEfficiencyMetrics(
+        leagueId,
+        player.player_id,
+        seasonYear,
+        week
+      );
+
+    const {
+      targets_per_game_3wk_avg,
+      catch_rate_3wk_avg,
+      yards_per_target_3wk_avg,
+    } = await calculateEfficiencyMetrics3WeekAvg(
+      leagueId,
+      player.player_id,
+      seasonYear,
+      week
+    );
+
+    // Update the league_calcs record with recent statistics and efficiency metrics
     const { error: updateError } = await supabase
       .from('league_calcs')
       .update({
         recent_mean,
         recent_std,
+        targets_per_game,
+        catch_rate,
+        yards_per_target,
+        targets_per_game_3wk_avg,
+        catch_rate_3wk_avg,
+        yards_per_target_3wk_avg,
         updated_at: new Date().toISOString(),
       })
       .eq('league_id', leagueId)
@@ -141,15 +114,31 @@ async function updateRecentStatsForLeague(
       .eq('week', week);
 
     if (updateError) {
-      logger.error('Failed to update recent stats for player', {
-        error: updateError,
-        leagueId,
-        playerId: player.player_id,
-        seasonYear,
-        week,
-      });
+      logger.error(
+        'Failed to update recent stats and efficiency metrics for player',
+        {
+          error: updateError,
+          leagueId,
+          playerId: player.player_id,
+          seasonYear,
+          week,
+        }
+      );
     }
   }
+
+  // Calculate normalized values for all players after individual updates are complete
+  await calculateNormalizedEfficiencyMetrics3WeekAvg(
+    leagueId,
+    seasonYear,
+    week
+  );
+
+  // Normalize recent stats (mean and std) prior to weighted scoring
+  await calculateNormalizedRecentStats(leagueId, seasonYear, week);
+
+  // Calculate weighted scores for WR players after normalization is complete
+  await calculateWeightedScoresForLeague(leagueId, seasonYear, week);
 
   logger.info('Completed recent statistics update for league', {
     leagueId,
@@ -166,14 +155,7 @@ export async function calculateRecentStatsOnly(
   leagueId?: string,
   seasonYear?: number,
   week?: number
-): Promise<{
-  success: boolean;
-  message: string;
-  league_id?: string;
-  season_year?: number;
-  week?: number;
-  updated_count?: number;
-}> {
+): Promise<LeagueCalcsResult> {
   const currentYear = seasonYear || new Date().getFullYear();
   const currentWeek = week || getMostRecentNFLWeek();
 
@@ -198,7 +180,7 @@ export async function calculateRecentStatsOnly(
     // Update recent stats for all leagues
     const { data: leagues, error } = await supabase
       .from('league_calcs')
-      .select('DISTINCT league_id')
+      .select('league_id')
       .eq('season_year', currentYear)
       .eq('week', currentWeek)
       .not('fantasy_points', 'is', null);
@@ -209,12 +191,14 @@ export async function calculateRecentStatsOnly(
     }
 
     if (leagues && leagues.length > 0) {
-      for (const league of leagues) {
-        await updateRecentStatsForLeague(
-          league.league_id,
-          currentYear,
-          currentWeek
-        );
+      // Deduplicate league IDs since we can't use DISTINCT in Supabase select
+      const leagueIds = leagues.map(
+        (league: { league_id: string }) => league.league_id
+      );
+      const uniqueLeagueIds = [...new Set<string>(leagueIds)];
+
+      for (const leagueId of uniqueLeagueIds) {
+        await updateRecentStatsForLeague(leagueId, currentYear, currentWeek);
       }
     }
 
