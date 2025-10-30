@@ -14,7 +14,7 @@ import {
 } from './sync-functions/leagueSync.ts';
 import { syncDefensePointsAgainst } from './sync-functions/syncDefensePointsAgainst.ts';
 import { calculateAllLeaguesFantasyPoints } from './sync-functions/fantasyPointsCalc.ts';
-import { calculateRecentStatsOnly } from './sync-functions/leagueCalcs.ts';
+import { calculateRecentStatsOnly } from './sync-functions/leagueCalcs/index.ts';
 import { getMostRecentNFLWeek } from '../../supabase/functions/utils/syncHelpers.ts';
 import { createServer } from 'node:http';
 
