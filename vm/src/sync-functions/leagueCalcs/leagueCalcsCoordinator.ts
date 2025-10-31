@@ -1,15 +1,8 @@
 import { logger } from '../../../../supabase/functions/utils/logger.ts';
 import { supabase } from '../../../../supabase/functions/utils/supabase.ts';
 import { getMostRecentNFLWeek } from '../../../../supabase/functions/utils/syncHelpers.ts';
-import {
-  calculateEfficiencyMetrics,
-  calculateEfficiencyMetrics3WeekAvg,
-} from './efficiencyMetrics.ts';
 import { calculateRecentStats } from './recentStats.ts';
-import {
-  calculateNormalizedEfficiencyMetrics3WeekAvg,
-  calculateNormalizedRecentStats,
-} from './normalization.ts';
+import { calculateNormalizedRecentStats } from './normalization.ts';
 import { calculateWeightedScoresForLeague } from './weightedScoring/leagueWeightedScoring.ts';
 import type { LeagueCalcsResult } from './types.ts';
 
@@ -75,37 +68,19 @@ async function updateRecentStatsForLeague(
       week
     );
 
-    const { targets_per_game, catch_rate, yards_per_target } =
-      await calculateEfficiencyMetrics(
-        leagueId,
-        player.player_id,
-        seasonYear,
-        week
-      );
+    // Note: Efficiency metrics are now stored in player_stats (league-agnostic)
+    // We still need to fetch the 3-week averages for normalization
+    // The base efficiency metrics (targets_per_game, catch_rate, yards_per_target)
+    // are no longer stored in league_calcs since they're league-agnostic
 
-    const {
-      targets_per_game_3wk_avg,
-      catch_rate_3wk_avg,
-      yards_per_target_3wk_avg,
-    } = await calculateEfficiencyMetrics3WeekAvg(
-      leagueId,
-      player.player_id,
-      seasonYear,
-      week
-    );
-
-    // Update the league_calcs record with recent statistics and efficiency metrics
+    // Update the league_calcs record with recent statistics
+    // Efficiency metrics 3-week averages will be used for normalization but not stored
+    // (normalized values will be stored instead)
     const { error: updateError } = await supabase
       .from('league_calcs')
       .update({
         recent_mean,
         recent_std,
-        targets_per_game,
-        catch_rate,
-        yards_per_target,
-        targets_per_game_3wk_avg,
-        catch_rate_3wk_avg,
-        yards_per_target_3wk_avg,
         updated_at: new Date().toISOString(),
       })
       .eq('league_id', leagueId)
@@ -114,27 +89,21 @@ async function updateRecentStatsForLeague(
       .eq('week', week);
 
     if (updateError) {
-      logger.error(
-        'Failed to update recent stats and efficiency metrics for player',
-        {
-          error: updateError,
-          leagueId,
-          playerId: player.player_id,
-          seasonYear,
-          week,
-        }
-      );
+      logger.error('Failed to update recent stats for player', {
+        error: updateError,
+        leagueId,
+        playerId: player.player_id,
+        seasonYear,
+        week,
+      });
     }
   }
 
-  // Calculate normalized values for all players after individual updates are complete
-  await calculateNormalizedEfficiencyMetrics3WeekAvg(
-    leagueId,
-    seasonYear,
-    week
-  );
+  // Note: Efficiency metrics normalization is now done globally in syncPlayerStats
+  // and stored in player_stats, so we skip it here
 
   // Normalize recent stats (mean and std) prior to weighted scoring
+  // Recent stats are league-specific because they use league-specific fantasy_points
   await calculateNormalizedRecentStats(leagueId, seasonYear, week);
 
   // Calculate weighted scores for WR players after normalization is complete

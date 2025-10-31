@@ -20,16 +20,13 @@ export async function calculateWeightedScoreWR(
   week: number
 ): Promise<WeightedScoreResult> {
   try {
-    // Get player's recent stats and normalized efficiency metrics
+    // Get player's recent stats from league_calcs and normalized efficiency metrics from player_stats
     const { data: playerData, error: playerError } = await supabase
       .from('league_calcs')
       .select(
         `
         recent_mean_norm,
         recent_std_norm,
-        targets_per_game_3wk_avg_norm,
-        catch_rate_3wk_avg_norm,
-        yards_per_target_3wk_avg_norm,
         players!league_calcs_player_id_fkey(position, team)
       `
       )
@@ -39,13 +36,25 @@ export async function calculateWeightedScoreWR(
       .eq('week', week)
       .single();
 
-    if (playerError || !playerData) {
+    // Get normalized efficiency metrics from player_stats (globally normalized)
+    const { data: efficiencyMetrics, error: efficiencyError } = await supabase
+      .from('player_stats')
+      .select(
+        'targets_per_game_3wk_avg_norm, catch_rate_3wk_avg_norm, yards_per_target_3wk_avg_norm'
+      )
+      .eq('player_id', playerId)
+      .eq('season_year', seasonYear)
+      .eq('week', week)
+      .eq('source', 'actual')
+      .single();
+
+    if (playerError || !playerData || efficiencyError || !efficiencyMetrics) {
       logger.debug('No player data found for weighted score calculation', {
         leagueId,
         playerId,
         seasonYear,
         week,
-        error: playerError?.message,
+        error: playerError?.message || efficiencyError?.message,
       });
       return {
         weighted_score: null,
@@ -63,9 +72,11 @@ export async function calculateWeightedScoreWR(
         weighted_score: null,
         recent_mean_norm: playerData.recent_mean_norm,
         recent_std_norm: playerData.recent_std_norm,
-        targets_per_game_3wk_avg_norm: playerData.targets_per_game_3wk_avg_norm,
-        catch_rate_3wk_avg_norm: playerData.catch_rate_3wk_avg_norm,
-        yards_per_target_3wk_avg_norm: playerData.yards_per_target_3wk_avg_norm,
+        targets_per_game_3wk_avg_norm:
+          efficiencyMetrics?.targets_per_game_3wk_avg_norm || null,
+        catch_rate_3wk_avg_norm: efficiencyMetrics?.catch_rate_3wk_avg_norm || null,
+        yards_per_target_3wk_avg_norm:
+          efficiencyMetrics?.yards_per_target_3wk_avg_norm || null,
       };
     }
 
@@ -150,9 +161,9 @@ export async function calculateWeightedScoreWR(
 
     const recentMean = playerData.recent_mean_norm || 0;
     const recentStd = playerData.recent_std_norm || 0;
-    const targetsPerGameNorm = playerData.targets_per_game_3wk_avg_norm || 0;
-    const catchRateNorm = playerData.catch_rate_3wk_avg_norm || 0;
-    const yardsPerTargetNorm = playerData.yards_per_target_3wk_avg_norm || 0;
+    const targetsPerGameNorm = efficiencyMetrics.targets_per_game_3wk_avg_norm || 0;
+    const catchRateNorm = efficiencyMetrics.catch_rate_3wk_avg_norm || 0;
+    const yardsPerTargetNorm = efficiencyMetrics.yards_per_target_3wk_avg_norm || 0;
 
     // Calculate weighted score using the formula:
     // weighted_score = w_1*recent_mean + w_2*recent_std + w_3*targets_per_game_norm +
