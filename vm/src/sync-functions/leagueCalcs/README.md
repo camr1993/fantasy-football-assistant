@@ -61,16 +61,20 @@ await calculateRecentStatsOnly();
 
 ```typescript
 import {
-  calculateEfficiencyMetrics,
   calculateRecentStats,
   calculateWeightedScore,
-  POSITION_WEIGHTS
+  POSITION_WEIGHTS,
 } from './leagueCalcs/index.ts';
 
 // Calculate individual metrics
-const efficiency = await calculateEfficiencyMetrics(leagueId, playerId, season, week);
 const recent = await calculateRecentStats(leagueId, playerId, season, week);
-const weighted = await calculateWeightedScore('WR', leagueId, playerId, season, week);
+const weighted = await calculateWeightedScore(
+  'WR',
+  leagueId,
+  playerId,
+  season,
+  week
+);
 ```
 
 ## Adding New Positions
@@ -78,9 +82,10 @@ const weighted = await calculateWeightedScore('WR', leagueId, playerId, season, 
 To add weighted scoring for a new position (e.g., RB):
 
 1. **Add weights to `constants.ts`**:
+
 ```typescript
 export const RB_WEIGHTS = {
-  recent_mean: 0.40,
+  recent_mean: 0.4,
   volatility: -0.15,
   // ... other weights
 } as const;
@@ -93,6 +98,7 @@ export const POSITION_WEIGHTS = {
 ```
 
 2. **Implement scoring function in `positionScoring.ts`**:
+
 ```typescript
 export async function calculateWeightedScoreRB(
   leagueId: string,
@@ -105,9 +111,10 @@ export async function calculateWeightedScoreRB(
 ```
 
 3. **Update the generic `calculateWeightedScore` function**:
+
 ```typescript
 export async function calculateWeightedScore(
-  position: keyof typeof POSITION_WEIGHTS,
+  position: keyof typeof POSITION_WEIGHTS
   // ... other params
 ): Promise<WeightedScoreResult> {
   if (position === 'WR') {

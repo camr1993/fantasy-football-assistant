@@ -74,16 +74,14 @@ export async function calculateWeightedScoresForLeague(
       week
     );
 
-    // Update the league_calcs record with weighted score and component values
+    // Update the league_calcs record with weighted score and recent stats
+    // Note: Normalized efficiency metrics are stored in player_stats, not league_calcs
     const { error: updateError } = await supabase
       .from('league_calcs')
       .update({
         weighted_score,
         recent_mean_norm,
         recent_std_norm,
-        targets_per_game_3wk_avg_norm,
-        catch_rate_3wk_avg_norm,
-        yards_per_target_3wk_avg_norm,
         updated_at: new Date().toISOString(),
       })
       .eq('league_id', leagueId)

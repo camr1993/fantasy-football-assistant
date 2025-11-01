@@ -125,7 +125,9 @@ async function updateJobStatus(
     updateData.error_message = errorMessage;
   }
 
-  if (runTime !== undefined) {
+  // Always set run_time if provided (including 0)
+  // This ensures the trigger can read NEW.run_time when moving to history
+  if (runTime !== undefined && runTime !== null) {
     updateData.run_time = runTime;
   }
 
