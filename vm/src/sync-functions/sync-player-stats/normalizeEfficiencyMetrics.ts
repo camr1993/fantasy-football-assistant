@@ -20,31 +20,53 @@ export async function normalizeEfficiencyMetricsGlobally(
   // Each metric is normalized independently, so we'll filter nulls per metric in JavaScript.
   // This ensures we include all records that have ANY of the three metrics, not just
   // records that have all three metrics.
-  const { data: wrMetrics, error } = await supabase
-    .from('player_stats')
-    .select(
-      `
-      player_id,
-      targets_per_game_3wk_avg,
-      catch_rate_3wk_avg,
-      yards_per_target_3wk_avg,
-      players!player_stats_player_id_fkey(position)
-    `
-    )
-    .eq('season_year', seasonYear)
-    .eq('week', week)
-    .eq('source', 'actual')
-    .eq('players.position', 'WR');
-  // Don't filter by any metric here - we want ALL WR records for this week
-  // Each metric will be filtered independently when calculating min/max
+  // IMPORTANT: Use pagination to fetch all records (Supabase has a default limit of 1000 rows)
+  const wrMetrics: any[] = [];
+  let from = 0;
+  const pageSize = 1000;
+  let hasMore = true;
 
-  if (error) {
-    logger.error('Failed to fetch WR efficiency metrics for normalization', {
-      error,
-      seasonYear,
-      week,
-    });
-    return;
+  while (hasMore) {
+    const { data: pageData, error } = await supabase
+      .from('player_stats')
+      .select(
+        `
+        player_id,
+        targets_per_game_3wk_avg,
+        catch_rate_3wk_avg,
+        yards_per_target_3wk_avg,
+        players!player_stats_player_id_fkey(position)
+      `
+      )
+      .eq('season_year', seasonYear)
+      .eq('week', week)
+      .eq('source', 'actual')
+      .eq('players.position', 'WR')
+      .range(from, from + pageSize - 1);
+
+    if (error) {
+      logger.error('Failed to fetch WR efficiency metrics for normalization', {
+        error,
+        seasonYear,
+        week,
+        from,
+        pageSize,
+      });
+      return;
+    }
+
+    if (!pageData || pageData.length === 0) {
+      hasMore = false;
+      break;
+    }
+
+    wrMetrics.push(...pageData);
+
+    if (pageData.length < pageSize) {
+      hasMore = false;
+    } else {
+      from += pageSize;
+    }
   }
 
   if (!wrMetrics || wrMetrics.length === 0) {
@@ -63,6 +85,31 @@ export async function normalizeEfficiencyMetricsGlobally(
   const targetsPerGameValues = wrMetrics
     .map((m: any) => m.targets_per_game_3wk_avg)
     .filter((v: any) => v !== null && v !== undefined);
+
+  // Debug: Log to help diagnose discrepancies with SQL queries
+  logger.info('Debug: Fetched WR metrics for normalization', {
+    seasonYear,
+    week,
+    totalRecordsFetched: wrMetrics.length,
+    targetsPerGameCount: targetsPerGameValues.length,
+    // Log the actual max/min values we're seeing
+    rawTargetsPerGameMax:
+      targetsPerGameValues.length > 0
+        ? Math.max(...targetsPerGameValues.map((v: any) => Number(v)))
+        : null,
+    rawTargetsPerGameMin:
+      targetsPerGameValues.length > 0
+        ? Math.min(...targetsPerGameValues.map((v: any) => Number(v)))
+        : null,
+    // Log the actual values array (sorted) to see what we're missing
+    sortedTargetsPerGameValues:
+      targetsPerGameValues.length > 0
+        ? [...targetsPerGameValues]
+            .map((v: any) => Number(v))
+            .sort((a, b) => b - a)
+            .slice(0, 10) // Top 10 values
+        : [],
+  });
 
   const catchRateValues = wrMetrics
     .map((m: any) => m.catch_rate_3wk_avg)
@@ -166,17 +213,25 @@ export async function normalizeEfficiencyMetricsGlobally(
         console.log('normalizedMetric', normalizedMetric);
         console.log(
           'targets_per_game_3wk_avg_norm',
-          Math.round(normalizedMetric.targets_per_game_3wk_avg_norm * 1000) /
-            1000
+          normalizedMetric.targets_per_game_3wk_avg_norm !== null
+            ? Math.round(
+                normalizedMetric.targets_per_game_3wk_avg_norm * 1000
+              ) / 1000
+            : null
         );
         console.log(
           'catch_rate_3wk_avg_norm',
-          Math.round(normalizedMetric.catch_rate_3wk_avg_norm * 1000) / 1000
+          normalizedMetric.catch_rate_3wk_avg_norm !== null
+            ? Math.round(normalizedMetric.catch_rate_3wk_avg_norm * 1000) / 1000
+            : null
         );
         console.log(
           'yards_per_target_3wk_avg_norm',
-          Math.round(normalizedMetric.yards_per_target_3wk_avg_norm * 1000) /
-            1000
+          normalizedMetric.yards_per_target_3wk_avg_norm !== null
+            ? Math.round(
+                normalizedMetric.yards_per_target_3wk_avg_norm * 1000
+              ) / 1000
+            : null
         );
         console.log('--------------------------------');
         console.log('max', targetsPerGameMax, catchRateMax, yardsPerTargetMax);
