@@ -87,22 +87,6 @@ export async function normalizeEfficiencyMetricsGlobally(
   // Extract values for min/max calculation
   // Each metric is normalized independently, so we filter nulls per metric
   // NOTE: The query already filters by .eq('players.position', 'WR'), so all records should be WR
-  // Debug: Verify all records are actually WR (should all be 'WR' if query filter is working)
-  const nonWRRecords = wrMetrics.filter(
-    (m: any) => m.players?.position !== 'WR'
-  );
-  if (nonWRRecords.length > 0) {
-    logger.warn('Found non-WR records in query results despite WR filter', {
-      seasonYear,
-      week,
-      nonWRCount: nonWRRecords.length,
-      totalRecords: wrMetrics.length,
-      sampleNonWRPositions: nonWRRecords
-        .slice(0, 5)
-        .map((r: any) => r.players?.position),
-    });
-  }
-
   const targetsPerGameValues = wrMetrics
     .map((m: any) => m.targets_per_game_3wk_avg)
     .filter((v: any) => v !== null && v !== undefined);
