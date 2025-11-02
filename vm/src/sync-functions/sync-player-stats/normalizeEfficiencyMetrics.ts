@@ -27,6 +27,10 @@ export async function normalizeEfficiencyMetricsGlobally(
   let hasMore = true;
 
   while (hasMore) {
+    // Use !inner to force an inner join, ensuring we only get records where player exists
+    // Specify the exact foreign key relationship (player_stats_player_id_fkey) since there
+    // are multiple relationships between player_stats and players
+    // Filter by position = 'WR'
     const { data: pageData, error } = await supabase
       .from('player_stats')
       .select(
@@ -35,7 +39,7 @@ export async function normalizeEfficiencyMetricsGlobally(
         targets_per_game_3wk_avg,
         catch_rate_3wk_avg,
         yards_per_target_3wk_avg,
-        players!player_stats_player_id_fkey(position)
+        players!inner!player_stats_player_id_fkey(position)
       `
       )
       .eq('season_year', seasonYear)
@@ -82,34 +86,26 @@ export async function normalizeEfficiencyMetricsGlobally(
 
   // Extract values for min/max calculation
   // Each metric is normalized independently, so we filter nulls per metric
+  // NOTE: The query already filters by .eq('players.position', 'WR'), so all records should be WR
+  // Debug: Verify all records are actually WR (should all be 'WR' if query filter is working)
+  const nonWRRecords = wrMetrics.filter(
+    (m: any) => m.players?.position !== 'WR'
+  );
+  if (nonWRRecords.length > 0) {
+    logger.warn('Found non-WR records in query results despite WR filter', {
+      seasonYear,
+      week,
+      nonWRCount: nonWRRecords.length,
+      totalRecords: wrMetrics.length,
+      sampleNonWRPositions: nonWRRecords
+        .slice(0, 5)
+        .map((r: any) => r.players?.position),
+    });
+  }
+
   const targetsPerGameValues = wrMetrics
     .map((m: any) => m.targets_per_game_3wk_avg)
     .filter((v: any) => v !== null && v !== undefined);
-
-  // Debug: Log to help diagnose discrepancies with SQL queries
-  logger.info('Debug: Fetched WR metrics for normalization', {
-    seasonYear,
-    week,
-    totalRecordsFetched: wrMetrics.length,
-    targetsPerGameCount: targetsPerGameValues.length,
-    // Log the actual max/min values we're seeing
-    rawTargetsPerGameMax:
-      targetsPerGameValues.length > 0
-        ? Math.max(...targetsPerGameValues.map((v: any) => Number(v)))
-        : null,
-    rawTargetsPerGameMin:
-      targetsPerGameValues.length > 0
-        ? Math.min(...targetsPerGameValues.map((v: any) => Number(v)))
-        : null,
-    // Log the actual values array (sorted) to see what we're missing
-    sortedTargetsPerGameValues:
-      targetsPerGameValues.length > 0
-        ? [...targetsPerGameValues]
-            .map((v: any) => Number(v))
-            .sort((a, b) => b - a)
-            .slice(0, 10) // Top 10 values
-        : [],
-  });
 
   const catchRateValues = wrMetrics
     .map((m: any) => m.catch_rate_3wk_avg)
