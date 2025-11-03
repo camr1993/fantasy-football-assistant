@@ -4,24 +4,24 @@ import { supabase } from '../../../../supabase/functions/utils/supabase.ts';
 /**
  * Calculate 3-week rolling averages for efficiency metrics using SQL
  * This is much more efficient than doing it in JavaScript loops
+ * Only includes weeks where the player actually played (played = true)
+ * Uses the most recent 3 weeks where the player played (not necessarily consecutive weeks)
  */
 export async function calculate3WeekRollingAverages(
   seasonYear: number,
   currentWeek: number
 ): Promise<void> {
-  const startWeek = Math.max(1, currentWeek - 2); // 3 weeks: currentWeek, currentWeek-1, currentWeek-2
-
   logger.info('Calculating 3-week rolling averages for efficiency metrics', {
     seasonYear,
     currentWeek,
-    startWeek,
   });
 
   // Use SQL to calculate rolling averages efficiently
+  // Note: p_start_week parameter is kept for backwards compatibility but not used
   const { error } = await supabase.rpc('calculate_efficiency_3wk_avg', {
     p_season_year: seasonYear,
     p_week: currentWeek,
-    p_start_week: startWeek,
+    p_start_week: Math.max(1, currentWeek - 2), // Not used in function, kept for compatibility
   });
 
   if (error) {
@@ -41,21 +41,21 @@ export async function calculate3WeekRollingAverages(
 /**
  * Fallback: Calculate 3-week rolling averages in code
  * This is less efficient but works if SQL function isn't available
+ * Only includes weeks where the player actually played (played = true)
+ * Uses the most recent 3 weeks where the player played (not necessarily consecutive weeks)
  */
 async function calculate3WeekRollingAveragesFallback(
   seasonYear: number,
   currentWeek: number
 ): Promise<void> {
-  const startWeek = Math.max(1, currentWeek - 2);
-
-  // Get all players with stats in the 3-week window
+  // Get all players who have played in any week up to the current week
   const { data: players, error: playersError } = await supabase
     .from('player_stats')
     .select('player_id')
     .eq('season_year', seasonYear)
-    .gte('week', startWeek)
     .lte('week', currentWeek)
     .eq('source', 'actual')
+    .eq('played', true)
     .not('targets_per_game', 'is', null);
 
   if (playersError || !players) {
@@ -81,16 +81,18 @@ async function calculate3WeekRollingAveragesFallback(
     const batch = uniquePlayerIds.slice(i, i + batchSize);
 
     for (const playerId of batch) {
-      // Get efficiency metrics for the 3-week window
+      // Get efficiency metrics for the most recent 3 weeks where the player actually played
+      // Only include weeks where played = true
       const { data: recentMetrics, error: metricsError } = await supabase
         .from('player_stats')
-        .select('targets_per_game, catch_rate, yards_per_target')
+        .select('targets_per_game, catch_rate, yards_per_target, week')
         .eq('player_id', playerId)
         .eq('season_year', seasonYear)
-        .gte('week', startWeek)
         .lte('week', currentWeek)
         .eq('source', 'actual')
-        .order('week', { ascending: true });
+        .eq('played', true)
+        .order('week', { ascending: false })
+        .limit(3); // Get the most recent 3 weeks where played = true
 
       if (metricsError || !recentMetrics || recentMetrics.length === 0) {
         continue;
@@ -156,4 +158,3 @@ async function calculate3WeekRollingAveragesFallback(
     }
   }
 }
-
