@@ -19,7 +19,6 @@
 export { calculateRecentStatsOnly } from './leagueCalcsCoordinator.ts';
 
 // Export individual modules for direct use if needed
-export * from './efficiencyMetrics.ts';
 export * from './recentStats.ts';
 export * from './normalization.ts';
 export * from './weightedScoring/positionScoring.ts';

@@ -1,15 +1,8 @@
 import { logger } from '../../../../supabase/functions/utils/logger.ts';
 import { supabase } from '../../../../supabase/functions/utils/supabase.ts';
 import { getMostRecentNFLWeek } from '../../../../supabase/functions/utils/syncHelpers.ts';
-import {
-  calculateEfficiencyMetrics,
-  calculateEfficiencyMetrics3WeekAvg,
-} from './efficiencyMetrics.ts';
 import { calculateRecentStats } from './recentStats.ts';
-import {
-  calculateNormalizedEfficiencyMetrics3WeekAvg,
-  calculateNormalizedRecentStats,
-} from './normalization.ts';
+import { calculateNormalizedRecentStats } from './normalization.ts';
 import { calculateWeightedScoresForLeague } from './weightedScoring/leagueWeightedScoring.ts';
 import type { LeagueCalcsResult } from './types.ts';
 
@@ -38,103 +31,40 @@ async function updateRecentStatsForLeague(
     week,
   });
 
-  // Get all players who have fantasy points calculated for this week
-  const { data: players, error: fetchError } = await supabase
-    .from('league_calcs')
-    .select('player_id')
-    .eq('league_id', leagueId)
-    .eq('season_year', seasonYear)
-    .eq('week', week)
-    .not('fantasy_points', 'is', null);
-
-  if (fetchError) {
-    logger.error('Failed to fetch players for recent stats update', {
-      error: fetchError,
-      leagueId,
-      seasonYear,
-      week,
-    });
-    return;
-  }
-
-  if (!players || players.length === 0) {
-    logger.info('No players found for recent stats update', {
-      leagueId,
-      seasonYear,
-      week,
-    });
-    return;
-  }
-
-  // Update recent stats and efficiency metrics for each player
-  for (const player of players) {
-    const { recent_mean, recent_std } = await calculateRecentStats(
-      leagueId,
-      player.player_id,
-      seasonYear,
-      week
-    );
-
-    const { targets_per_game, catch_rate, yards_per_target } =
-      await calculateEfficiencyMetrics(
-        leagueId,
-        player.player_id,
-        seasonYear,
-        week
-      );
-
-    const {
-      targets_per_game_3wk_avg,
-      catch_rate_3wk_avg,
-      yards_per_target_3wk_avg,
-    } = await calculateEfficiencyMetrics3WeekAvg(
-      leagueId,
-      player.player_id,
-      seasonYear,
-      week
-    );
-
-    // Update the league_calcs record with recent statistics and efficiency metrics
-    const { error: updateError } = await supabase
-      .from('league_calcs')
-      .update({
-        recent_mean,
-        recent_std,
-        targets_per_game,
-        catch_rate,
-        yards_per_target,
-        targets_per_game_3wk_avg,
-        catch_rate_3wk_avg,
-        yards_per_target_3wk_avg,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('league_id', leagueId)
-      .eq('player_id', player.player_id)
-      .eq('season_year', seasonYear)
-      .eq('week', week);
-
-    if (updateError) {
-      logger.error(
-        'Failed to update recent stats and efficiency metrics for player',
-        {
-          error: updateError,
-          leagueId,
-          playerId: player.player_id,
-          seasonYear,
-          week,
-        }
-      );
+  // Use SQL bulk update to calculate recent stats for all players at once
+  const { data: result, error: rpcError } = await supabase.rpc(
+    'calculate_recent_stats_bulk',
+    {
+      p_league_id: leagueId,
+      p_season_year: seasonYear,
+      p_week: week,
+      p_recent_weeks: 3,
     }
-  }
-
-  // Calculate normalized values for all players after individual updates are complete
-  await calculateNormalizedEfficiencyMetrics3WeekAvg(
-    leagueId,
-    seasonYear,
-    week
   );
 
+  if (rpcError) {
+    logger.warn('SQL bulk update failed, falling back to individual updates', {
+      error: rpcError,
+      leagueId,
+      seasonYear,
+      week,
+    });
+    // Fallback to individual updates
+    await updateRecentStatsForLeagueFallback(leagueId, seasonYear, week);
+  } else {
+    logger.info('Successfully calculated recent stats using SQL bulk update', {
+      leagueId,
+      seasonYear,
+      week,
+      playersUpdated: result || 0,
+    });
+  }
+
+  // Note: Efficiency metrics normalization is now done globally in syncPlayerStats
+  // and stored in player_stats, so we skip it here
+
   // Normalize recent stats (mean and std) prior to weighted scoring
+  // Recent stats are league-specific because they use league-specific fantasy_points
   await calculateNormalizedRecentStats(leagueId, seasonYear, week);
 
   // Calculate weighted scores for WR players after normalization is complete
@@ -144,8 +74,68 @@ async function updateRecentStatsForLeague(
     leagueId,
     seasonYear,
     week,
-    playersUpdated: players.length,
   });
+}
+
+/**
+ * Fallback: Calculate recent stats individually (less efficient)
+ * Used when SQL bulk function is not available
+ */
+async function updateRecentStatsForLeagueFallback(
+  leagueId: string,
+  seasonYear: number,
+  week: number
+): Promise<void> {
+  // Get all players who have fantasy points calculated for this week
+  const { data: players, error: fetchError } = await supabase
+    .from('league_calcs')
+    .select('player_id')
+    .eq('league_id', leagueId)
+    .eq('season_year', seasonYear)
+    .eq('week', week)
+    .not('fantasy_points', 'is', null);
+
+  if (fetchError || !players || players.length === 0) {
+    logger.warn('No players found for recent stats update', {
+      error: fetchError,
+      leagueId,
+      seasonYear,
+      week,
+    });
+    return;
+  }
+
+  // Update recent stats for each player individually
+  for (const player of players) {
+    const { recent_mean, recent_std } = await calculateRecentStats(
+      leagueId,
+      player.player_id,
+      seasonYear,
+      week
+    );
+
+    const { error: updateError } = await supabase
+      .from('league_calcs')
+      .update({
+        recent_mean,
+        recent_std,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('league_id', leagueId)
+      .eq('player_id', player.player_id)
+      .eq('season_year', seasonYear)
+      .eq('week', week);
+
+    if (updateError) {
+      logger.error('Failed to update recent stats for player', {
+        error: updateError,
+        leagueId,
+        playerId: player.player_id,
+        seasonYear,
+        week,
+      });
+    }
+  }
 }
 
 /**
