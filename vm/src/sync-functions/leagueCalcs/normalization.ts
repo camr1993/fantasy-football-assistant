@@ -38,6 +38,7 @@ export async function calculateNormalizedEfficiencyMetrics3WeekAvg(
 
 /**
  * Calculate normalized values for recent stats (mean and std) using min-max scaling
+ * Normalizes within each position group (WR vs WR, RB vs RB, etc.)
  */
 export async function calculateNormalizedRecentStats(
   leagueId: string,
@@ -100,6 +101,7 @@ export async function calculateNormalizedRecentStats(
 /**
  * Fallback: Normalize recent stats individually (less efficient)
  * Used when SQL bulk function is not available
+ * Normalizes within each position group (WR vs WR, RB vs RB, etc.)
  */
 async function calculateNormalizedRecentStatsFallback(
   leagueId: string,
@@ -111,7 +113,9 @@ async function calculateNormalizedRecentStatsFallback(
 }> {
   const { data: allRecent, error } = await supabase
     .from('league_calcs')
-    .select('player_id, recent_mean, recent_std')
+    .select(
+      'player_id, recent_mean, recent_std, players!league_calcs_player_id_fkey(position)'
+    )
     .eq('league_id', leagueId)
     .eq('season_year', seasonYear)
     .eq('week', week)
@@ -122,31 +126,69 @@ async function calculateNormalizedRecentStatsFallback(
     return { recent_mean_norm: null, recent_std_norm: null };
   }
 
-  const recentMeanValues = allRecent
-    .map((m: any) => m.recent_mean)
-    .filter((v: any) => v !== null && v !== undefined);
-  const recentStdValues = allRecent
-    .map((m: any) => m.recent_std)
-    .filter((v: any) => v !== null && v !== undefined);
+  // Group by position
+  const byPosition = new Map<string, typeof allRecent>();
+  for (const record of allRecent) {
+    const position = (record as any).players?.position;
+    if (!position) {
+      logger.warn('Player missing position, skipping normalization', {
+        playerId: record.player_id,
+        leagueId,
+        seasonYear,
+        week,
+      });
+      continue;
+    }
 
-  const recentMeanMin = Math.min(...recentMeanValues);
-  const recentMeanMax = Math.max(...recentMeanValues);
-  const recentMeanRange = recentMeanMax - recentMeanMin;
+    if (!byPosition.has(position)) {
+      byPosition.set(position, []);
+    }
+    byPosition.get(position)!.push(record);
+  }
 
-  const recentStdMin = Math.min(...recentStdValues);
-  const recentStdMax = Math.max(...recentStdValues);
-  const recentStdRange = recentStdMax - recentStdMin;
+  // Normalize within each position group
+  const normalized: Array<{
+    player_id: string;
+    recent_mean_norm: number;
+    recent_std_norm: number;
+  }> = [];
 
-  const normalized = allRecent.map((r: any) => ({
-    player_id: r.player_id,
-    recent_mean_norm:
-      recentMeanRange > 0
-        ? (r.recent_mean - recentMeanMin) / recentMeanRange
-        : 0,
-    recent_std_norm:
-      recentStdRange > 0 ? (r.recent_std - recentStdMin) / recentStdRange : 0,
-  }));
+  for (const [_position, positionRecords] of byPosition.entries()) {
+    const recentMeanValues = positionRecords
+      .map((m: any) => m.recent_mean)
+      .filter((v: any) => v !== null && v !== undefined);
+    const recentStdValues = positionRecords
+      .map((m: any) => m.recent_std)
+      .filter((v: any) => v !== null && v !== undefined);
 
+    if (recentMeanValues.length === 0 || recentStdValues.length === 0) {
+      continue;
+    }
+
+    const recentMeanMin = Math.min(...recentMeanValues);
+    const recentMeanMax = Math.max(...recentMeanValues);
+    const recentMeanRange = recentMeanMax - recentMeanMin;
+
+    const recentStdMin = Math.min(...recentStdValues);
+    const recentStdMax = Math.max(...recentStdValues);
+    const recentStdRange = recentStdMax - recentStdMin;
+
+    for (const r of positionRecords) {
+      normalized.push({
+        player_id: r.player_id,
+        recent_mean_norm:
+          recentMeanRange > 0
+            ? (r.recent_mean - recentMeanMin) / recentMeanRange
+            : 0,
+        recent_std_norm:
+          recentStdRange > 0
+            ? (r.recent_std - recentStdMin) / recentStdRange
+            : 0,
+      });
+    }
+  }
+
+  // Update all normalized values
   for (const n of normalized) {
     const { error: updateError } = await supabase
       .from('league_calcs')
