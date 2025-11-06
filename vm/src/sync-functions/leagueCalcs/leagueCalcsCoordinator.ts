@@ -31,6 +31,61 @@ async function updateRecentStatsForLeague(
     week,
   });
 
+  // Use SQL bulk update to calculate recent stats for all players at once
+  const { data: result, error: rpcError } = await supabase.rpc(
+    'calculate_recent_stats_bulk',
+    {
+      p_league_id: leagueId,
+      p_season_year: seasonYear,
+      p_week: week,
+      p_recent_weeks: 3,
+    }
+  );
+
+  if (rpcError) {
+    logger.warn('SQL bulk update failed, falling back to individual updates', {
+      error: rpcError,
+      leagueId,
+      seasonYear,
+      week,
+    });
+    // Fallback to individual updates
+    await updateRecentStatsForLeagueFallback(leagueId, seasonYear, week);
+  } else {
+    logger.info('Successfully calculated recent stats using SQL bulk update', {
+      leagueId,
+      seasonYear,
+      week,
+      playersUpdated: result || 0,
+    });
+  }
+
+  // Note: Efficiency metrics normalization is now done globally in syncPlayerStats
+  // and stored in player_stats, so we skip it here
+
+  // Normalize recent stats (mean and std) prior to weighted scoring
+  // Recent stats are league-specific because they use league-specific fantasy_points
+  await calculateNormalizedRecentStats(leagueId, seasonYear, week);
+
+  // Calculate weighted scores for WR players after normalization is complete
+  await calculateWeightedScoresForLeague(leagueId, seasonYear, week);
+
+  logger.info('Completed recent statistics update for league', {
+    leagueId,
+    seasonYear,
+    week,
+  });
+}
+
+/**
+ * Fallback: Calculate recent stats individually (less efficient)
+ * Used when SQL bulk function is not available
+ */
+async function updateRecentStatsForLeagueFallback(
+  leagueId: string,
+  seasonYear: number,
+  week: number
+): Promise<void> {
   // Get all players who have fantasy points calculated for this week
   const { data: players, error: fetchError } = await supabase
     .from('league_calcs')
@@ -40,8 +95,8 @@ async function updateRecentStatsForLeague(
     .eq('week', week)
     .not('fantasy_points', 'is', null);
 
-  if (fetchError) {
-    logger.error('Failed to fetch players for recent stats update', {
+  if (fetchError || !players || players.length === 0) {
+    logger.warn('No players found for recent stats update', {
       error: fetchError,
       leagueId,
       seasonYear,
@@ -50,16 +105,7 @@ async function updateRecentStatsForLeague(
     return;
   }
 
-  if (!players || players.length === 0) {
-    logger.info('No players found for recent stats update', {
-      leagueId,
-      seasonYear,
-      week,
-    });
-    return;
-  }
-
-  // Update recent stats and efficiency metrics for each player
+  // Update recent stats for each player individually
   for (const player of players) {
     const { recent_mean, recent_std } = await calculateRecentStats(
       leagueId,
@@ -68,14 +114,6 @@ async function updateRecentStatsForLeague(
       week
     );
 
-    // Note: Efficiency metrics are now stored in player_stats (league-agnostic)
-    // We still need to fetch the 3-week averages for normalization
-    // The base efficiency metrics (targets_per_game, catch_rate, yards_per_target)
-    // are no longer stored in league_calcs since they're league-agnostic
-
-    // Update the league_calcs record with recent statistics
-    // Efficiency metrics 3-week averages will be used for normalization but not stored
-    // (normalized values will be stored instead)
     const { error: updateError } = await supabase
       .from('league_calcs')
       .update({
@@ -98,23 +136,6 @@ async function updateRecentStatsForLeague(
       });
     }
   }
-
-  // Note: Efficiency metrics normalization is now done globally in syncPlayerStats
-  // and stored in player_stats, so we skip it here
-
-  // Normalize recent stats (mean and std) prior to weighted scoring
-  // Recent stats are league-specific because they use league-specific fantasy_points
-  await calculateNormalizedRecentStats(leagueId, seasonYear, week);
-
-  // Calculate weighted scores for WR players after normalization is complete
-  await calculateWeightedScoresForLeague(leagueId, seasonYear, week);
-
-  logger.info('Completed recent statistics update for league', {
-    leagueId,
-    seasonYear,
-    week,
-    playersUpdated: players.length,
-  });
 }
 
 /**
