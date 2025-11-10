@@ -39,7 +39,7 @@ export async function calculateNormalizedEfficiencyMetrics3WeekAvg(
 /**
  * Calculate normalized values for recent stats
  * recent_mean_norm: min-max scaling normalization
- * recent_std_norm: inverted z-score normalization (-1 * z-score)
+ * recent_std_norm: z-score normalization
  * Normalizes within each position group (WR vs WR, RB vs RB, etc.)
  */
 export async function calculateNormalizedRecentStats(
@@ -104,7 +104,7 @@ export async function calculateNormalizedRecentStats(
  * Fallback: Normalize recent stats individually (less efficient)
  * Used when SQL bulk function is not available
  * recent_mean_norm: min-max scaling normalization
- * recent_std_norm: inverted z-score normalization (-1 * z-score)
+ * recent_std_norm: z-score normalization
  * Normalizes within each position group (WR vs WR, RB vs RB, etc.)
  */
 async function calculateNormalizedRecentStatsFallback(
@@ -194,7 +194,7 @@ async function calculateNormalizedRecentStatsFallback(
             : 0,
         recent_std_norm:
           recentStdStddev > 0
-            ? -1 * ((r.recent_std - recentStdMean) / recentStdStddev)
+            ? (r.recent_std - recentStdMean) / recentStdStddev
             : 0,
       });
     }
@@ -206,7 +206,7 @@ async function calculateNormalizedRecentStatsFallback(
       .from('league_calcs')
       .update({
         recent_mean_norm: Math.round(n.recent_mean_norm * 1000) / 1000,
-        recent_std_norm: (-1 * Math.round(n.recent_std_norm * 1000)) / 1000, // multiply by -1 to invert the z-score normalization
+        recent_std_norm: Math.round(n.recent_std_norm * 1000) / 1000,
         updated_at: new Date().toISOString(),
       })
       .eq('league_id', leagueId)
