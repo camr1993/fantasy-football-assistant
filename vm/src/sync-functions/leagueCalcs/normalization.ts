@@ -37,7 +37,9 @@ export async function calculateNormalizedEfficiencyMetrics3WeekAvg(
 }
 
 /**
- * Calculate normalized values for recent stats (mean and std) using min-max scaling
+ * Calculate normalized values for recent stats
+ * recent_mean_norm: min-max scaling normalization
+ * recent_std_norm: z-score normalization
  * Normalizes within each position group (WR vs WR, RB vs RB, etc.)
  */
 export async function calculateNormalizedRecentStats(
@@ -101,6 +103,8 @@ export async function calculateNormalizedRecentStats(
 /**
  * Fallback: Normalize recent stats individually (less efficient)
  * Used when SQL bulk function is not available
+ * recent_mean_norm: min-max scaling normalization
+ * recent_std_norm: z-score normalization
  * Normalizes within each position group (WR vs WR, RB vs RB, etc.)
  */
 async function calculateNormalizedRecentStatsFallback(
@@ -165,13 +169,21 @@ async function calculateNormalizedRecentStatsFallback(
       continue;
     }
 
+    // Min-max normalization for recent_mean
     const recentMeanMin = Math.min(...recentMeanValues);
     const recentMeanMax = Math.max(...recentMeanValues);
     const recentMeanRange = recentMeanMax - recentMeanMin;
 
-    const recentStdMin = Math.min(...recentStdValues);
-    const recentStdMax = Math.max(...recentStdValues);
-    const recentStdRange = recentStdMax - recentStdMin;
+    // Z-score normalization for recent_std: calculate mean and std
+    const recentStdMean =
+      recentStdValues.reduce((sum: number, val: number) => sum + val, 0) /
+      recentStdValues.length;
+    const recentStdVariance =
+      recentStdValues.reduce(
+        (sum: number, val: number) => sum + Math.pow(val - recentStdMean, 2),
+        0
+      ) / recentStdValues.length;
+    const recentStdStddev = Math.sqrt(recentStdVariance);
 
     for (const r of positionRecords) {
       normalized.push({
@@ -181,8 +193,8 @@ async function calculateNormalizedRecentStatsFallback(
             ? (r.recent_mean - recentMeanMin) / recentMeanRange
             : 0,
         recent_std_norm:
-          recentStdRange > 0
-            ? (r.recent_std - recentStdMin) / recentStdRange
+          recentStdStddev > 0
+            ? (r.recent_std - recentStdMean) / recentStdStddev
             : 0,
       });
     }

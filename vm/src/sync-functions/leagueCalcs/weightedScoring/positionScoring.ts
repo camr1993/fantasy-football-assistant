@@ -74,7 +74,8 @@ export async function calculateWeightedScoreWR(
         recent_std_norm: playerData.recent_std_norm,
         targets_per_game_3wk_avg_norm:
           efficiencyMetrics?.targets_per_game_3wk_avg_norm || null,
-        catch_rate_3wk_avg_norm: efficiencyMetrics?.catch_rate_3wk_avg_norm || null,
+        catch_rate_3wk_avg_norm:
+          efficiencyMetrics?.catch_rate_3wk_avg_norm || null,
         yards_per_target_3wk_avg_norm:
           efficiencyMetrics?.yards_per_target_3wk_avg_norm || null,
       };
@@ -118,7 +119,7 @@ export async function calculateWeightedScoreWR(
             // Query defense_points_against by defense player ID
             const { data: opponentData, error: opponentError } = await supabase
               .from('defense_points_against')
-              .select('wr_normalized_odi')
+              .select('wr_rolling_3_wk_avg_norm')
               .eq('league_id', leagueId)
               .eq('player_id', defensePlayer.id)
               .eq('season_year', seasonYear)
@@ -126,7 +127,7 @@ export async function calculateWeightedScoreWR(
               .single();
 
             if (!opponentError && opponentData) {
-              opponentDifficulty = opponentData.wr_normalized_odi || 0;
+              opponentDifficulty = opponentData.wr_rolling_3_wk_avg_norm || 0;
             } else {
               logger.debug(
                 'No opponent defensive data found for weighted score calculation',
@@ -161,9 +162,11 @@ export async function calculateWeightedScoreWR(
 
     const recentMean = playerData.recent_mean_norm || 0;
     const recentStd = playerData.recent_std_norm || 0;
-    const targetsPerGameNorm = efficiencyMetrics.targets_per_game_3wk_avg_norm || 0;
+    const targetsPerGameNorm =
+      efficiencyMetrics.targets_per_game_3wk_avg_norm || 0;
     const catchRateNorm = efficiencyMetrics.catch_rate_3wk_avg_norm || 0;
-    const yardsPerTargetNorm = efficiencyMetrics.yards_per_target_3wk_avg_norm || 0;
+    const yardsPerTargetNorm =
+      efficiencyMetrics.yards_per_target_3wk_avg_norm || 0;
 
     // Calculate weighted score using the formula:
     // weighted_score = w_1*recent_mean + w_2*recent_std + w_3*targets_per_game_norm +

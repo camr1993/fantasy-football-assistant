@@ -187,42 +187,6 @@ export async function normalizeEfficiencyMetricsGlobally(
     const batch = normalizedMetrics.slice(i, i + batchSize);
 
     for (const normalizedMetric of batch) {
-      if (
-        normalizedMetric.player_id === '7eda501d-d1b2-443f-b316-e553bc6cd6e4'
-      ) {
-        console.log('normalizedMetric', normalizedMetric);
-        console.log(
-          'targets_per_game_3wk_avg_norm',
-          normalizedMetric.targets_per_game_3wk_avg_norm !== null
-            ? Math.round(
-                normalizedMetric.targets_per_game_3wk_avg_norm * 1000
-              ) / 1000
-            : null
-        );
-        console.log(
-          'catch_rate_3wk_avg_norm',
-          normalizedMetric.catch_rate_3wk_avg_norm !== null
-            ? Math.round(normalizedMetric.catch_rate_3wk_avg_norm * 1000) / 1000
-            : null
-        );
-        console.log(
-          'yards_per_target_3wk_avg_norm',
-          normalizedMetric.yards_per_target_3wk_avg_norm !== null
-            ? Math.round(
-                normalizedMetric.yards_per_target_3wk_avg_norm * 1000
-              ) / 1000
-            : null
-        );
-        console.log('--------------------------------');
-        console.log('max', targetsPerGameMax, catchRateMax, yardsPerTargetMax);
-        console.log('min', targetsPerGameMin, catchRateMin, yardsPerTargetMin);
-        console.log(
-          'range',
-          targetsPerGameRange,
-          catchRateRange,
-          yardsPerTargetRange
-        );
-      }
       // Build update object, handling null values for all metrics
       const updateData: Record<string, number | null> = {
         targets_per_game_3wk_avg_norm:

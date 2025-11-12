@@ -234,7 +234,7 @@ export async function calculateWeightedScoresForLeague(
   if (defensePlayerIds.length > 0) {
     const result = await supabase
       .from('defense_points_against')
-      .select('player_id, wr_normalized_odi')
+      .select('player_id, wr_rolling_3_wk_avg_norm')
       .eq('league_id', leagueId)
       .eq('season_year', seasonYear)
       .eq('week', week)
@@ -262,7 +262,7 @@ export async function calculateWeightedScoresForLeague(
   const difficultyMap = new Map<string, number>();
   if (opponentDifficultyData) {
     for (const od of opponentDifficultyData) {
-      difficultyMap.set(od.player_id, od.wr_normalized_odi || 0);
+      difficultyMap.set(od.player_id, od.wr_rolling_3_wk_avg_norm || 0);
     }
   }
 
