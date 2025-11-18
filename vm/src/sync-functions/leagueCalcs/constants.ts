@@ -15,11 +15,22 @@ export const WR_WEIGHTS = {
   opponent_difficulty: 0.05, // w_6: Context
 } as const;
 
+// Weighted scoring configuration for RBs
+export const RB_WEIGHTS = {
+  recent_mean: 0.3, // w_1: Recent mean fantasy points
+  volatility: -0.07, // w_2: Volatility (negative)
+  weighted_opportunity: 0.3, // w_3: Weighted Opportunity (carries + targets)
+  touchdown_production: 0.16, // w_4: Touchdown production (rush_tds + rec_tds)
+  receiving_profile: 0.1, // w_5: Receiving profile (receptions + receiving_yards)
+  efficiency: 0.06, // w_6: Efficiency (yards per carry / yards per target)
+  opponent_difficulty: 0.05, // w_7: Matchup / opponent rush defense metric
+} as const;
+
 // Position-specific weight configurations
 export const POSITION_WEIGHTS = {
   WR: WR_WEIGHTS,
+  RB: RB_WEIGHTS,
   // TODO: Add other positions as needed
-  // RB: RB_WEIGHTS,
   // QB: QB_WEIGHTS,
   // TE: TE_WEIGHTS,
   // K: K_WEIGHTS,

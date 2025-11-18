@@ -1,40 +1,12 @@
 import { logger } from '../../../../supabase/functions/utils/logger.ts';
 import { supabase } from '../../../../supabase/functions/utils/supabase.ts';
-import type { EfficiencyMetrics3WeekAvgNorm } from './types.ts';
 
 /**
  * Normalization Module
  *
  * Handles min-max scaling normalization of efficiency metrics to 0-1 scale
+ * and z-score normalization of recent stats (mean and std)
  */
-
-/**
- * Calculate normalized values for 3-week rolling averages
- * NOTE: Efficiency metrics normalization is now done globally in syncPlayerStats
- * This function is kept for backward compatibility but is a no-op for efficiency metrics
- */
-export async function calculateNormalizedEfficiencyMetrics3WeekAvg(
-  leagueId: string,
-  seasonYear: number,
-  week: number
-): Promise<EfficiencyMetrics3WeekAvgNorm> {
-  // Efficiency metrics are now normalized globally in syncPlayerStats job
-  // and stored in player_stats. No need to normalize here per league.
-  logger.info(
-    'Efficiency metrics normalization skipped - already done globally in player_stats',
-    {
-      leagueId,
-      seasonYear,
-      week,
-    }
-  );
-
-  return {
-    targets_per_game_3wk_avg_norm: null,
-    catch_rate_3wk_avg_norm: null,
-    yards_per_target_3wk_avg_norm: null,
-  };
-}
 
 /**
  * Calculate normalized values for recent stats
