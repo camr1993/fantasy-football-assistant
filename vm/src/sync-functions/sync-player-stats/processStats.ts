@@ -5,7 +5,7 @@ import type { PlayerStatsData } from './types.ts';
 import {
   calculateWREfficiencyMetrics,
   calculateRBEfficiencyMetrics,
-} from './calculateEfficiencyMetrics.ts';
+} from './efficiencyMetrics/index.ts';
 
 /**
  * Process a single player's stats from Yahoo API response

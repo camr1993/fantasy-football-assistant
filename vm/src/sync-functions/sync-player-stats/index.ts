@@ -8,7 +8,7 @@ import { calculate3WeekRollingAverages } from './calculate3WeekAverages.ts';
 import {
   normalizeWREfficiencyMetricsGlobally,
   normalizeRBEfficiencyMetricsGlobally,
-} from './normalizeEfficiencyMetrics.ts';
+} from './normalizeEfficiencyMetrics/index.ts';
 
 /**
  * Sync all player stats (master data)

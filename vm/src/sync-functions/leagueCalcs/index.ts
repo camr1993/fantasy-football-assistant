@@ -6,7 +6,7 @@ import { calculateNormalizedRecentStats } from './normalization.ts';
 import {
   calculateWeightedScoresForLeagueWR,
   calculateWeightedScoresForLeagueRB,
-} from './weightedScoring/leagueWeightedScoring.ts';
+} from './weightedScoring/index.ts';
 import type { LeagueCalcsResult } from './types.ts';
 
 /**
