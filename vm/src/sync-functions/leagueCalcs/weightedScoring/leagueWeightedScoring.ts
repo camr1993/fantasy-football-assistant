@@ -541,7 +541,7 @@ export async function calculateWeightedScoresForLeagueRB(
   const { data: efficiencyMetrics, error: efficiencyError } = await supabase
     .from('player_stats')
     .select(
-      'player_id, weighted_opportunity_3wk_avg_norm, touchdown_production_3wk_avg_norm, receiving_profile_3wk_avg_norm, yards_per_carry_3wk_avg_norm, yards_per_target_rb_3wk_avg_norm'
+      'player_id, weighted_opportunity_3wk_avg_norm, touchdown_production_3wk_avg_norm, receiving_profile_3wk_avg_norm, yards_per_touch_3wk_avg_norm'
     )
     .in('player_id', playerIds)
     .eq('season_year', seasonYear)
@@ -742,9 +742,9 @@ export async function calculateWeightedScoresForLeagueRB(
       efficiency?.touchdown_production_3wk_avg_norm || 0;
     const receivingProfileNorm =
       efficiency?.receiving_profile_3wk_avg_norm || 0;
-    const yardsPerCarryNorm = efficiency?.yards_per_carry_3wk_avg_norm || 0;
-    // Using yards_per_carry as the primary efficiency metric
-    const efficiencyNorm = yardsPerCarryNorm;
+    const yardsPerTouchNorm = efficiency?.yards_per_touch_3wk_avg_norm || 0;
+    // Using yards_per_touch as the efficiency metric
+    const efficiencyNorm = yardsPerTouchNorm;
 
     // Calculate weighted score using the formula
     const weightedScore =

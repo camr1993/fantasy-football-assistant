@@ -28,6 +28,5 @@ export interface RBEfficiencyMetricsResult {
   weighted_opportunity: number | null;
   touchdown_production: number | null;
   receiving_profile: number | null;
-  yards_per_carry: number | null;
-  yards_per_target_rb: number | null;
+  yards_per_touch: number | null;
 }

@@ -56,22 +56,17 @@ export function calculateRBEfficiencyMetrics(
   // Receiving profile: receptions + receiving_yards (PPR value)
   const receivingProfile = receptions + receivingYards;
 
-  // Efficiency: yards per carry (guard divide-by-zero)
-  const yardsPerCarry =
-    rushingAttempts > 0 ? rushingYards / rushingAttempts : null;
-
-  // Efficiency: yards per target (guard divide-by-zero)
-  const yardsPerTargetRb = targets > 0 ? receivingYards / targets : null;
+  // Efficiency: yards per touch = (rushing_yards + receiving_yards) / (rushing_attempts + targets)
+  // Guard divide-by-zero
+  const totalTouches = rushingAttempts + targets;
+  const yardsPerTouch =
+    totalTouches > 0 ? (rushingYards + receivingYards) / totalTouches : null;
 
   return {
     weighted_opportunity: Math.round(weightedOpportunity * 100) / 100,
     touchdown_production: Math.round(touchdownProduction * 100) / 100,
     receiving_profile: Math.round(receivingProfile * 100) / 100,
-    yards_per_carry:
-      yardsPerCarry !== null ? Math.round(yardsPerCarry * 100) / 100 : null,
-    yards_per_target_rb:
-      yardsPerTargetRb !== null
-        ? Math.round(yardsPerTargetRb * 100) / 100
-        : null,
+    yards_per_touch:
+      yardsPerTouch !== null ? Math.round(yardsPerTouch * 100) / 100 : null,
   };
 }

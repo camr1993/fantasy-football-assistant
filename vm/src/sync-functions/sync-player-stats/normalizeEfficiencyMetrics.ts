@@ -265,8 +265,7 @@ export async function normalizeRBEfficiencyMetricsGlobally(
         weighted_opportunity_3wk_avg,
         touchdown_production_3wk_avg,
         receiving_profile_3wk_avg,
-        yards_per_carry_3wk_avg,
-        yards_per_target_rb_3wk_avg,
+        yards_per_touch_3wk_avg,
         players!inner!player_stats_player_id_fkey(position)
       `
       )
@@ -325,12 +324,8 @@ export async function normalizeRBEfficiencyMetricsGlobally(
     .map((m: any) => m.receiving_profile_3wk_avg)
     .filter((v: any) => v !== null && v !== undefined);
 
-  const yardsPerCarryValues = rbMetrics
-    .map((m: any) => m.yards_per_carry_3wk_avg)
-    .filter((v: any) => v !== null && v !== undefined);
-
-  const yardsPerTargetRbValues = rbMetrics
-    .map((m: any) => m.yards_per_target_rb_3wk_avg)
+  const yardsPerTouchValues = rbMetrics
+    .map((m: any) => m.yards_per_touch_3wk_avg)
     .filter((v: any) => v !== null && v !== undefined);
 
   // Check if we have any data to normalize
@@ -338,8 +333,7 @@ export async function normalizeRBEfficiencyMetricsGlobally(
     weightedOpportunityValues.length === 0 &&
     touchdownProductionValues.length === 0 &&
     receivingProfileValues.length === 0 &&
-    yardsPerCarryValues.length === 0 &&
-    yardsPerTargetRbValues.length === 0
+    yardsPerTouchValues.length === 0
   ) {
     logger.warn('Insufficient data for RB normalization', {
       seasonYear,
@@ -347,8 +341,7 @@ export async function normalizeRBEfficiencyMetricsGlobally(
       weightedOpportunityCount: weightedOpportunityValues.length,
       touchdownProductionCount: touchdownProductionValues.length,
       receivingProfileCount: receivingProfileValues.length,
-      yardsPerCarryCount: yardsPerCarryValues.length,
-      yardsPerTargetRbCount: yardsPerTargetRbValues.length,
+      yardsPerTouchCount: yardsPerTouchValues.length,
     });
     return;
   }
@@ -393,26 +386,13 @@ export async function normalizeRBEfficiencyMetricsGlobally(
       ? receivingProfileMax - receivingProfileMin
       : 0;
 
-  const yardsPerCarryMin =
-    yardsPerCarryValues.length > 0 ? Math.min(...yardsPerCarryValues) : null;
-  const yardsPerCarryMax =
-    yardsPerCarryValues.length > 0 ? Math.max(...yardsPerCarryValues) : null;
-  const yardsPerCarryRange =
-    yardsPerCarryMin !== null && yardsPerCarryMax !== null
-      ? yardsPerCarryMax - yardsPerCarryMin
-      : 0;
-
-  const yardsPerTargetRbMin =
-    yardsPerTargetRbValues.length > 0
-      ? Math.min(...yardsPerTargetRbValues)
-      : null;
-  const yardsPerTargetRbMax =
-    yardsPerTargetRbValues.length > 0
-      ? Math.max(...yardsPerTargetRbValues)
-      : null;
-  const yardsPerTargetRbRange =
-    yardsPerTargetRbMin !== null && yardsPerTargetRbMax !== null
-      ? yardsPerTargetRbMax - yardsPerTargetRbMin
+  const yardsPerTouchMin =
+    yardsPerTouchValues.length > 0 ? Math.min(...yardsPerTouchValues) : null;
+  const yardsPerTouchMax =
+    yardsPerTouchValues.length > 0 ? Math.max(...yardsPerTouchValues) : null;
+  const yardsPerTouchRange =
+    yardsPerTouchMin !== null && yardsPerTouchMax !== null
+      ? yardsPerTouchMax - yardsPerTouchMin
       : 0;
 
   logger.info('Calculated global min/max for RB efficiency metrics', {
@@ -427,8 +407,7 @@ export async function normalizeRBEfficiencyMetricsGlobally(
       max: touchdownProductionMax,
     },
     receivingProfile: { min: receivingProfileMin, max: receivingProfileMax },
-    yardsPerCarry: { min: yardsPerCarryMin, max: yardsPerCarryMax },
-    yardsPerTargetRb: { min: yardsPerTargetRbMin, max: yardsPerTargetRbMax },
+    yardsPerTouch: { min: yardsPerTouchMin, max: yardsPerTouchMax },
   });
 
   // Normalize values using min-max scaling: (x - min) / (max - min)
@@ -455,19 +434,12 @@ export async function normalizeRBEfficiencyMetricsGlobally(
         ? (metric.receiving_profile_3wk_avg - receivingProfileMin) /
           receivingProfileRange
         : null,
-    yards_per_carry_3wk_avg_norm:
-      metric.yards_per_carry_3wk_avg !== null &&
-      yardsPerCarryRange > 0 &&
-      yardsPerCarryMin !== null
-        ? (metric.yards_per_carry_3wk_avg - yardsPerCarryMin) /
-          yardsPerCarryRange
-        : null,
-    yards_per_target_rb_3wk_avg_norm:
-      metric.yards_per_target_rb_3wk_avg !== null &&
-      yardsPerTargetRbRange > 0 &&
-      yardsPerTargetRbMin !== null
-        ? (metric.yards_per_target_rb_3wk_avg - yardsPerTargetRbMin) /
-          yardsPerTargetRbRange
+    yards_per_touch_3wk_avg_norm:
+      metric.yards_per_touch_3wk_avg !== null &&
+      yardsPerTouchRange > 0 &&
+      yardsPerTouchMin !== null
+        ? (metric.yards_per_touch_3wk_avg - yardsPerTouchMin) /
+          yardsPerTouchRange
         : null,
   }));
 
@@ -496,16 +468,10 @@ export async function normalizeRBEfficiencyMetricsGlobally(
                 normalizedMetric.receiving_profile_3wk_avg_norm * 1000
               ) / 1000
             : null,
-        yards_per_carry_3wk_avg_norm:
-          normalizedMetric.yards_per_carry_3wk_avg_norm !== null
-            ? Math.round(normalizedMetric.yards_per_carry_3wk_avg_norm * 1000) /
+        yards_per_touch_3wk_avg_norm:
+          normalizedMetric.yards_per_touch_3wk_avg_norm !== null
+            ? Math.round(normalizedMetric.yards_per_touch_3wk_avg_norm * 1000) /
               1000
-            : null,
-        yards_per_target_rb_3wk_avg_norm:
-          normalizedMetric.yards_per_target_rb_3wk_avg_norm !== null
-            ? Math.round(
-                normalizedMetric.yards_per_target_rb_3wk_avg_norm * 1000
-              ) / 1000
             : null,
       };
 
