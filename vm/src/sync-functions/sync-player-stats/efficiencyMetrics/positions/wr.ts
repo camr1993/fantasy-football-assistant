@@ -1,15 +1,15 @@
 import type {
-  EfficiencyMetricsInput,
-  EfficiencyMetricsResult,
-} from './types.ts';
+  WREfficiencyMetricsInput,
+  WREfficiencyMetricsResult,
+} from '../../types.ts';
 
 /**
- * Calculate efficiency metrics from raw player stats
+ * Calculate WR efficiency metrics from raw player stats
  * These are league-agnostic metrics
  */
-export function calculateEfficiencyMetrics(
-  input: EfficiencyMetricsInput
-): EfficiencyMetricsResult {
+export function calculateWREfficiencyMetrics(
+  input: WREfficiencyMetricsInput
+): WREfficiencyMetricsResult {
   const { receptions = 0, targets = 0, receivingYards = 0 } = input;
 
   // Calculate efficiency metrics
@@ -22,8 +22,7 @@ export function calculateEfficiencyMetrics(
 
   return {
     targets_per_game: Math.round(targetsPerGame * 100) / 100,
-    catch_rate:
-      catchRate !== null ? Math.round(catchRate * 1000) / 1000 : null,
+    catch_rate: catchRate !== null ? Math.round(catchRate * 1000) / 1000 : null,
     yards_per_target:
       yardsPerTarget !== null ? Math.round(yardsPerTarget * 100) / 100 : null,
   };

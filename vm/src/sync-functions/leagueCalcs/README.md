@@ -9,13 +9,13 @@ leagueCalcs/
 ├── index.ts                    # Main entry point - exports all modules
 ├── types.ts                    # Type definitions
 ├── constants.ts                # Configuration constants and position weights
-├── efficiencyMetrics.ts        # Efficiency metrics calculations
 ├── recentStats.ts             # Recent statistics calculations
 ├── normalization.ts           # Min-max scaling normalization
-├── leagueCalcsCoordinator.ts  # Main orchestrator
 └── weightedScoring/
-    ├── positionScoring.ts     # Individual position scoring logic
-    └── leagueWeightedScoring.ts # League-wide weighted scoring
+    ├── index.ts               # Re-exports all position scoring functions
+    └── positions/
+        ├── wr.ts              # WR weighted scoring
+        └── rb.ts              # RB weighted scoring
 ```
 
 ## Modules
@@ -28,10 +28,11 @@ leagueCalcs/
 
 ### Weighted Scoring System
 
-- **`positionScoring.ts`**: Position-specific weighted scoring logic
-  - Currently implements WR scoring
-  - Extensible for other positions (RB, QB, TE, K)
-- **`leagueWeightedScoring.ts`**: Orchestrates weighted scoring for all players in a league
+- **`weightedScoring/`**: Position-specific weighted scoring logic
+  - **`positions/wr.ts`**: WR weighted scoring implementation
+  - **`positions/rb.ts`**: RB weighted scoring implementation
+  - **`index.ts`**: Re-exports all position scoring functions
+  - Extensible for other positions (QB, TE, K) - just add a new file in `positions/`
 
 ### Configuration
 
@@ -97,37 +98,25 @@ export const POSITION_WEIGHTS = {
 } as const;
 ```
 
-2. **Implement scoring function in `positionScoring.ts`**:
+2. **Create a new position file in `weightedScoring/positions/`** (e.g., `qb.ts`):
 
 ```typescript
-export async function calculateWeightedScoreRB(
+export async function calculateWeightedScoresForLeagueQB(
   leagueId: string,
-  playerId: string,
   seasonYear: number,
   week: number
-): Promise<WeightedScoreResult> {
-  // Implementation for RB-specific scoring
+): Promise<void> {
+  // Implementation for QB-specific scoring
 }
 ```
 
-3. **Update the generic `calculateWeightedScore` function**:
+3. **Export the function in `weightedScoring/index.ts`**:
 
 ```typescript
-export async function calculateWeightedScore(
-  position: keyof typeof POSITION_WEIGHTS
-  // ... other params
-): Promise<WeightedScoreResult> {
-  if (position === 'WR') {
-    return calculateWeightedScoreWR(leagueId, playerId, seasonYear, week);
-  }
-  if (position === 'RB') {
-    return calculateWeightedScoreRB(leagueId, playerId, seasonYear, week);
-  }
-  // ...
-}
+export { calculateWeightedScoresForLeagueQB } from './positions/qb.ts';
 ```
 
-4. **Update `leagueWeightedScoring.ts`** to include the new position in league-wide calculations.
+4. **Call the function in `leagueCalcs/index.ts`** after normalization.
 
 ## Benefits of Modular Structure
 

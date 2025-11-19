@@ -1,18 +1,11 @@
-import { logger } from '../../../../../supabase/functions/utils/logger.ts';
-import { supabase } from '../../../../../supabase/functions/utils/supabase.ts';
-import { POSITION_WEIGHTS } from '../constants.ts';
-
-/**
- * League-wide Weighted Scoring Module
- *
- * Handles calculation of weighted scores for all players in a league
- * by position
- */
+import { logger } from '../../../../../../supabase/functions/utils/logger.ts';
+import { supabase } from '../../../../../../supabase/functions/utils/supabase.ts';
+import { POSITION_WEIGHTS } from '../../constants.ts';
 
 /**
  * Calculate weighted scores for all WR players in a league
  */
-export async function calculateWeightedScoresForLeague(
+export async function calculateWeightedScoresForLeagueWR(
   leagueId: string,
   seasonYear: number,
   week: number
@@ -140,28 +133,60 @@ export async function calculateWeightedScoresForLeague(
     efficiencyMetricsCount: efficiencyMetrics?.length || 0,
   });
 
-  // 3. Get all matchups for the week to build opponent lookup
-  logger.info('Fetching NFL matchups for opponent lookup', {
+  // 3. Get all matchups for the upcoming week (week + 1) to build opponent lookup
+  // This allows us to use the opponent difficulty for the upcoming week's matchup
+  // If we're at week 18 (last week), fall back to current week
+  const upcomingWeek = week >= 18 ? week : week + 1;
+  logger.info('Fetching NFL matchups for opponent lookup (upcoming week)', {
     seasonYear,
-    week,
+    currentWeek: week,
+    upcomingWeek,
   });
   const { data: matchups, error: matchupsError } = await supabase
     .from('nfl_matchups')
     .select('home_team, away_team')
     .eq('season', seasonYear)
-    .eq('week', week);
+    .eq('week', upcomingWeek);
 
   if (matchupsError) {
     logger.warn('Failed to fetch matchups, opponent difficulty will be 0', {
       error: matchupsError,
       seasonYear,
-      week,
+      upcomingWeek,
     });
   }
 
   // Build matchup lookup: team -> opponent
   const matchupMap = new Map<string, string>();
-  if (matchups) {
+
+  // If no matchups found for upcoming week, try falling back to current week
+  if ((!matchups || matchups.length === 0) && upcomingWeek !== week) {
+    logger.info(
+      'No matchups found for upcoming week, falling back to current week',
+      {
+        seasonYear,
+        upcomingWeek,
+        currentWeek: week,
+      }
+    );
+    const { data: fallbackMatchups, error: fallbackError } = await supabase
+      .from('nfl_matchups')
+      .select('home_team, away_team')
+      .eq('season', seasonYear)
+      .eq('week', week);
+
+    if (!fallbackError && fallbackMatchups && fallbackMatchups.length > 0) {
+      // Use fallback matchups
+      for (const matchup of fallbackMatchups) {
+        matchupMap.set(matchup.home_team.toLowerCase(), matchup.away_team);
+        matchupMap.set(matchup.away_team.toLowerCase(), matchup.home_team);
+      }
+      logger.info('Using fallback matchups from current week', {
+        matchupsCount: fallbackMatchups.length,
+      });
+    }
+  } else if (matchups) {
+    // Use matchups from upcoming week
     for (const matchup of matchups) {
       matchupMap.set(matchup.home_team.toLowerCase(), matchup.away_team);
       matchupMap.set(matchup.away_team.toLowerCase(), matchup.home_team);
@@ -220,13 +245,18 @@ export async function calculateWeightedScoresForLeague(
   }
 
   // 5. Get all opponent difficulty indices in one query
+  // Use the most recent completed week (current week) for defense difficulty data
+  // since the upcoming week hasn't been played yet
   const defensePlayerIds = Array.from(defenseMap.values());
-  logger.info('Fetching opponent difficulty data', {
-    leagueId,
-    seasonYear,
-    week,
-    defensePlayerIdsCount: defensePlayerIds.length,
-  });
+  logger.info(
+    'Fetching opponent difficulty data (using most recent completed week)',
+    {
+      leagueId,
+      seasonYear,
+      week,
+      defensePlayerIdsCount: defensePlayerIds.length,
+    }
+  );
 
   let opponentDifficultyData = null;
   let opponentError = null;
@@ -234,7 +264,7 @@ export async function calculateWeightedScoresForLeague(
   if (defensePlayerIds.length > 0) {
     const result = await supabase
       .from('defense_points_against')
-      .select('player_id, wr_normalized_odi')
+      .select('player_id, wr_rolling_3_wk_avg_norm')
       .eq('league_id', leagueId)
       .eq('season_year', seasonYear)
       .eq('week', week)
@@ -262,7 +292,7 @@ export async function calculateWeightedScoresForLeague(
   const difficultyMap = new Map<string, number>();
   if (opponentDifficultyData) {
     for (const od of opponentDifficultyData) {
-      difficultyMap.set(od.player_id, od.wr_normalized_odi || 0);
+      difficultyMap.set(od.player_id, od.wr_rolling_3_wk_avg_norm || 0);
     }
   }
 

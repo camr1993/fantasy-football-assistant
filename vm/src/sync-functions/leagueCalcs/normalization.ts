@@ -1,43 +1,17 @@
 import { logger } from '../../../../supabase/functions/utils/logger.ts';
 import { supabase } from '../../../../supabase/functions/utils/supabase.ts';
-import type { EfficiencyMetrics3WeekAvgNorm } from './types.ts';
 
 /**
  * Normalization Module
  *
  * Handles min-max scaling normalization of efficiency metrics to 0-1 scale
+ * and z-score normalization of recent stats (mean and std)
  */
 
 /**
- * Calculate normalized values for 3-week rolling averages
- * NOTE: Efficiency metrics normalization is now done globally in syncPlayerStats
- * This function is kept for backward compatibility but is a no-op for efficiency metrics
- */
-export async function calculateNormalizedEfficiencyMetrics3WeekAvg(
-  leagueId: string,
-  seasonYear: number,
-  week: number
-): Promise<EfficiencyMetrics3WeekAvgNorm> {
-  // Efficiency metrics are now normalized globally in syncPlayerStats job
-  // and stored in player_stats. No need to normalize here per league.
-  logger.info(
-    'Efficiency metrics normalization skipped - already done globally in player_stats',
-    {
-      leagueId,
-      seasonYear,
-      week,
-    }
-  );
-
-  return {
-    targets_per_game_3wk_avg_norm: null,
-    catch_rate_3wk_avg_norm: null,
-    yards_per_target_3wk_avg_norm: null,
-  };
-}
-
-/**
- * Calculate normalized values for recent stats (mean and std) using min-max scaling
+ * Calculate normalized values for recent stats
+ * recent_mean_norm: min-max scaling normalization
+ * recent_std_norm: z-score normalization
  * Normalizes within each position group (WR vs WR, RB vs RB, etc.)
  */
 export async function calculateNormalizedRecentStats(
@@ -101,6 +75,8 @@ export async function calculateNormalizedRecentStats(
 /**
  * Fallback: Normalize recent stats individually (less efficient)
  * Used when SQL bulk function is not available
+ * recent_mean_norm: min-max scaling normalization
+ * recent_std_norm: z-score normalization
  * Normalizes within each position group (WR vs WR, RB vs RB, etc.)
  */
 async function calculateNormalizedRecentStatsFallback(
@@ -165,13 +141,21 @@ async function calculateNormalizedRecentStatsFallback(
       continue;
     }
 
+    // Min-max normalization for recent_mean
     const recentMeanMin = Math.min(...recentMeanValues);
     const recentMeanMax = Math.max(...recentMeanValues);
     const recentMeanRange = recentMeanMax - recentMeanMin;
 
-    const recentStdMin = Math.min(...recentStdValues);
-    const recentStdMax = Math.max(...recentStdValues);
-    const recentStdRange = recentStdMax - recentStdMin;
+    // Z-score normalization for recent_std: calculate mean and std
+    const recentStdMean =
+      recentStdValues.reduce((sum: number, val: number) => sum + val, 0) /
+      recentStdValues.length;
+    const recentStdVariance =
+      recentStdValues.reduce(
+        (sum: number, val: number) => sum + Math.pow(val - recentStdMean, 2),
+        0
+      ) / recentStdValues.length;
+    const recentStdStddev = Math.sqrt(recentStdVariance);
 
     for (const r of positionRecords) {
       normalized.push({
@@ -181,8 +165,8 @@ async function calculateNormalizedRecentStatsFallback(
             ? (r.recent_mean - recentMeanMin) / recentMeanRange
             : 0,
         recent_std_norm:
-          recentStdRange > 0
-            ? (r.recent_std - recentStdMin) / recentStdRange
+          recentStdStddev > 0
+            ? (r.recent_std - recentStdMean) / recentStdStddev
             : 0,
       });
     }

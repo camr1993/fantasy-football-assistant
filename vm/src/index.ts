@@ -5,7 +5,7 @@ import { getUserTokens } from '../../supabase/functions/utils/userTokenManager.t
 // Import all sync functions
 import { syncAllPlayers } from './sync-functions/playerSync.ts';
 import { syncAllPlayerInjuries } from './sync-functions/injurySync.ts';
-import { syncAllPlayerStats } from './sync-functions/syncPlayerStats.ts';
+import { syncAllPlayerStats } from './sync-functions/sync-player-stats/index.ts';
 import { syncNflMatchups } from './sync-functions/syncNflMatchups.ts';
 import { syncOpponents } from './sync-functions/syncOpponents.ts';
 import {

@@ -5,7 +5,10 @@ import { fetchAllPlayers } from './fetchPlayers.ts';
 import { fetchYahooPlayerStats } from './fetchYahooStats.ts';
 import { processPlayerStatsBatch } from './processStats.ts';
 import { calculate3WeekRollingAverages } from './calculate3WeekAverages.ts';
-import { normalizeEfficiencyMetricsGlobally } from './normalizeEfficiencyMetrics.ts';
+import {
+  normalizeWREfficiencyMetricsGlobally,
+  normalizeRBEfficiencyMetricsGlobally,
+} from './normalizeEfficiencyMetrics/index.ts';
 
 /**
  * Sync all player stats (master data)
@@ -131,7 +134,10 @@ export async function syncAllPlayerStats(
   await calculate3WeekRollingAverages(currentYear, currentWeek);
 
   // Normalize efficiency metrics globally across all WRs
-  await normalizeEfficiencyMetricsGlobally(currentYear, currentWeek);
+  await normalizeWREfficiencyMetricsGlobally(currentYear, currentWeek);
+
+  // Normalize RB efficiency metrics globally across all RBs
+  await normalizeRBEfficiencyMetricsGlobally(currentYear, currentWeek);
 
   logger.info('Completed syncing all player stats from admin user league', {
     totalProcessed,
@@ -140,4 +146,3 @@ export async function syncAllPlayerStats(
   });
   return totalProcessed;
 }
-

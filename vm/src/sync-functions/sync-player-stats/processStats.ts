@@ -2,7 +2,10 @@ import { logger } from '../../../../supabase/functions/utils/logger.ts';
 import { supabase } from '../../../../supabase/functions/utils/supabase.ts';
 import { mapYahooStatsToColumns } from '../statMapper.ts';
 import type { PlayerStatsData } from './types.ts';
-import { calculateEfficiencyMetrics } from './calculateEfficiencyMetrics.ts';
+import {
+  calculateWREfficiencyMetrics,
+  calculateRBEfficiencyMetrics,
+} from './efficiencyMetrics/index.ts';
 
 /**
  * Process a single player's stats from Yahoo API response
@@ -61,11 +64,22 @@ export function processPlayerStats(
   });
   const mappedStats = mapYahooStatsToColumns(yahooStats, playerKey || '');
 
-  // Calculate efficiency metrics
-  const efficiencyMetrics = calculateEfficiencyMetrics({
+  // Calculate efficiency metrics (WR)
+  const wrEfficiencyMetrics = calculateWREfficiencyMetrics({
     receptions: mappedStats.receptions || 0,
     targets: mappedStats.targets || 0,
     receivingYards: mappedStats.receiving_yards || 0,
+  });
+
+  // Calculate RB efficiency metrics (calculated for all players, will be null/0 for non-RBs)
+  const rbEfficiencyMetrics = calculateRBEfficiencyMetrics({
+    rushingAttempts: mappedStats.rushing_attempts || 0,
+    targets: mappedStats.targets || 0,
+    rushingTouchdowns: mappedStats.rushing_touchdowns || 0,
+    receivingTouchdowns: mappedStats.receiving_touchdowns || 0,
+    receptions: mappedStats.receptions || 0,
+    receivingYards: mappedStats.receiving_yards || 0,
+    rushingYards: mappedStats.rushing_yards || 0,
   });
 
   // Combine mapped stats with efficiency metrics
@@ -80,8 +94,10 @@ export function processPlayerStats(
       updated_at: currentTime,
       // Individual stat columns
       ...mappedStats,
-      // Efficiency metrics
-      ...efficiencyMetrics,
+      // Efficiency metrics (WR)
+      ...wrEfficiencyMetrics,
+      // RB efficiency metrics
+      ...rbEfficiencyMetrics,
     },
   };
 }
@@ -124,4 +140,3 @@ export async function processPlayerStatsBatch(
 
   return statsInserts;
 }
-
