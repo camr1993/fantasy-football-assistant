@@ -133,28 +133,60 @@ export async function calculateWeightedScoresForLeagueRB(
     efficiencyMetricsCount: efficiencyMetrics?.length || 0,
   });
 
-  // 3. Get all matchups for the week to build opponent lookup
-  logger.info('Fetching NFL matchups for opponent lookup', {
+  // 3. Get all matchups for the upcoming week (week + 1) to build opponent lookup
+  // This allows us to use the opponent difficulty for the upcoming week's matchup
+  // If we're at week 18 (last week), fall back to current week
+  const upcomingWeek = week >= 18 ? week : week + 1;
+  logger.info('Fetching NFL matchups for opponent lookup (upcoming week)', {
     seasonYear,
-    week,
+    currentWeek: week,
+    upcomingWeek,
   });
   const { data: matchups, error: matchupsError } = await supabase
     .from('nfl_matchups')
     .select('home_team, away_team')
     .eq('season', seasonYear)
-    .eq('week', week);
+    .eq('week', upcomingWeek);
 
   if (matchupsError) {
     logger.warn('Failed to fetch matchups, opponent difficulty will be 0', {
       error: matchupsError,
       seasonYear,
-      week,
+      upcomingWeek,
     });
   }
 
   // Build matchup lookup: team -> opponent
   const matchupMap = new Map<string, string>();
-  if (matchups) {
+
+  // If no matchups found for upcoming week, try falling back to current week
+  if ((!matchups || matchups.length === 0) && upcomingWeek !== week) {
+    logger.info(
+      'No matchups found for upcoming week, falling back to current week',
+      {
+        seasonYear,
+        upcomingWeek,
+        currentWeek: week,
+      }
+    );
+    const { data: fallbackMatchups, error: fallbackError } = await supabase
+      .from('nfl_matchups')
+      .select('home_team, away_team')
+      .eq('season', seasonYear)
+      .eq('week', week);
+
+    if (!fallbackError && fallbackMatchups && fallbackMatchups.length > 0) {
+      // Use fallback matchups
+      for (const matchup of fallbackMatchups) {
+        matchupMap.set(matchup.home_team.toLowerCase(), matchup.away_team);
+        matchupMap.set(matchup.away_team.toLowerCase(), matchup.home_team);
+      }
+      logger.info('Using fallback matchups from current week', {
+        matchupsCount: fallbackMatchups.length,
+      });
+    }
+  } else if (matchups) {
+    // Use matchups from upcoming week
     for (const matchup of matchups) {
       matchupMap.set(matchup.home_team.toLowerCase(), matchup.away_team);
       matchupMap.set(matchup.away_team.toLowerCase(), matchup.home_team);
@@ -213,13 +245,18 @@ export async function calculateWeightedScoresForLeagueRB(
   }
 
   // 5. Get all opponent difficulty indices in one query (RB-specific)
+  // Use the most recent completed week (current week) for defense difficulty data
+  // since the upcoming week hasn't been played yet
   const defensePlayerIds = Array.from(defenseMap.values());
-  logger.info('Fetching opponent difficulty data for RB', {
-    leagueId,
-    seasonYear,
-    week,
-    defensePlayerIdsCount: defensePlayerIds.length,
-  });
+  logger.info(
+    'Fetching opponent difficulty data for RB (using most recent completed week)',
+    {
+      leagueId,
+      seasonYear,
+      week,
+      defensePlayerIdsCount: defensePlayerIds.length,
+    }
+  );
 
   let opponentDifficultyData = null;
   let opponentError = null;
@@ -433,4 +470,3 @@ export async function calculateWeightedScoresForLeagueRB(
     rbPlayersUpdated: updates.length,
   });
 }
-
