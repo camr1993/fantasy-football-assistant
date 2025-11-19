@@ -5,6 +5,7 @@ import type { PlayerStatsData } from './types.ts';
 import {
   calculateWREfficiencyMetrics,
   calculateRBEfficiencyMetrics,
+  calculateTEEfficiencyMetrics,
 } from './efficiencyMetrics/index.ts';
 
 /**
@@ -82,6 +83,13 @@ export function processPlayerStats(
     rushingYards: mappedStats.rushing_yards || 0,
   });
 
+  // Calculate TE efficiency metrics (calculated for all players, will be null/0 for non-TEs)
+  const teEfficiencyMetrics = calculateTEEfficiencyMetrics({
+    targets: mappedStats.targets || 0,
+    receivingYards: mappedStats.receiving_yards || 0,
+    receivingTouchdowns: mappedStats.receiving_touchdowns || 0,
+  });
+
   // Combine mapped stats with efficiency metrics
   const currentTime = new Date().toISOString();
 
@@ -98,6 +106,8 @@ export function processPlayerStats(
       ...wrEfficiencyMetrics,
       // RB efficiency metrics
       ...rbEfficiencyMetrics,
+      // TE efficiency metrics
+      ...teEfficiencyMetrics,
     },
   };
 }

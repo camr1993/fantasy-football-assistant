@@ -30,3 +30,15 @@ export interface RBEfficiencyMetricsResult {
   receiving_profile: number | null;
   yards_per_touch: number | null;
 }
+
+export interface TEEfficiencyMetricsInput {
+  targets: number;
+  receivingYards: number;
+  receivingTouchdowns: number;
+}
+
+export interface TEEfficiencyMetricsResult {
+  targets_per_game: number | null;
+  yards_per_target: number | null;
+  receiving_touchdowns: number | null;
+}

@@ -7,4 +7,4 @@
 
 export { normalizeWREfficiencyMetricsGlobally } from './positions/wr.ts';
 export { normalizeRBEfficiencyMetricsGlobally } from './positions/rb.ts';
-
+export { normalizeTEEfficiencyMetricsGlobally } from './positions/te.ts';
