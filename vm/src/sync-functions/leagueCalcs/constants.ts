@@ -46,12 +46,21 @@ export const QB_WEIGHTS = {
   opponent_difficulty: 0.05, // w_6: Matchup / opponent pass defense metric
 } as const;
 
+// Weighted scoring configuration for Ks
+export const K_WEIGHTS = {
+  recent_mean: 0.4, // w_1: Recent mean fantasy points (baseline production: FGs + PATs)
+  volatility: -0.1, // w_2: Volatility (negative) - penalize inconsistency
+  fg_profile: 0.25, // w_3: FG attempts & distance profile (weighted by distance)
+  fg_pat_misses: -0.1, // w_4: FG/PAT misses penalty (negative)
+  fg_attempts: 0.1, // w_5: Team offensive opportunity (total FG attempts)
+  opponent_difficulty: 0.05, // w_6: Matchup / weather / stadium (opponent defense)
+} as const;
+
 // Position-specific weight configurations
 export const POSITION_WEIGHTS = {
   WR: WR_WEIGHTS,
   RB: RB_WEIGHTS,
   TE: TE_WEIGHTS,
   QB: QB_WEIGHTS,
-  // TODO: Add other positions as needed
-  // K: K_WEIGHTS,
+  K: K_WEIGHTS,
 } as const;

@@ -46,6 +46,9 @@ export interface MappedStats {
   fg_made_50_plus: number;
   fg_missed_0_19: number;
   fg_missed_20_29: number;
+  fg_missed_30_39: number;
+  fg_missed_40_49: number;
+  fg_missed_50_plus: number;
   pat_made: number;
   pat_missed: number;
 
@@ -114,6 +117,9 @@ export function mapYahooStatsToColumns(
     fg_made_50_plus: 0,
     fg_missed_0_19: 0,
     fg_missed_20_29: 0,
+    fg_missed_30_39: 0,
+    fg_missed_40_49: 0,
+    fg_missed_50_plus: 0,
     pat_made: 0,
     pat_missed: 0,
 
@@ -247,6 +253,15 @@ export function mapYahooStatsToColumns(
         break;
       case 25:
         mappedStats.fg_missed_20_29 = value;
+        break;
+      case 26:
+        mappedStats.fg_missed_30_39 = value;
+        break;
+      case 27:
+        mappedStats.fg_missed_40_49 = value;
+        break;
+      case 28:
+        mappedStats.fg_missed_50_plus = value;
         break;
       case 29:
         mappedStats.pat_made = value;
@@ -385,6 +400,9 @@ export function calculateFantasyPoints(
   totalPoints += mappedStats.fg_made_50_plus * (leagueModifiers[23] || 0);
   totalPoints += mappedStats.fg_missed_0_19 * (leagueModifiers[24] || 0);
   totalPoints += mappedStats.fg_missed_20_29 * (leagueModifiers[25] || 0);
+  totalPoints += mappedStats.fg_missed_30_39 * (leagueModifiers[26] || 0);
+  totalPoints += mappedStats.fg_missed_40_49 * (leagueModifiers[27] || 0);
+  totalPoints += mappedStats.fg_missed_50_plus * (leagueModifiers[28] || 0);
   totalPoints += mappedStats.pat_made * (leagueModifiers[29] || 0);
   totalPoints += mappedStats.pat_missed * (leagueModifiers[30] || 0);
 

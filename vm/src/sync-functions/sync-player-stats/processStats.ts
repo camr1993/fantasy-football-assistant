@@ -7,6 +7,7 @@ import {
   calculateRBEfficiencyMetrics,
   calculateTEEfficiencyMetrics,
   calculateQBEfficiencyMetrics,
+  calculateKEfficiencyMetrics,
 } from './efficiencyMetrics/index.ts';
 
 /**
@@ -102,6 +103,21 @@ export function processPlayerStats(
     rushingTouchdowns: mappedStats.rushing_touchdowns || 0,
   });
 
+  // Calculate K efficiency metrics (calculated for all players, will be null/0 for non-Ks)
+  const kEfficiencyMetrics = calculateKEfficiencyMetrics({
+    fgMade0_19: mappedStats.fg_made_0_19 || 0,
+    fgMade20_29: mappedStats.fg_made_20_29 || 0,
+    fgMade30_39: mappedStats.fg_made_30_39 || 0,
+    fgMade40_49: mappedStats.fg_made_40_49 || 0,
+    fgMade50Plus: mappedStats.fg_made_50_plus || 0,
+    fgMissed0_19: mappedStats.fg_missed_0_19 || 0,
+    fgMissed20_29: mappedStats.fg_missed_20_29 || 0,
+    fgMissed30_39: mappedStats.fg_missed_30_39 || 0,
+    fgMissed40_49: mappedStats.fg_missed_40_49 || 0,
+    fgMissed50Plus: mappedStats.fg_missed_50_plus || 0,
+    patMissed: mappedStats.pat_missed || 0,
+  });
+
   // Combine mapped stats with efficiency metrics
   const currentTime = new Date().toISOString();
 
@@ -122,6 +138,8 @@ export function processPlayerStats(
       ...teEfficiencyMetrics,
       // QB efficiency metrics
       ...qbEfficiencyMetrics,
+      // K efficiency metrics
+      ...kEfficiencyMetrics,
     },
   };
 }

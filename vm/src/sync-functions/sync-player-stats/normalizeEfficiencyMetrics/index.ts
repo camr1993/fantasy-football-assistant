@@ -9,3 +9,4 @@ export { normalizeWREfficiencyMetricsGlobally } from './positions/wr.ts';
 export { normalizeRBEfficiencyMetricsGlobally } from './positions/rb.ts';
 export { normalizeTEEfficiencyMetricsGlobally } from './positions/te.ts';
 export { normalizeQBEfficiencyMetricsGlobally } from './positions/qb.ts';
+export { normalizeKEfficiencyMetricsGlobally } from './positions/k.ts';

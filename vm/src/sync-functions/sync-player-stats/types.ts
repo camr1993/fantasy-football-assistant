@@ -58,3 +58,23 @@ export interface QBEfficiencyMetricsResult {
   turnovers: number | null;
   rushing_upside: number | null;
 }
+
+export interface KEfficiencyMetricsInput {
+  fgMade0_19: number;
+  fgMade20_29: number;
+  fgMade30_39: number;
+  fgMade40_49: number;
+  fgMade50Plus: number;
+  fgMissed0_19: number;
+  fgMissed20_29: number;
+  fgMissed30_39: number;
+  fgMissed40_49: number;
+  fgMissed50Plus: number;
+  patMissed: number;
+}
+
+export interface KEfficiencyMetricsResult {
+  fg_profile: number | null;
+  fg_pat_misses: number | null;
+  fg_attempts: number | null;
+}
