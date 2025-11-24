@@ -42,3 +42,19 @@ export interface TEEfficiencyMetricsResult {
   yards_per_target: number | null;
   receiving_touchdowns: number | null;
 }
+
+export interface QBEfficiencyMetricsInput {
+  passingTouchdowns: number;
+  passingYards: number;
+  passesAttempted: number;
+  interceptions: number;
+  fumblesLost: number;
+  rushingYards: number;
+  rushingTouchdowns: number;
+}
+
+export interface QBEfficiencyMetricsResult {
+  passing_efficiency: number | null;
+  turnovers: number | null;
+  rushing_upside: number | null;
+}

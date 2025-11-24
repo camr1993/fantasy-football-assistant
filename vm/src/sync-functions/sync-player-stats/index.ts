@@ -9,6 +9,7 @@ import {
   normalizeWREfficiencyMetricsGlobally,
   normalizeRBEfficiencyMetricsGlobally,
   normalizeTEEfficiencyMetricsGlobally,
+  normalizeQBEfficiencyMetricsGlobally,
 } from './normalizeEfficiencyMetrics/index.ts';
 
 /**
@@ -142,6 +143,9 @@ export async function syncAllPlayerStats(
 
   // Normalize TE efficiency metrics globally across all TEs
   await normalizeTEEfficiencyMetricsGlobally(currentYear, currentWeek);
+
+  // Normalize QB efficiency metrics globally across all QBs
+  await normalizeQBEfficiencyMetricsGlobally(currentYear, currentWeek);
 
   logger.info('Completed syncing all player stats from admin user league', {
     totalProcessed,

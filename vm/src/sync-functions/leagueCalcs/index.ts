@@ -7,6 +7,7 @@ import {
   calculateWeightedScoresForLeagueWR,
   calculateWeightedScoresForLeagueRB,
   calculateWeightedScoresForLeagueTE,
+  calculateWeightedScoresForLeagueQB,
 } from './weightedScoring/index.ts';
 import type { LeagueCalcsResult } from './types.ts';
 
@@ -79,6 +80,9 @@ async function updateRecentStatsForLeague(
 
   // Calculate weighted scores for TE players after normalization is complete
   await calculateWeightedScoresForLeagueTE(leagueId, seasonYear, week);
+
+  // Calculate weighted scores for QB players after normalization is complete
+  await calculateWeightedScoresForLeagueQB(leagueId, seasonYear, week);
 
   logger.info('Completed recent statistics update for league', {
     leagueId,

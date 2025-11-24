@@ -6,6 +6,7 @@ import {
   calculateWREfficiencyMetrics,
   calculateRBEfficiencyMetrics,
   calculateTEEfficiencyMetrics,
+  calculateQBEfficiencyMetrics,
 } from './efficiencyMetrics/index.ts';
 
 /**
@@ -90,6 +91,17 @@ export function processPlayerStats(
     receivingTouchdowns: mappedStats.receiving_touchdowns || 0,
   });
 
+  // Calculate QB efficiency metrics (calculated for all players, will be null/0 for non-QBs)
+  const qbEfficiencyMetrics = calculateQBEfficiencyMetrics({
+    passingTouchdowns: mappedStats.passing_touchdowns || 0,
+    passingYards: mappedStats.passing_yards || 0,
+    passesAttempted: mappedStats.passes_attempted || 0,
+    interceptions: mappedStats.interceptions || 0,
+    fumblesLost: mappedStats.fumbles_lost || 0,
+    rushingYards: mappedStats.rushing_yards || 0,
+    rushingTouchdowns: mappedStats.rushing_touchdowns || 0,
+  });
+
   // Combine mapped stats with efficiency metrics
   const currentTime = new Date().toISOString();
 
@@ -108,6 +120,8 @@ export function processPlayerStats(
       ...rbEfficiencyMetrics,
       // TE efficiency metrics
       ...teEfficiencyMetrics,
+      // QB efficiency metrics
+      ...qbEfficiencyMetrics,
     },
   };
 }

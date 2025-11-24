@@ -33,7 +33,17 @@ export const TE_WEIGHTS = {
   targets_per_game: 0.26, // w_3: Targets per game / target share
   receiving_touchdowns: 0.18, // w_4: Receiving TDs (TD upside without red-zone)
   yards_per_target: 0.12, // w_5: Catch rate / efficiency (yards_per_target)
-  opponent_difficulty: 0.10, // w_6: Matchup / opponent TE coverage metric
+  opponent_difficulty: 0.1, // w_6: Matchup / opponent TE coverage metric
+} as const;
+
+// Weighted scoring configuration for QBs
+export const QB_WEIGHTS = {
+  recent_mean: 0.35, // w_1: Recent mean fantasy points (baseline production)
+  volatility: -0.05, // w_2: Volatility (negative) - penalize inconsistent weeks
+  passing_efficiency: 0.25, // w_3: Passing TDs & yards (efficiency combo) - TDs and yards per attempt
+  turnovers: -0.15, // w_4: Turnover penalty (INTs + fumbles) - negative leverage
+  rushing_upside: 0.15, // w_5: Rushing upside (rush yds + rush TDs) - dual-threat value
+  opponent_difficulty: 0.05, // w_6: Matchup / opponent pass defense metric
 } as const;
 
 // Position-specific weight configurations
@@ -41,7 +51,7 @@ export const POSITION_WEIGHTS = {
   WR: WR_WEIGHTS,
   RB: RB_WEIGHTS,
   TE: TE_WEIGHTS,
+  QB: QB_WEIGHTS,
   // TODO: Add other positions as needed
-  // QB: QB_WEIGHTS,
   // K: K_WEIGHTS,
 } as const;

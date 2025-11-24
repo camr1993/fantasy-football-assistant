@@ -8,3 +8,4 @@
 export { calculateWeightedScoresForLeagueWR } from './positions/wr.ts';
 export { calculateWeightedScoresForLeagueRB } from './positions/rb.ts';
 export { calculateWeightedScoresForLeagueTE } from './positions/te.ts';
+export { calculateWeightedScoresForLeagueQB } from './positions/qb.ts';
