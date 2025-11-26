@@ -11,6 +11,7 @@ import {
   normalizeTEEfficiencyMetricsGlobally,
   normalizeQBEfficiencyMetricsGlobally,
   normalizeKEfficiencyMetricsGlobally,
+  normalizeDEFEfficiencyMetricsGlobally,
 } from './normalizeEfficiencyMetrics/index.ts';
 
 /**
@@ -150,6 +151,9 @@ export async function syncAllPlayerStats(
 
   // Normalize K efficiency metrics globally across all Ks
   await normalizeKEfficiencyMetricsGlobally(currentYear, currentWeek);
+
+  // Normalize DEF efficiency metrics globally across all DEFs
+  await normalizeDEFEfficiencyMetricsGlobally(currentYear, currentWeek);
 
   logger.info('Completed syncing all player stats from admin user league', {
     totalProcessed,

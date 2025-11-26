@@ -105,6 +105,29 @@ export async function calculate3WeekRollingAverages(
       currentWeek,
     });
   }
+
+  // Calculate 3-week rolling averages for DEF efficiency metrics
+  const { error: defError } = await supabase.rpc(
+    'calculate_def_efficiency_3wk_avg',
+    {
+      p_season_year: seasonYear,
+      p_week: currentWeek,
+      p_start_week: Math.max(1, currentWeek - 2), // Not used in function, kept for compatibility
+    }
+  );
+
+  if (defError) {
+    logger.warn('SQL function for DEF efficiency 3wk avg not found', {
+      error: defError.message,
+      seasonYear,
+      currentWeek,
+    });
+  } else {
+    logger.info('Successfully calculated DEF 3-week rolling averages via SQL', {
+      seasonYear,
+      currentWeek,
+    });
+  }
 }
 
 /**

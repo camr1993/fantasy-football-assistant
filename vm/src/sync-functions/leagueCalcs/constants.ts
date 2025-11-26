@@ -56,6 +56,20 @@ export const K_WEIGHTS = {
   opponent_difficulty: 0.05, // w_6: Matchup / weather / stadium (opponent defense)
 } as const;
 
+// Weighted scoring configuration for DEFs
+export const DEF_WEIGHTS = {
+  recent_mean: 0.25, // w_1: Recent mean fantasy points (baseline production)
+  volatility: -0.08, // w_2: Volatility (negative) - penalize inconsistency
+  sacks_per_game: 0.2, // w_3: Sacks per game - strongest stable DST predictor
+  turnovers_forced: 0.18, // w_4: Turnovers forced (INT+FR) - biggest DST scoring catalyst
+  dst_tds: 0.1, // w_5: DST TDs (DEF + return) - ceiling booster
+  points_allowed: -0.1, // w_6: Points allowed (negative) - better defenses allow fewer points
+  yards_allowed: -0.07, // w_7: Yards allowed (negative) - controls PA volatility
+  blocked_kicks: 0.02, // w_8: Blocked kicks - small but real
+  safeties: 0.01, // w_9: Safeties - rare but valuable
+  opponent_difficulty: 0.19, // w_10: Opponent offensive difficulty - most important added variable
+} as const;
+
 // Position-specific weight configurations
 export const POSITION_WEIGHTS = {
   WR: WR_WEIGHTS,
@@ -63,4 +77,5 @@ export const POSITION_WEIGHTS = {
   TE: TE_WEIGHTS,
   QB: QB_WEIGHTS,
   K: K_WEIGHTS,
+  DEF: DEF_WEIGHTS,
 } as const;

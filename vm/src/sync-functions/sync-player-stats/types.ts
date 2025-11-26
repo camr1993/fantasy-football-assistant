@@ -78,3 +78,25 @@ export interface KEfficiencyMetricsResult {
   fg_pat_misses: number | null;
   fg_attempts: number | null;
 }
+
+export interface DEFEfficiencyMetricsInput {
+  sacks: number;
+  defensiveInt: number;
+  fumbleRecoveries: number;
+  defensiveTouchdowns: number;
+  defenseReturnTouchdowns: number;
+  totalYardsGivenUp: number;
+  pointsAllowed: number;
+  blockKicks: number;
+  safeties: number;
+}
+
+export interface DEFEfficiencyMetricsResult {
+  sacks_per_game: number;
+  turnovers_forced: number;
+  dst_tds: number;
+  yards_allowed: number;
+  points_allowed: number;
+  block_kicks: number;
+  safeties: number;
+}
