@@ -5,6 +5,10 @@ import type { PlayerStatsData } from './types.ts';
 import {
   calculateWREfficiencyMetrics,
   calculateRBEfficiencyMetrics,
+  calculateTEEfficiencyMetrics,
+  calculateQBEfficiencyMetrics,
+  calculateKEfficiencyMetrics,
+  calculateDEFEfficiencyMetrics,
 } from './efficiencyMetrics/index.ts';
 
 /**
@@ -82,6 +86,52 @@ export function processPlayerStats(
     rushingYards: mappedStats.rushing_yards || 0,
   });
 
+  // Calculate TE efficiency metrics (calculated for all players, will be null/0 for non-TEs)
+  const teEfficiencyMetrics = calculateTEEfficiencyMetrics({
+    targets: mappedStats.targets || 0,
+    receivingYards: mappedStats.receiving_yards || 0,
+    receivingTouchdowns: mappedStats.receiving_touchdowns || 0,
+  });
+
+  // Calculate QB efficiency metrics (calculated for all players, will be null/0 for non-QBs)
+  const qbEfficiencyMetrics = calculateQBEfficiencyMetrics({
+    passingTouchdowns: mappedStats.passing_touchdowns || 0,
+    passingYards: mappedStats.passing_yards || 0,
+    passesAttempted: mappedStats.passes_attempted || 0,
+    interceptions: mappedStats.interceptions || 0,
+    fumblesLost: mappedStats.fumbles_lost || 0,
+    rushingYards: mappedStats.rushing_yards || 0,
+    rushingTouchdowns: mappedStats.rushing_touchdowns || 0,
+  });
+
+  // Calculate K efficiency metrics (calculated for all players, will be null/0 for non-Ks)
+  const kEfficiencyMetrics = calculateKEfficiencyMetrics({
+    fgMade0_19: mappedStats.fg_made_0_19 || 0,
+    fgMade20_29: mappedStats.fg_made_20_29 || 0,
+    fgMade30_39: mappedStats.fg_made_30_39 || 0,
+    fgMade40_49: mappedStats.fg_made_40_49 || 0,
+    fgMade50Plus: mappedStats.fg_made_50_plus || 0,
+    fgMissed0_19: mappedStats.fg_missed_0_19 || 0,
+    fgMissed20_29: mappedStats.fg_missed_20_29 || 0,
+    fgMissed30_39: mappedStats.fg_missed_30_39 || 0,
+    fgMissed40_49: mappedStats.fg_missed_40_49 || 0,
+    fgMissed50Plus: mappedStats.fg_missed_50_plus || 0,
+    patMissed: mappedStats.pat_missed || 0,
+  });
+
+  // Calculate DEF efficiency metrics (calculated for all players, will be null/0 for non-DEFs)
+  const defEfficiencyMetrics = calculateDEFEfficiencyMetrics({
+    sacks: mappedStats.sacks || 0,
+    defensiveInt: mappedStats.defensive_int || 0,
+    fumbleRecoveries: mappedStats.fumble_recoveries || 0,
+    defensiveTouchdowns: mappedStats.defensive_touchdowns || 0,
+    defenseReturnTouchdowns: mappedStats.defense_return_touchdowns || 0,
+    totalYardsGivenUp: mappedStats.total_yards_given_up || 0,
+    pointsAllowed: mappedStats.points_allowed || 0,
+    blockKicks: mappedStats.block_kicks || 0,
+    safeties: mappedStats.safeties || 0,
+  });
+
   // Combine mapped stats with efficiency metrics
   const currentTime = new Date().toISOString();
 
@@ -98,6 +148,14 @@ export function processPlayerStats(
       ...wrEfficiencyMetrics,
       // RB efficiency metrics
       ...rbEfficiencyMetrics,
+      // TE efficiency metrics
+      ...teEfficiencyMetrics,
+      // QB efficiency metrics
+      ...qbEfficiencyMetrics,
+      // K efficiency metrics
+      ...kEfficiencyMetrics,
+      // DEF efficiency metrics
+      ...defEfficiencyMetrics,
     },
   };
 }

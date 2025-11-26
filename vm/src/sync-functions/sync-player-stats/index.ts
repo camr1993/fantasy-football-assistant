@@ -8,6 +8,10 @@ import { calculate3WeekRollingAverages } from './calculate3WeekAverages.ts';
 import {
   normalizeWREfficiencyMetricsGlobally,
   normalizeRBEfficiencyMetricsGlobally,
+  normalizeTEEfficiencyMetricsGlobally,
+  normalizeQBEfficiencyMetricsGlobally,
+  normalizeKEfficiencyMetricsGlobally,
+  normalizeDEFEfficiencyMetricsGlobally,
 } from './normalizeEfficiencyMetrics/index.ts';
 
 /**
@@ -138,6 +142,18 @@ export async function syncAllPlayerStats(
 
   // Normalize RB efficiency metrics globally across all RBs
   await normalizeRBEfficiencyMetricsGlobally(currentYear, currentWeek);
+
+  // Normalize TE efficiency metrics globally across all TEs
+  await normalizeTEEfficiencyMetricsGlobally(currentYear, currentWeek);
+
+  // Normalize QB efficiency metrics globally across all QBs
+  await normalizeQBEfficiencyMetricsGlobally(currentYear, currentWeek);
+
+  // Normalize K efficiency metrics globally across all Ks
+  await normalizeKEfficiencyMetricsGlobally(currentYear, currentWeek);
+
+  // Normalize DEF efficiency metrics globally across all DEFs
+  await normalizeDEFEfficiencyMetricsGlobally(currentYear, currentWeek);
 
   logger.info('Completed syncing all player stats from admin user league', {
     totalProcessed,

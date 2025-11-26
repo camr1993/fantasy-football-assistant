@@ -13,6 +13,7 @@ import {
   syncTeamRosterOnly,
 } from './sync-functions/leagueSync.ts';
 import { syncDefensePointsAgainst } from './sync-functions/syncDefensePointsAgainst.ts';
+import { syncTeamOffensiveStats } from './sync-functions/syncTeamOffensiveStats.ts';
 import { calculateAllLeaguesFantasyPoints } from './sync-functions/fantasyPointsCalc.ts';
 import { calculateRecentStatsOnly } from './sync-functions/leagueCalcs/index.ts';
 import { getMostRecentNFLWeek } from '../../supabase/functions/utils/syncHelpers.ts';
@@ -83,6 +84,10 @@ const SYNC_FUNCTIONS: Record<string, SyncFunction> = {
   'sync-defense-points-against': {
     name: 'sync-defense-points-against',
     fn: (_yahooToken: string, week?: number) => syncDefensePointsAgainst(week),
+  },
+  'sync-team-offensive-stats': {
+    name: 'sync-team-offensive-stats',
+    fn: (_yahooToken: string, week?: number) => syncTeamOffensiveStats(week),
   },
   'league-calcs': {
     name: 'league-calcs',

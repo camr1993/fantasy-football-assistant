@@ -38,11 +38,14 @@ export async function calculate3WeekRollingAverages(
   }
 
   // Calculate 3-week rolling averages for RB efficiency metrics
-  const { error: rbError } = await supabase.rpc('calculate_rb_efficiency_3wk_avg', {
-    p_season_year: seasonYear,
-    p_week: currentWeek,
-    p_start_week: Math.max(1, currentWeek - 2), // Not used in function, kept for compatibility
-  });
+  const { error: rbError } = await supabase.rpc(
+    'calculate_rb_efficiency_3wk_avg',
+    {
+      p_season_year: seasonYear,
+      p_week: currentWeek,
+      p_start_week: Math.max(1, currentWeek - 2), // Not used in function, kept for compatibility
+    }
+  );
 
   if (rbError) {
     logger.warn('SQL function for RB efficiency 3wk avg not found', {
@@ -52,6 +55,75 @@ export async function calculate3WeekRollingAverages(
     });
   } else {
     logger.info('Successfully calculated RB 3-week rolling averages via SQL', {
+      seasonYear,
+      currentWeek,
+    });
+  }
+
+  // Calculate 3-week rolling averages for QB efficiency metrics
+  const { error: qbError } = await supabase.rpc(
+    'calculate_qb_efficiency_3wk_avg',
+    {
+      p_season_year: seasonYear,
+      p_week: currentWeek,
+      p_start_week: Math.max(1, currentWeek - 2), // Not used in function, kept for compatibility
+    }
+  );
+
+  if (qbError) {
+    logger.warn('SQL function for QB efficiency 3wk avg not found', {
+      error: qbError.message,
+      seasonYear,
+      currentWeek,
+    });
+  } else {
+    logger.info('Successfully calculated QB 3-week rolling averages via SQL', {
+      seasonYear,
+      currentWeek,
+    });
+  }
+
+  // Calculate 3-week rolling averages for K efficiency metrics
+  const { error: kError } = await supabase.rpc(
+    'calculate_k_efficiency_3wk_avg',
+    {
+      p_season_year: seasonYear,
+      p_week: currentWeek,
+      p_start_week: Math.max(1, currentWeek - 2), // Not used in function, kept for compatibility
+    }
+  );
+
+  if (kError) {
+    logger.warn('SQL function for K efficiency 3wk avg not found', {
+      error: kError.message,
+      seasonYear,
+      currentWeek,
+    });
+  } else {
+    logger.info('Successfully calculated K 3-week rolling averages via SQL', {
+      seasonYear,
+      currentWeek,
+    });
+  }
+
+  // Calculate 3-week rolling averages for DEF efficiency metrics
+  const { error: defError } = await supabase.rpc(
+    'calculate_def_efficiency_3wk_avg',
+    {
+      p_season_year: seasonYear,
+      p_week: currentWeek,
+      p_start_week: Math.max(1, currentWeek - 2), // Not used in function, kept for compatibility
+    }
+  );
+
+  if (defError) {
+    logger.warn('SQL function for DEF efficiency 3wk avg not found', {
+      error: defError.message,
+      seasonYear,
+      currentWeek,
+    });
+  } else {
+    logger.info('Successfully calculated DEF 3-week rolling averages via SQL', {
       seasonYear,
       currentWeek,
     });

@@ -26,12 +26,56 @@ export const RB_WEIGHTS = {
   opponent_difficulty: 0.05, // w_7: Matchup / opponent rush defense metric
 } as const;
 
+// Weighted scoring configuration for TEs
+export const TE_WEIGHTS = {
+  recent_mean: 0.32, // w_1: Recent mean fantasy points
+  volatility: -0.08, // w_2: Volatility (negative)
+  targets_per_game: 0.26, // w_3: Targets per game / target share
+  receiving_touchdowns: 0.18, // w_4: Receiving TDs (TD upside without red-zone)
+  yards_per_target: 0.12, // w_5: Catch rate / efficiency (yards_per_target)
+  opponent_difficulty: 0.1, // w_6: Matchup / opponent TE coverage metric
+} as const;
+
+// Weighted scoring configuration for QBs
+export const QB_WEIGHTS = {
+  recent_mean: 0.35, // w_1: Recent mean fantasy points (baseline production)
+  volatility: -0.05, // w_2: Volatility (negative) - penalize inconsistent weeks
+  passing_efficiency: 0.25, // w_3: Passing TDs & yards (efficiency combo) - TDs and yards per attempt
+  turnovers: -0.15, // w_4: Turnover penalty (INTs + fumbles) - negative leverage
+  rushing_upside: 0.15, // w_5: Rushing upside (rush yds + rush TDs) - dual-threat value
+  opponent_difficulty: 0.05, // w_6: Matchup / opponent pass defense metric
+} as const;
+
+// Weighted scoring configuration for Ks
+export const K_WEIGHTS = {
+  recent_mean: 0.4, // w_1: Recent mean fantasy points (baseline production: FGs + PATs)
+  volatility: -0.1, // w_2: Volatility (negative) - penalize inconsistency
+  fg_profile: 0.25, // w_3: FG attempts & distance profile (weighted by distance)
+  fg_pat_misses: -0.1, // w_4: FG/PAT misses penalty (negative)
+  fg_attempts: 0.1, // w_5: Team offensive opportunity (total FG attempts)
+  opponent_difficulty: 0.05, // w_6: Matchup / weather / stadium (opponent defense)
+} as const;
+
+// Weighted scoring configuration for DEFs
+export const DEF_WEIGHTS = {
+  recent_mean: 0.25, // w_1: Recent mean fantasy points (baseline production)
+  volatility: -0.08, // w_2: Volatility (negative) - penalize inconsistency
+  sacks_per_game: 0.2, // w_3: Sacks per game - strongest stable DST predictor
+  turnovers_forced: 0.18, // w_4: Turnovers forced (INT+FR) - biggest DST scoring catalyst
+  dst_tds: 0.1, // w_5: DST TDs (DEF + return) - ceiling booster
+  points_allowed: -0.1, // w_6: Points allowed (negative) - better defenses allow fewer points
+  yards_allowed: -0.07, // w_7: Yards allowed (negative) - controls PA volatility
+  blocked_kicks: 0.02, // w_8: Blocked kicks - small but real
+  safeties: 0.01, // w_9: Safeties - rare but valuable
+  opponent_difficulty: 0.19, // w_10: Opponent offensive difficulty - most important added variable
+} as const;
+
 // Position-specific weight configurations
 export const POSITION_WEIGHTS = {
   WR: WR_WEIGHTS,
   RB: RB_WEIGHTS,
-  // TODO: Add other positions as needed
-  // QB: QB_WEIGHTS,
-  // TE: TE_WEIGHTS,
-  // K: K_WEIGHTS,
+  TE: TE_WEIGHTS,
+  QB: QB_WEIGHTS,
+  K: K_WEIGHTS,
+  DEF: DEF_WEIGHTS,
 } as const;

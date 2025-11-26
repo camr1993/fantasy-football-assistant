@@ -109,6 +109,12 @@ Deno.serve(async (req) => {
         priority: 10, // High priority for scheduled jobs
       },
       {
+        name: 'sync-team-offensive-stats',
+        status: 'pending',
+        week: week || null,
+        priority: 10, // High priority for scheduled jobs
+      },
+      {
         name: 'sync-defense-points-against',
         status: 'pending',
         week: week || null,
