@@ -69,9 +69,15 @@ export interface YahooStatModifier {
   display_name: string;
 }
 
+export interface YahooRosterPosition {
+  position: string;
+  count: number;
+}
+
 export interface YahooLeagueSettings {
   league_key: string;
   stat_modifiers: YahooStatModifier[];
+  roster_positions: YahooRosterPosition[];
 }
 
 /**
@@ -193,6 +199,30 @@ export async function fetchLeagueSettings(
       return null;
     }
 
+    // Extract roster positions from the settings
+    const rosterPositions: YahooRosterPosition[] = [];
+    const rosterPositionsData = settings.roster_positions;
+
+    if (rosterPositionsData) {
+      // Handle both single object and array cases
+      const positionsArray = Array.isArray(rosterPositionsData)
+        ? rosterPositionsData
+        : [rosterPositionsData];
+
+      for (const positionWrapper of positionsArray) {
+        // The position data is directly on the wrapper, not nested in roster_position
+        const position = positionWrapper?.roster_position?.position;
+        const count = positionWrapper?.roster_position?.count;
+
+        if (position && count !== undefined) {
+          rosterPositions.push({
+            position: position,
+            count: parseInt(count, 10),
+          });
+        }
+      }
+    }
+
     // Extract stat modifiers from the settings
     const statModifiers: YahooStatModifier[] = [];
     const statModifiersData = settings.stat_modifiers?.stats;
@@ -240,11 +270,13 @@ export async function fetchLeagueSettings(
     logger.info('Successfully fetched league settings', {
       leagueKey,
       statModifiersCount: statModifiers.length,
+      rosterPositionsCount: rosterPositions.length,
     });
 
     return {
       league_key: leagueKey,
       stat_modifiers: statModifiers,
+      roster_positions: rosterPositions,
     };
   } catch (error) {
     logger.error('Error fetching league settings', { leagueKey, error });
@@ -540,6 +572,66 @@ export async function syncTeamRoster(
     });
   } catch (error) {
     logger.error('Error syncing team roster', { teamId, error });
+    throw error;
+  }
+}
+
+/**
+ * Sync league roster positions to the database
+ */
+export async function syncLeagueRosterPositions(
+  leagueId: string,
+  rosterPositions: YahooRosterPosition[]
+): Promise<void> {
+  try {
+    logger.info('Syncing league roster positions', {
+      leagueId,
+      positionsCount: rosterPositions.length,
+    });
+
+    if (rosterPositions.length > 0) {
+      // First, clear existing roster positions for this league
+      const { error: deleteError } = await supabase
+        .from('league_roster_positions')
+        .delete()
+        .eq('league_id', leagueId);
+
+      if (deleteError) {
+        logger.error('Error clearing existing roster positions', {
+          leagueId,
+          error: deleteError,
+        });
+        throw deleteError;
+      }
+
+      // Insert new roster positions
+      const positionsToInsert = rosterPositions.map((pos) => ({
+        league_id: leagueId,
+        position: pos.position,
+        count: pos.count,
+      }));
+
+      const { error: insertError } = await supabase
+        .from('league_roster_positions')
+        .insert(positionsToInsert);
+
+      if (insertError) {
+        logger.error('Error inserting roster positions', {
+          leagueId,
+          error: insertError,
+        });
+        throw insertError;
+      }
+
+      logger.info('Successfully synced roster positions', {
+        leagueId,
+        count: positionsToInsert.length,
+      });
+    } else {
+      logger.info('No roster positions to sync for league', { leagueId });
+    }
+  } catch (error) {
+    logger.error('Error syncing league roster positions', { leagueId, error });
     throw error;
   }
 }
@@ -859,18 +951,29 @@ export async function syncUserLeagues(
         syncedLeagues.push(newLeague);
       }
 
-      // Fetch and sync league settings (including stat modifiers)
+      // Fetch and sync league settings (including stat modifiers and roster positions)
       try {
         const leagueSettings = await fetchLeagueSettings(
           accessToken,
           yahooLeague.league_key
         );
 
-        if (leagueSettings && leagueSettings.stat_modifiers.length > 0) {
-          await syncLeagueStatModifiers(
-            leagueId,
-            leagueSettings.stat_modifiers
-          );
+        if (leagueSettings) {
+          // Sync roster positions
+          if (leagueSettings.roster_positions.length > 0) {
+            await syncLeagueRosterPositions(
+              leagueId,
+              leagueSettings.roster_positions
+            );
+          }
+
+          // Sync stat modifiers
+          if (leagueSettings.stat_modifiers.length > 0) {
+            await syncLeagueStatModifiers(
+              leagueId,
+              leagueSettings.stat_modifiers
+            );
+          }
         }
       } catch (settingsError) {
         logger.error('Error syncing league settings', {

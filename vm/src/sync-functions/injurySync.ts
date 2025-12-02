@@ -15,13 +15,14 @@ interface PlayerData {
 }
 
 /**
- * Sync all player injuries (master data)
+ * Sync all player injury statuses (master data)
+ * Tracks all players (1 row per player) with their current injury status
  * Gets players from user's leagues since global players endpoint requires specific player keys
  */
 export async function syncAllPlayerInjuries(
   yahooToken: string
 ): Promise<number> {
-  logger.info('Syncing all player injuries from admin league');
+  logger.info('Syncing all player injury statuses from admin league');
 
   // Get the admin user's league directly from the database
   // First, get the admin user's ID
@@ -58,7 +59,7 @@ export async function syncAllPlayerInjuries(
     return 0;
   }
 
-  logger.info('Syncing player injuries from league', { leagueKey });
+  logger.info('Syncing player injury statuses from league', { leagueKey });
 
   let totalProcessed = 0;
   const currentTime = new Date().toISOString();
@@ -146,6 +147,7 @@ export async function syncAllPlayerInjuries(
     for (let i = 0; i < players.length; i += batchSize) {
       const batch = players.slice(i, i + batchSize);
 
+      // Process ALL players, including those with status 'NA' (healthy)
       const injuryInserts = batch
         .map((player: PlayerData, _index: number) => {
           // Each player has a player array with the actual data
@@ -168,14 +170,17 @@ export async function syncAllPlayerInjuries(
             }
           }
 
-          // Only process players with non-null status and not "NA"
-          if (!status || !playerKey || status === 'NA') {
+          // Process all players - if no status or status is 'NA', use 'NA' for healthy
+          if (!playerKey) {
             return null;
           }
 
+          // Use 'NA' as the status for healthy players (when status is null or 'NA')
+          const finalStatus = status && status !== 'NA' ? status : 'NA';
+
           return {
             yahoo_player_id: playerKey,
-            status: status,
+            status: finalStatus,
           };
         })
         .filter(Boolean);
@@ -199,23 +204,19 @@ export async function syncAllPlayerInjuries(
           continue;
         }
 
-        // Create injury records with individual timestamps to ensure uniqueness
+        // Create injury records - one per player with updated_at timestamp
         const injuryRecords = injuryInserts
-          .map((injuryRecord, index) => {
+          .map((injuryRecord) => {
             const playerRecord = playerRecords.find(
               (p: { yahoo_player_id: string; id: string }) =>
                 p.yahoo_player_id === injuryRecord?.yahoo_player_id
             );
             if (!playerRecord) return null;
 
-            // Add small offset to ensure unique timestamps within the same batch
-            const recordTime = new Date(currentTime);
-            recordTime.setMilliseconds(recordTime.getMilliseconds() + index);
-
             return {
               player_id: playerRecord.id,
               status: injuryRecord?.status,
-              created_at: recordTime.toISOString(),
+              updated_at: currentTime,
             };
           })
           .filter(Boolean);
@@ -224,11 +225,11 @@ export async function syncAllPlayerInjuries(
           const { error } = await supabase
             .from('player_injuries')
             .upsert(injuryRecords, {
-              onConflict: 'player_id,created_at',
+              onConflict: 'player_id',
             });
 
           if (error) {
-            logger.error('Failed to upsert player injuries batch', {
+            logger.error('Failed to upsert player injury statuses batch', {
               error,
               leagueKey,
               batchSize: injuryRecords.length,
@@ -238,30 +239,33 @@ export async function syncAllPlayerInjuries(
           }
         }
       } else {
-        logger.warn('No valid injury records in batch', {
+        logger.warn('No valid player records in batch', {
           leagueKey,
           batchSize: batch.length,
         });
       }
     }
 
-    logger.info('Completed syncing player injuries from league', {
+    logger.info('Completed syncing player injury statuses from league', {
       leagueKey,
       playersFound: players.length,
-      injuriesProcessed: totalProcessed,
+      playersProcessed: totalProcessed,
     });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logger.error('Error syncing player injuries from league', {
+    logger.error('Error syncing player injury statuses from league', {
       leagueKey,
       error: errorMessage,
     });
   }
 
-  logger.info('Completed syncing all player injuries from admin league', {
-    totalProcessed,
-    leagueKey,
-    adminUserId: superAdminUserId,
-  });
+  logger.info(
+    'Completed syncing all player injury statuses from admin league',
+    {
+      totalProcessed,
+      leagueKey,
+      adminUserId: superAdminUserId,
+    }
+  );
   return totalProcessed;
 }
