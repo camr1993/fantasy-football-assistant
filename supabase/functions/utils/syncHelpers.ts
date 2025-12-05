@@ -124,6 +124,17 @@ export function getMostRecentNFLWeek(): number {
 }
 
 /**
+ * Get current NFL season year
+ */
+export function getCurrentNFLSeasonYear(): number {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1; // getMonth() returns 0-11
+  // NFL season typically starts in September, so if we're before September, use previous year
+  return currentMonth < 9 ? currentYear - 1 : currentYear;
+}
+
+/**
  * Calculate points from Yahoo stats
  */
 export function calculatePointsFromStats(stats: any[]): number {

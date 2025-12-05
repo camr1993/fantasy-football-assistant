@@ -8,10 +8,17 @@ function Popup() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [authCode, setAuthCode] = useState('');
+  const [loadingTips, setLoadingTips] = useState(false);
 
   useEffect(() => {
     checkAuthStatus();
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadTips();
+    }
+  }, [isAuthenticated]);
 
   async function checkAuthStatus() {
     // Check if user is already authenticated
@@ -168,6 +175,28 @@ function Popup() {
     }
   }
 
+  // Function to load tips
+  async function loadTips() {
+    try {
+      setLoadingTips(true);
+      setError(null);
+
+      const result = await apiClient.getTips();
+
+      if (result.success) {
+        console.log('Tips data:', result.data);
+      } else {
+        console.error('Failed to load tips:', result.error?.error);
+        setError(result.error?.error || 'Failed to load tips');
+      }
+    } catch (error) {
+      console.error('Error loading tips:', error);
+      setError('Failed to load tips');
+    } finally {
+      setLoadingTips(false);
+    }
+  }
+
   return (
     <div style={{ padding: '1rem', width: '300px' }}>
       <h3>Fantasy Assistant</h3>
@@ -229,7 +258,15 @@ function Popup() {
         </div>
       ) : (
         <div>
-          <p>Welcome, {user?.name || user?.email}!</p>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '16px',
+            }}
+          >
+            <p style={{ margin: 0 }}>Welcome, {user?.name || user?.email}!</p>
           <button
             onClick={signOut}
             style={{
@@ -243,6 +280,24 @@ function Popup() {
             }}
           >
             Sign Out
+            </button>
+          </div>
+
+          <button
+            onClick={loadTips}
+            disabled={loadingTips}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#7c3aed',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: loadingTips ? 'not-allowed' : 'pointer',
+              width: '100%',
+              marginBottom: '16px',
+            }}
+          >
+            {loadingTips ? 'Loading Tips...' : 'Load Tips (Check Console)'}
           </button>
         </div>
       )}

@@ -159,6 +159,46 @@ class ApiClient {
   }
 
   /**
+   * Get fantasy tips (waiver wire recommendations and start/bench advice)
+   */
+  async getTips(): Promise<ApiResponse<any>> {
+    try {
+      const userId = await this.getUserId();
+      if (!userId) {
+        return {
+          success: false,
+          error: { error: 'No user found' },
+        };
+      }
+
+      const { data, error } = await supabase.functions.invoke('tips', {
+        body: {
+          userId,
+        },
+      });
+
+      if (error) {
+        return {
+          success: false,
+          error: { error: error.message || 'Failed to get tips' },
+        };
+      }
+
+      return {
+        success: true,
+        data: data,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+      };
+    }
+  }
+
+  /**
    * Get user ID from Chrome storage
    */
   private async getUserId(): Promise<string | null> {
