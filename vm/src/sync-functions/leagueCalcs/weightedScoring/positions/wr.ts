@@ -340,7 +340,7 @@ export async function calculateWeightedScoresForLeagueWR(
 
     const efficiency = efficiencyMap.get(player.player_id);
     const recentMean = player.recent_mean_norm || 0;
-    const recentStd = player.recent_std_norm || 0;
+    const recentStd = Math.max(-2, Math.min(2, player.recent_std_norm || 0)); // Clip volatility z-score to ±2
     const targetsPerGameNorm = efficiency?.targets_per_game_3wk_avg_norm || 0;
     const catchRateNorm = efficiency?.catch_rate_3wk_avg_norm || 0;
     const yardsPerTargetNorm = efficiency?.yards_per_target_3wk_avg_norm || 0;

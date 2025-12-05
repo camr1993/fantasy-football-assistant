@@ -340,7 +340,7 @@ export async function calculateWeightedScoresForLeagueQB(
 
     const efficiency = efficiencyMap.get(player.player_id);
     const recentMean = player.recent_mean_norm || 0;
-    const recentStd = player.recent_std_norm || 0;
+    const recentStd = Math.max(-2, Math.min(2, player.recent_std_norm || 0)); // Clip volatility z-score to ±2
     const passingEfficiencyNorm =
       efficiency?.passing_efficiency_3wk_avg_norm || 0;
     const turnoversNorm = efficiency?.turnovers_3wk_avg_norm || 0;
