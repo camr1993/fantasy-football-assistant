@@ -2,10 +2,6 @@ import { logger, performance } from '../utils/logger.ts';
 import { corsHeaders } from '../utils/constants.ts';
 import { getUserTokens } from '../utils/userTokenManager.ts';
 import { supabase } from '../utils/supabase.ts';
-import {
-  getMostRecentNFLWeek,
-  getCurrentNFLSeasonYear,
-} from '../utils/syncHelpers.ts';
 import { getUserLeagues } from './utils/getUserLeagues.ts';
 import {
   getWaiverWirePlayers,
@@ -85,12 +81,37 @@ Deno.serve(async (req) => {
 
     logger.info('User authentication validated', { userId });
 
-    // Get current NFL week and season year
-    const currentWeek = getMostRecentNFLWeek();
-    const nextWeek = currentWeek + 1;
-    const seasonYear = getCurrentNFLSeasonYear();
+    // Get current NFL week and season year from the most recent league_calcs data
+    const { data: latestCalcs, error: calcsError } = await supabase
+      .from('league_calcs')
+      .select('season_year, week')
+      .order('season_year', { ascending: false })
+      .order('week', { ascending: false })
+      .limit(1)
+      .single();
 
-    logger.info('Current NFL week and season', {
+    if (calcsError || !latestCalcs) {
+      logger.error('Failed to get current week/season from league_calcs', {
+        error: calcsError,
+      });
+      timer.end();
+      return new Response(
+        JSON.stringify({
+          code: 500,
+          message: 'Failed to determine current NFL week',
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    const currentWeek = latestCalcs.week;
+    const nextWeek = currentWeek + 1;
+    const seasonYear = latestCalcs.season_year;
+
+    logger.info('Current NFL week and season from league_calcs', {
       currentWeek,
       nextWeek,
       seasonYear,

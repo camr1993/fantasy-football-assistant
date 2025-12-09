@@ -3,7 +3,8 @@ import { supabase } from '../../../../../../supabase/functions/utils/supabase.ts
 
 /**
  * Normalize efficiency metrics globally across all QBs
- * Uses min-max scaling: (x - min) / (max - min)
+ * Uses min-max scaling for passing_efficiency and rushing_upside: (x - min) / (max - min)
+ * Uses z-score normalization for turnovers: (x - mean) / stddev
  * This is league-agnostic - all QBs are normalized together
  */
 export async function normalizeQBEfficiencyMetricsGlobally(
@@ -131,15 +132,20 @@ export async function normalizeQBEfficiencyMetricsGlobally(
       ? passingEfficiencyMax - passingEfficiencyMin
       : 0;
 
-  // Only calculate turnovers min/max if we have data
-  const turnoversMin =
-    turnoversValues.length > 0 ? Math.min(...turnoversValues) : null;
-  const turnoversMax =
-    turnoversValues.length > 0 ? Math.max(...turnoversValues) : null;
-  const turnoversRange =
-    turnoversMin !== null && turnoversMax !== null
-      ? turnoversMax - turnoversMin
+  // Z-score normalization for turnovers: calculate mean and std
+  const turnoversMean =
+    turnoversValues.length > 0
+      ? turnoversValues.reduce((sum: number, val: number) => sum + val, 0) /
+        turnoversValues.length
+      : null;
+  const turnoversVariance =
+    turnoversMean !== null && turnoversValues.length > 0
+      ? turnoversValues.reduce(
+          (sum: number, val: number) => sum + Math.pow(val - turnoversMean, 2),
+          0
+        ) / turnoversValues.length
       : 0;
+  const turnoversStddev = Math.sqrt(turnoversVariance);
 
   // Only calculate rushing upside min/max if we have data
   const rushingUpsideMin =
@@ -151,18 +157,20 @@ export async function normalizeQBEfficiencyMetricsGlobally(
       ? rushingUpsideMax - rushingUpsideMin
       : 0;
 
-  logger.info('Calculated global min/max for QB efficiency metrics', {
+  logger.info('Calculated global stats for QB efficiency metrics', {
     seasonYear,
     week,
     passingEfficiency: {
       min: passingEfficiencyMin,
       max: passingEfficiencyMax,
     },
-    turnovers: { min: turnoversMin, max: turnoversMax },
+    turnovers: { mean: turnoversMean, stddev: turnoversStddev },
     rushingUpside: { min: rushingUpsideMin, max: rushingUpsideMax },
   });
 
-  // Normalize values using min-max scaling: (x - min) / (max - min)
+  // Normalize values:
+  // - passing_efficiency and rushing_upside use min-max scaling: (x - min) / (max - min)
+  // - turnovers uses z-score normalization: (x - mean) / stddev
   // Each metric is normalized independently - null values remain null
   const normalizedMetrics = qbMetrics.map((metric: any) => ({
     player_id: metric.player_id,
@@ -175,9 +183,9 @@ export async function normalizeQBEfficiencyMetricsGlobally(
         : null,
     turnovers_3wk_avg_norm:
       metric.turnovers_3wk_avg !== null &&
-      turnoversRange > 0 &&
-      turnoversMin !== null
-        ? (metric.turnovers_3wk_avg - turnoversMin) / turnoversRange
+      turnoversStddev > 0 &&
+      turnoversMean !== null
+        ? (metric.turnovers_3wk_avg - turnoversMean) / turnoversStddev
         : null,
     rushing_upside_3wk_avg_norm:
       metric.rushing_upside_3wk_avg !== null &&

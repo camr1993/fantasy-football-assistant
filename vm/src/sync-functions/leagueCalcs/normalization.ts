@@ -4,13 +4,12 @@ import { supabase } from '../../../../supabase/functions/utils/supabase.ts';
 /**
  * Normalization Module
  *
- * Handles min-max scaling normalization of efficiency metrics to 0-1 scale
- * and z-score normalization of recent stats (mean and std)
+ * Handles z-score normalization of recent stats (mean and std)
  */
 
 /**
  * Calculate normalized values for recent stats
- * recent_mean_norm: min-max scaling normalization
+ * recent_mean_norm: z-score normalization
  * recent_std_norm: z-score normalization
  * Normalizes within each position group (WR vs WR, RB vs RB, etc.)
  */
@@ -75,7 +74,7 @@ export async function calculateNormalizedRecentStats(
 /**
  * Fallback: Normalize recent stats individually (less efficient)
  * Used when SQL bulk function is not available
- * recent_mean_norm: min-max scaling normalization
+ * recent_mean_norm: z-score normalization
  * recent_std_norm: z-score normalization
  * Normalizes within each position group (WR vs WR, RB vs RB, etc.)
  */
@@ -141,10 +140,16 @@ async function calculateNormalizedRecentStatsFallback(
       continue;
     }
 
-    // Min-max normalization for recent_mean
-    const recentMeanMin = Math.min(...recentMeanValues);
-    const recentMeanMax = Math.max(...recentMeanValues);
-    const recentMeanRange = recentMeanMax - recentMeanMin;
+    // Z-score normalization for recent_mean: calculate mean and std
+    const recentMeanMean =
+      recentMeanValues.reduce((sum: number, val: number) => sum + val, 0) /
+      recentMeanValues.length;
+    const recentMeanVariance =
+      recentMeanValues.reduce(
+        (sum: number, val: number) => sum + Math.pow(val - recentMeanMean, 2),
+        0
+      ) / recentMeanValues.length;
+    const recentMeanStddev = Math.sqrt(recentMeanVariance);
 
     // Z-score normalization for recent_std: calculate mean and std
     const recentStdMean =
@@ -161,8 +166,8 @@ async function calculateNormalizedRecentStatsFallback(
       normalized.push({
         player_id: r.player_id,
         recent_mean_norm:
-          recentMeanRange > 0
-            ? (r.recent_mean - recentMeanMin) / recentMeanRange
+          recentMeanStddev > 0
+            ? (r.recent_mean - recentMeanMean) / recentMeanStddev
             : 0,
         recent_std_norm:
           recentStdStddev > 0
