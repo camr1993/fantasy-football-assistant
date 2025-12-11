@@ -10,7 +10,7 @@ import {
 import {
   getStartBenchRecommendations,
   StartBenchRecommendation,
-} from './services/startBenchRecommendations.ts';
+} from './services/startBench/index.ts';
 
 Deno.serve(async (req) => {
   const timer = performance.start('tips_request');
