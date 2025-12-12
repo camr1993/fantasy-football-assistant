@@ -5,7 +5,9 @@ import { supabase } from '../utils/supabase.ts';
 import { getUserLeagues } from './utils/getUserLeagues.ts';
 import {
   getWaiverWirePlayers,
+  getWaiverWireRecommendations,
   WaiverWirePlayer,
+  WaiverWireRecommendation,
 } from './services/waiverWire.ts';
 import {
   getStartBenchRecommendations,
@@ -150,6 +152,7 @@ Deno.serve(async (req) => {
     }
 
     const allWaiverWireResults: WaiverWirePlayer[] = [];
+    const allWaiverWireRecommendations: WaiverWireRecommendation[] = [];
     const allStartBenchResults: StartBenchRecommendation[] = [];
 
     // Process each league
@@ -178,6 +181,17 @@ Deno.serve(async (req) => {
           userTeamIds
         );
         allStartBenchResults.push(...recommendations);
+
+        // Get waiver wire recommendations (compare rostered players to waiver wire)
+        const waiverRecommendations = await getWaiverWireRecommendations(
+          leagueId,
+          league.name,
+          seasonYear,
+          currentWeek,
+          userTeamIds,
+          waiverWirePlayers
+        );
+        allWaiverWireRecommendations.push(...waiverRecommendations);
       }
     }
 
@@ -194,6 +208,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         waiver_wire: waiverWireByPosition,
+        waiver_wire_recommendations: allWaiverWireRecommendations,
         start_bench_recommendations: allStartBenchResults,
         current_week: currentWeek,
         next_week: nextWeek,
