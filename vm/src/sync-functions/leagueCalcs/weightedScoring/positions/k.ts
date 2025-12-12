@@ -340,7 +340,7 @@ export async function calculateWeightedScoresForLeagueK(
 
     const efficiency = efficiencyMap.get(player.player_id);
     const recentMean = player.recent_mean_norm || 0;
-    const recentStd = player.recent_std_norm || 0;
+    const recentStd = Math.max(-2, Math.min(2, player.recent_std_norm || 0)); // Clip volatility z-score to ±2
     const fgProfileNorm = efficiency?.fg_profile_3wk_avg_norm || 0;
     const fgPatMissesNorm = efficiency?.fg_pat_misses_3wk_avg_norm || 0;
     const fgAttemptsNorm = efficiency?.fg_attempts_3wk_avg_norm || 0;

@@ -7,67 +7,67 @@ export const RECENT_WEEKS = 3; // Number of recent weeks to include in mean/std 
 
 // Weighted scoring configuration for WRs
 export const WR_WEIGHTS = {
-  recent_mean: 0.35, // w_1: Performance baseline
-  volatility: -0.1, // w_2: Penalize inconsistency (negative weight)
-  targets_per_game: 0.25, // w_3: Opportunity driver
-  catch_rate: 0.1, // w_4: Efficiency
-  yards_per_target: 0.15, // w_5: Explosiveness
-  opponent_difficulty: 0.05, // w_6: Context
+  recent_mean: 0.5, // big driver: production (z-score)
+  volatility: -0.04, // small penalty (z-score, clip ±2)
+  targets_per_game: 0.28, // volume still very important (min-max)
+  yards_per_target: 0.12, // explosiveness (min-max)
+  catch_rate: 0.06, // efficiency (min-max)
+  opponent_difficulty: 0.08, // matchup (min-max)
 } as const;
 
 // Weighted scoring configuration for RBs
 export const RB_WEIGHTS = {
-  recent_mean: 0.3, // w_1: Recent mean fantasy points
-  volatility: -0.07, // w_2: Volatility (negative)
-  weighted_opportunity: 0.3, // w_3: Weighted Opportunity (carries + targets)
-  touchdown_production: 0.16, // w_4: Touchdown production (rush_tds + rec_tds)
-  receiving_profile: 0.1, // w_5: Receiving profile (receptions + receiving_yards)
-  efficiency: 0.06, // w_6: Efficiency (yards per carry / yards per target)
-  opponent_difficulty: 0.05, // w_7: Matchup / opponent rush defense metric
+  recent_mean: 0.3, // baseline production (z-score)
+  volatility: -0.04, // smaller penalty (z-score, clip ±2)
+  weighted_opportunity: 0.36, // workload (rushes + target value) — increased
+  touchdown_production: 0.18, // TD upside important for RBs
+  receiving_profile: 0.08, // receiving work (receptions + yards)
+  efficiency: 0.06, // YPC / YPT efficiency
+  opponent_difficulty: 0.06, // matchup vs run defense
 } as const;
 
 // Weighted scoring configuration for TEs
 export const TE_WEIGHTS = {
-  recent_mean: 0.32, // w_1: Recent mean fantasy points
-  volatility: -0.08, // w_2: Volatility (negative)
-  targets_per_game: 0.26, // w_3: Targets per game / target share
-  receiving_touchdowns: 0.18, // w_4: Receiving TDs (TD upside without red-zone)
-  yards_per_target: 0.12, // w_5: Catch rate / efficiency (yards_per_target)
-  opponent_difficulty: 0.1, // w_6: Matchup / opponent TE coverage metric
+  recent_mean: 0.36, // production (z-score)
+  volatility: -0.08, // TE usage can be spotty — keep stronger penalty but clip ±2
+  targets_per_game: 0.3, // target share matters a lot
+  receiving_touchdowns: 0.2, // TE TD upside is meaningful
+  yards_per_target: 0.12, // efficiency / matchup help
+  opponent_difficulty: 0.1, // matchup importance
 } as const;
 
 // Weighted scoring configuration for QBs
 export const QB_WEIGHTS = {
-  recent_mean: 0.35, // w_1: Recent mean fantasy points (baseline production)
-  volatility: -0.05, // w_2: Volatility (negative) - penalize inconsistent weeks
-  passing_efficiency: 0.25, // w_3: Passing TDs & yards (efficiency combo) - TDs and yards per attempt
-  turnovers: -0.15, // w_4: Turnover penalty (INTs + fumbles) - negative leverage
-  rushing_upside: 0.15, // w_5: Rushing upside (rush yds + rush TDs) - dual-threat value
-  opponent_difficulty: 0.05, // w_6: Matchup / opponent pass defense metric
+  recent_mean: 0.5, // baseline production (z-score)
+  volatility: -0.05, // modest penalty (z-score, clip ±2)
+  passing_efficiency: 0.45, // heavier: TD rate & yards/att are key
+  turnovers: -0.15, // big negative for INTs/fumbles
+  rushing_upside: 0.15, // dual-threat value still useful
+  opponent_difficulty: 0.1, // matchup vs pass defense
 } as const;
 
 // Weighted scoring configuration for Ks
 export const K_WEIGHTS = {
-  recent_mean: 0.4, // w_1: Recent mean fantasy points (baseline production: FGs + PATs)
-  volatility: -0.1, // w_2: Volatility (negative) - penalize inconsistency
-  fg_profile: 0.25, // w_3: FG attempts & distance profile (weighted by distance)
-  fg_pat_misses: -0.1, // w_4: FG/PAT misses penalty (negative)
-  fg_attempts: 0.1, // w_5: Team offensive opportunity (total FG attempts)
-  opponent_difficulty: 0.05, // w_6: Matchup / weather / stadium (opponent defense)
+  recent_mean: 0.65, // overall production (z-score)
+  volatility: -0.1, // keep stronger penalty (clip ±2)
+  fg_profile: 0.4, // attempts & distance profile
+  fg_pat_misses: -0.1, // misses are negative signal
+  fg_attempts: 0.15, // team opportunity
+  opponent_difficulty: 0.1, // weather / defense / stadium
 } as const;
 
 // Weighted scoring configuration for DEFs
 export const DEF_WEIGHTS = {
-  recent_mean: 0.25, // w_1: Recent mean fantasy points (baseline production)
-  volatility: -0.08, // w_2: Volatility (negative) - penalize inconsistency
-  sacks_per_game: 0.2, // w_3: Sacks per game - strongest stable DST predictor
-  turnovers_forced: 0.18, // w_4: Turnovers forced (INT+FR) - biggest DST scoring catalyst
-  dst_tds: 0.1, // w_5: DST TDs (DEF + return) - ceiling booster
-  points_allowed: -0.1, // w_6: Points allowed (negative) - better defenses allow fewer points
-  yards_allowed: -0.07, // w_7: Yards allowed (negative) - controls PA volatility
-  blocked_kicks: 0.02, // w_8: Blocked kicks - small but real
-  safeties: 0.01, // w_9: Safeties - rare but valuable
-  opponent_difficulty: 0.19, // w_10: Opponent offensive difficulty - most important added variable
+  recent_mean: 0.3, // baseline (z-score)
+  volatility: -0.04, // small penalty (z-score, clip ±2)
+  sacks_per_game: 0.28, // strong stable predictor
+  turnovers_forced: 0.26, // game-changing plays
+  dst_tds: 0.1, // TD ceilings matter
+  points_allowed: -0.1, // negative is better being low
+  yards_allowed: -0.07, // negative is better being low
+  blocked_kicks: 0.03, // small bonus
+  safeties: 0.02, // rare but valuable
+  opponent_difficulty: 0.22, // opponent offense matters a lot
 } as const;
 
 // Position-specific weight configurations

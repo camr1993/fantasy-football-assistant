@@ -2,19 +2,17 @@ import { logger, performance } from '../utils/logger.ts';
 import { corsHeaders } from '../utils/constants.ts';
 import { getUserTokens } from '../utils/userTokenManager.ts';
 import { supabase } from '../utils/supabase.ts';
-import {
-  getMostRecentNFLWeek,
-  getCurrentNFLSeasonYear,
-} from '../utils/syncHelpers.ts';
 import { getUserLeagues } from './utils/getUserLeagues.ts';
 import {
   getWaiverWirePlayers,
+  getWaiverWireRecommendations,
   WaiverWirePlayer,
+  WaiverWireRecommendation,
 } from './services/waiverWire.ts';
 import {
   getStartBenchRecommendations,
   StartBenchRecommendation,
-} from './services/startBenchRecommendations.ts';
+} from './services/startBench/index.ts';
 
 Deno.serve(async (req) => {
   const timer = performance.start('tips_request');
@@ -85,12 +83,37 @@ Deno.serve(async (req) => {
 
     logger.info('User authentication validated', { userId });
 
-    // Get current NFL week and season year
-    const currentWeek = getMostRecentNFLWeek();
-    const nextWeek = currentWeek + 1;
-    const seasonYear = getCurrentNFLSeasonYear();
+    // Get current NFL week and season year from the most recent league_calcs data
+    const { data: latestCalcs, error: calcsError } = await supabase
+      .from('league_calcs')
+      .select('season_year, week')
+      .order('season_year', { ascending: false })
+      .order('week', { ascending: false })
+      .limit(1)
+      .single();
 
-    logger.info('Current NFL week and season', {
+    if (calcsError || !latestCalcs) {
+      logger.error('Failed to get current week/season from league_calcs', {
+        error: calcsError,
+      });
+      timer.end();
+      return new Response(
+        JSON.stringify({
+          code: 500,
+          message: 'Failed to determine current NFL week',
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    const currentWeek = latestCalcs.week;
+    const nextWeek = currentWeek + 1;
+    const seasonYear = latestCalcs.season_year;
+
+    logger.info('Current NFL week and season from league_calcs', {
       currentWeek,
       nextWeek,
       seasonYear,
@@ -129,6 +152,7 @@ Deno.serve(async (req) => {
     }
 
     const allWaiverWireResults: WaiverWirePlayer[] = [];
+    const allWaiverWireRecommendations: WaiverWireRecommendation[] = [];
     const allStartBenchResults: StartBenchRecommendation[] = [];
 
     // Process each league
@@ -157,6 +181,17 @@ Deno.serve(async (req) => {
           userTeamIds
         );
         allStartBenchResults.push(...recommendations);
+
+        // Get waiver wire recommendations (compare rostered players to waiver wire)
+        const waiverRecommendations = await getWaiverWireRecommendations(
+          leagueId,
+          league.name,
+          seasonYear,
+          currentWeek,
+          userTeamIds,
+          waiverWirePlayers
+        );
+        allWaiverWireRecommendations.push(...waiverRecommendations);
       }
     }
 
@@ -173,6 +208,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         waiver_wire: waiverWireByPosition,
+        waiver_wire_recommendations: allWaiverWireRecommendations,
         start_bench_recommendations: allStartBenchResults,
         current_week: currentWeek,
         next_week: nextWeek,
