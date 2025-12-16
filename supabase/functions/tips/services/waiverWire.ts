@@ -1,5 +1,6 @@
 import { logger } from '../../utils/logger.ts';
 import { supabase } from '../../utils/supabase.ts';
+import { extractYahooPlayerId } from '../utils/yahooPlayerId.ts';
 
 export interface WaiverWirePlayer {
   position: string;
@@ -14,11 +15,13 @@ export interface WaiverWirePlayer {
 
 export interface WaiverWireRecommendation {
   waiver_player_id: string;
+  waiver_yahoo_player_id: string;
   waiver_player_name: string;
   waiver_player_team: string;
   waiver_player_position: string;
   waiver_weighted_score: number;
   rostered_player_id: string;
+  rostered_yahoo_player_id: string;
   rostered_player_name: string;
   rostered_player_team: string;
   rostered_weighted_score: number;
@@ -72,6 +75,7 @@ interface RosterEntryWithPlayer {
     name: string;
     position: string;
     team: string;
+    yahoo_player_id: string;
   } | null;
   teams: {
     id: string;
@@ -89,6 +93,7 @@ interface LeagueCalcScore {
 
 interface RosteredPlayerWithScore {
   player_id: string;
+  yahoo_player_id: string;
   name: string;
   position: string;
   team: string;
@@ -312,11 +317,15 @@ export async function getWaiverWireRecommendations(
         const reason = generateWaiverWireReason(waiverPlayer, rostered);
         recommendations.push({
           waiver_player_id: waiverPlayer.player_id,
+          waiver_yahoo_player_id: extractYahooPlayerId(
+            waiverPlayer.yahoo_player_id
+          ),
           waiver_player_name: waiverPlayer.name,
           waiver_player_team: waiverPlayer.team,
           waiver_player_position: waiverPlayer.position,
           waiver_weighted_score: waiverPlayer.weighted_score,
           rostered_player_id: rostered.player_id,
+          rostered_yahoo_player_id: rostered.yahoo_player_id,
           rostered_player_name: rostered.name,
           rostered_player_team: rostered.team,
           rostered_weighted_score: rostered.weighted_score,
@@ -361,7 +370,8 @@ async function getRosteredPlayersWithScores(
         id,
         name,
         position,
-        team
+        team,
+        yahoo_player_id
       ),
       teams!inner(
         id,
@@ -422,6 +432,7 @@ async function getRosteredPlayersWithScores(
 
     result.push({
       player_id: entry.player_id,
+      yahoo_player_id: extractYahooPlayerId(player.yahoo_player_id),
       name: player.name,
       position: player.position,
       team: player.team,

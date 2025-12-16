@@ -2,6 +2,7 @@ import { logger, performance } from '../utils/logger.ts';
 import { corsHeaders } from '../utils/constants.ts';
 import { getUserTokens } from '../utils/userTokenManager.ts';
 import { supabase } from '../utils/supabase.ts';
+import { startVM } from '../utils/vmManager.ts';
 import { getUserLeagues } from './utils/getUserLeagues.ts';
 import {
   getWaiverWirePlayers,
@@ -45,7 +46,7 @@ Deno.serve(async (req) => {
   try {
     // Get user data from request body
     const body = await req.json();
-    const { userId } = body;
+    const { userId, mode = 'immediate' } = body;
 
     if (!userId) {
       logger.error('Missing userId in request body');
@@ -62,7 +63,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    logger.info('Tips request for user', { userId });
+    logger.info('Tips request for user', { userId, mode });
 
     // Get user's tokens (with automatic refresh if needed) to validate authentication
     const userTokens = await getUserTokens(userId);
@@ -82,6 +83,68 @@ Deno.serve(async (req) => {
     }
 
     logger.info('User authentication validated', { userId });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // JOB MODE: Create a job for the VM to process tips asynchronously
+    // Used for periodic refreshes
+    // ─────────────────────────────────────────────────────────────────────────
+    if (mode === 'job') {
+      const { data: job, error: jobError } = await supabase
+        .from('jobs')
+        .insert({
+          name: 'refresh-tips',
+          status: 'pending',
+          user_id: userId,
+          priority: 50, // Lower priority than user-triggered syncs
+        })
+        .select()
+        .single();
+
+      if (jobError) {
+        logger.error('Failed to create tips refresh job', {
+          userId,
+          error: jobError,
+        });
+        timer.end();
+        return new Response(
+          JSON.stringify({
+            success: false,
+            message: 'Failed to create tips refresh job',
+            error: jobError.message,
+          }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      logger.info('Tips refresh job created successfully', {
+        jobId: job.id,
+        userId,
+      });
+
+      // Start the VM
+      await startVM();
+
+      timer.end();
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Tips refresh job created successfully',
+          jobId: job.id,
+          status: 'pending',
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // IMMEDIATE MODE: Compute and return tips directly
+    // Used for non-periodic (post-triggered) refreshes
+    // ─────────────────────────────────────────────────────────────────────────
 
     // Get current NFL week and season year from the most recent league_calcs data
     const { data: latestCalcs, error: calcsError } = await supabase
