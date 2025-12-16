@@ -21,6 +21,7 @@ import type {
   RosterEntryResponse,
   PlayerGroup,
 } from './types.ts';
+import { extractYahooPlayerId } from '../../utils/yahooPlayerId.ts';
 
 export type { StartBenchRecommendation } from './types.ts';
 
@@ -106,6 +107,7 @@ function groupPlayersByPositionAndTeam(
 
     positionGroups.get(key)!.push({
       player_id: entry.player_id,
+      yahoo_player_id: extractYahooPlayerId(player.yahoo_player_id),
       name: player.name,
       position: player.position,
       team: player.team,
@@ -267,6 +269,7 @@ function createRecommendation(
 ): StartBenchRecommendation {
   return {
     player_id: player.player_id,
+    yahoo_player_id: player.yahoo_player_id,
     name: player.name,
     position: player.position,
     team: player.team,

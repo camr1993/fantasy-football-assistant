@@ -47,22 +47,78 @@ class ApiClient {
   }
 
   /**
-   * Trigger roster sync for all user teams
+   * Trigger immediate roster sync for a specific team
+   * Used for post-triggered syncs (e.g., after user edits roster)
+   * This is synchronous and waits for the sync to complete
    */
-  async triggerRosterSync(
-    syncType: 'manual' | 'periodic' | 'post-triggered' = 'manual'
+  async syncTeamRosterImmediate(
+    yahooLeagueId: string,
+    yahooTeamId: string
   ): Promise<ApiResponse<any>> {
     try {
-      // Check if this is a periodic sync and if we've synced too recent
-      if (syncType === 'periodic') {
-        const shouldSync = await this.shouldPerformPeriodicSync();
-        if (!shouldSync) {
-          console.log('Skipping periodic sync - too recent');
-          return {
-            success: false,
-            error: { error: 'Periodic sync too recent' },
-          };
+      const userId = await this.getUserId();
+      if (!userId) {
+        console.log('No user found, skipping immediate roster sync');
+        return {
+          success: false,
+          error: { error: 'No user found' },
+        };
+      }
+
+      console.log(
+        `Starting immediate roster sync for league ${yahooLeagueId}, team ${yahooTeamId}...`
+      );
+
+      const { data, error } = await supabase.functions.invoke(
+        'sync-league-data',
+        {
+          body: {
+            userId,
+            syncType: 'immediate-roster',
+            yahooLeagueId,
+            yahooTeamId,
+          },
         }
+      );
+
+      if (error) {
+        console.error('Immediate roster sync failed:', error.message);
+        return {
+          success: false,
+          error: { error: error.message || 'Roster sync failed' },
+        };
+      }
+
+      console.log('Immediate roster sync completed successfully', data);
+
+      return {
+        success: true,
+        data: data,
+      };
+    } catch (error) {
+      console.error('Error during immediate roster sync:', error);
+      return {
+        success: false,
+        error: {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+      };
+    }
+  }
+
+  /**
+   * Trigger periodic roster sync for all teams
+   * Syncs all teams synchronously in the edge function
+   */
+  async triggerPeriodicRosterSync(): Promise<ApiResponse<any>> {
+    try {
+      const shouldSync = await this.shouldPerformPeriodicSync();
+      if (!shouldSync) {
+        console.log('Skipping periodic sync - too recent');
+        return {
+          success: false,
+          error: { error: 'Periodic sync too recent' },
+        };
       }
 
       const userId = await this.getUserId();
@@ -74,44 +130,42 @@ class ApiClient {
         };
       }
 
-      console.log(`Starting ${syncType} roster sync...`);
+      console.log('Starting periodic roster sync (all teams)...');
 
-      // Call the sync-league-data function with roster-only sync
+      // Call the sync-league-data function with immediate-roster-all
+      // This syncs all teams synchronously in the edge function
       const { data, error } = await supabase.functions.invoke(
         'sync-league-data',
         {
           body: {
             userId,
-            syncType: 'roster',
+            syncType: 'immediate-roster-all',
           },
         }
       );
 
       if (error) {
-        console.error(`${syncType} roster sync failed:`, error.message);
+        console.error('Periodic roster sync failed:', error.message);
         return {
           success: false,
           error: { error: error.message || 'Roster sync failed' },
         };
       }
 
-      console.log(`${syncType} roster sync completed successfully`);
-      console.log(data);
+      console.log('Periodic roster sync completed successfully', data);
 
-      // Store the last sync time for periodic syncs
-      if (syncType === 'periodic') {
-        await chrome.storage.local.set({
-          lastPeriodicSync: Date.now(),
-        });
-        console.log('Last periodic sync time updated');
-      }
+      // Store the last sync time
+      await chrome.storage.local.set({
+        lastPeriodicSync: Date.now(),
+      });
+      console.log('Last periodic sync time updated');
 
       return {
         success: true,
         data: data,
       };
     } catch (error) {
-      console.error(`Error triggering ${syncType} roster sync:`, error);
+      console.error('Error triggering periodic roster sync:', error);
       return {
         success: false,
         error: {
@@ -160,6 +214,7 @@ class ApiClient {
 
   /**
    * Get fantasy tips (waiver wire recommendations and start/bench advice)
+   * Computes tips synchronously and returns them immediately
    */
   async getTips(): Promise<ApiResponse<any>> {
     try {
@@ -174,6 +229,7 @@ class ApiClient {
       const { data, error } = await supabase.functions.invoke('tips', {
         body: {
           userId,
+          mode: 'immediate',
         },
       });
 
@@ -189,6 +245,55 @@ class ApiClient {
         data: data,
       };
     } catch (error) {
+      return {
+        success: false,
+        error: {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+      };
+    }
+  }
+
+  /**
+   * Trigger periodic tips refresh via VM job
+   * Creates a job in the database for the VM to process asynchronously
+   */
+  async triggerPeriodicTipsRefresh(): Promise<ApiResponse<any>> {
+    try {
+      const userId = await this.getUserId();
+      if (!userId) {
+        console.log('No user found, skipping tips refresh job');
+        return {
+          success: false,
+          error: { error: 'No user found' },
+        };
+      }
+
+      console.log('Creating tips refresh job for VM...');
+
+      const { data, error } = await supabase.functions.invoke('tips', {
+        body: {
+          userId,
+          mode: 'job',
+        },
+      });
+
+      if (error) {
+        console.error('Failed to create tips refresh job:', error.message);
+        return {
+          success: false,
+          error: { error: error.message || 'Failed to create tips job' },
+        };
+      }
+
+      console.log('Tips refresh job created successfully', data);
+
+      return {
+        success: true,
+        data: data,
+      };
+    } catch (error) {
+      console.error('Error creating tips refresh job:', error);
       return {
         success: false,
         error: {

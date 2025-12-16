@@ -1,5 +1,6 @@
 export interface StartBenchRecommendation {
   player_id: string;
+  yahoo_player_id: string;
   name: string;
   position: string;
   team: string;
@@ -65,6 +66,7 @@ export interface PlayerStatsData {
 
 export interface PlayerGroup {
   player_id: string;
+  yahoo_player_id: string;
   name: string;
   position: string;
   team: string;
