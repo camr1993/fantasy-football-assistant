@@ -8,17 +8,10 @@ function Popup() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [authCode, setAuthCode] = useState('');
-  const [loadingTips, setLoadingTips] = useState(false);
 
   useEffect(() => {
     checkAuthStatus();
   }, []);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      loadTips();
-    }
-  }, [isAuthenticated]);
 
   async function checkAuthStatus() {
     // Check if user is already authenticated
@@ -151,8 +144,19 @@ function Popup() {
   }
 
   function signOut() {
-    // Clear user data from Chrome storage
-    chrome.storage.local.remove(['yahoo_user']);
+    // Clear all cached data from Chrome storage
+    chrome.storage.local.remove([
+      'yahoo_user',
+      // Tips cache (background.ts)
+      'tips_data',
+      'player_recommendations',
+      'tips_timestamp',
+      // Sync timestamps (client.ts)
+      'lastPeriodicSync',
+      // OAuth session data (in case sign out during OAuth flow)
+      'oauth_nonce',
+      'oauth_timestamp',
+    ]);
     setUser(null);
     setIsAuthenticated(false);
   }
@@ -175,31 +179,9 @@ function Popup() {
     }
   }
 
-  // Function to load tips
-  async function loadTips() {
-    try {
-      setLoadingTips(true);
-      setError(null);
-
-      const result = await apiClient.getTips();
-
-      if (result.success) {
-        console.log('Tips data:', result.data);
-      } else {
-        console.error('Failed to load tips:', result.error?.error);
-        setError(result.error?.error || 'Failed to load tips');
-      }
-    } catch (error) {
-      console.error('Error loading tips:', error);
-      setError('Failed to load tips');
-    } finally {
-      setLoadingTips(false);
-    }
-  }
-
   return (
     <div style={{ padding: '1rem', width: '300px' }}>
-      <h3>Fantasy Assistant</h3>
+      <h3>FantasyEdge</h3>
 
       {!isAuthenticated ? (
         <div>
@@ -252,7 +234,7 @@ function Popup() {
                 width: '100%',
               }}
             >
-              {loading ? 'Exchanging...' : 'Submit Code'}
+              {loading ? 'Authorizing...' : 'Submit Code'}
             </button>
           </div>
         </div>
@@ -267,38 +249,21 @@ function Popup() {
             }}
           >
             <p style={{ margin: 0 }}>Welcome, {user?.name || user?.email}!</p>
-          <button
-            onClick={signOut}
-            style={{
-              padding: '4px 8px',
-              backgroundColor: '#ef4444',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '12px',
-            }}
-          >
-            Sign Out
+            <button
+              onClick={signOut}
+              style={{
+                padding: '4px 8px',
+                backgroundColor: '#ef4444',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '12px',
+              }}
+            >
+              Sign Out
             </button>
           </div>
-
-          <button
-            onClick={loadTips}
-            disabled={loadingTips}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: '#7c3aed',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: loadingTips ? 'not-allowed' : 'pointer',
-              width: '100%',
-              marginBottom: '16px',
-            }}
-          >
-            {loadingTips ? 'Loading Tips...' : 'Load Tips (Check Console)'}
-          </button>
         </div>
       )}
 

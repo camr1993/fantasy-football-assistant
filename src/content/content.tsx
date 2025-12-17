@@ -139,8 +139,12 @@ function RecommendationIcon({
           ...styles.iconButton,
           backgroundColor: bgColor,
         }}
-        onClick={() => setIsModalOpen(true)}
-        title="View Fantasy Assistant recommendations"
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          setIsModalOpen(true);
+        }}
+        title="View FantasyEdge recommendations"
       >
         {icon}
       </button>
@@ -198,6 +202,7 @@ const styles: Record<string, React.CSSProperties> = {
     maxHeight: '80vh',
     overflow: 'auto',
     boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+    cursor: 'default',
   },
   header: {
     display: 'flex',
@@ -250,6 +255,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#4b5563',
     lineHeight: 1.5,
     margin: '8px 0',
+    whiteSpace: 'normal',
   },
   meta: {
     fontSize: '12px',
@@ -261,6 +267,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '8px',
     padding: '12px',
     marginBottom: '12px',
+    whiteSpace: 'normal',
   },
   upgradeHeader: {
     display: 'flex',
@@ -339,8 +346,10 @@ function injectRecommendations(
   if (forceRefresh && mountedRoots.size > 0) {
     cleanupInjectedIcons();
   }
-  // Find all player note elements on the page
-  const playerNoteElements = document.querySelectorAll('.playernote');
+  // Find all player note elements on the page by aria-label pattern
+  const playerNoteElements = document.querySelectorAll(
+    '[aria-label*="Open player notes for"]'
+  );
 
   console.log(
     `[Fantasy Assistant] Found ${playerNoteElements.length} player elements on page`
@@ -364,10 +373,11 @@ function injectRecommendations(
     const containerId = `fantasy-assistant-${playerId}`;
     if (document.getElementById(containerId)) return;
 
-    // Get player name from the element's aria-label
-    const ariaLabel = element.getAttribute('aria-label') || '';
     const playerName =
-      ariaLabel.replace('Open player notes for ', '') || `Player ${playerId}`;
+      playerRecommendations[playerId]?.startBench?.name ||
+      playerRecommendations[playerId]?.waiverUpgrades?.[0]
+        ?.rostered_player_name ||
+      `Player ${playerId}`;
 
     // Create container for our React component
     const container = document.createElement('span');
@@ -448,8 +458,8 @@ const observer = new MutationObserver((mutations) => {
     Array.from(mutation.addedNodes).some(
       (node) =>
         node instanceof HTMLElement &&
-        (node.classList?.contains('playernote') ||
-          node.querySelector?.('.playernote'))
+        (node.getAttribute('aria-label')?.includes('Open player notes for') ||
+          node.querySelector?.('[aria-label*="Open player notes for"]'))
     )
   );
 
