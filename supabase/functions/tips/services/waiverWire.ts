@@ -98,8 +98,8 @@ interface RosteredPlayerWithScore {
   position: string;
   team: string;
   slot: string;
-  weighted_score: number;
-  fantasy_points: number;
+  weighted_score: number | null;
+  fantasy_points: number | null;
   recent_mean: number | null;
   recent_std: number | null;
   team_id: string;
@@ -313,8 +313,23 @@ export async function getWaiverWireRecommendations(
 
     // Find waiver wire players with higher weighted scores
     for (const waiverPlayer of positionWaiverPlayers) {
-      if (waiverPlayer.weighted_score > rostered.weighted_score) {
-        const reason = generateWaiverWireReason(waiverPlayer, rostered);
+      // Determine if waiver player should be recommended over rostered player
+      let shouldRecommend = false;
+
+      if (rostered.weighted_score === null) {
+        // Rostered player has no scores - recommend waiver player unless it's week 1 or 2
+        shouldRecommend = currentWeek > 2;
+      } else {
+        // Compare weighted scores
+        shouldRecommend = waiverPlayer.weighted_score > rostered.weighted_score;
+      }
+
+      if (shouldRecommend) {
+        const reason = generateWaiverWireReason(
+          waiverPlayer,
+          rostered,
+          currentWeek
+        );
         recommendations.push({
           waiver_player_id: waiverPlayer.player_id,
           waiver_yahoo_player_id: extractYahooPlayerId(
@@ -328,7 +343,7 @@ export async function getWaiverWireRecommendations(
           rostered_yahoo_player_id: rostered.yahoo_player_id,
           rostered_player_name: rostered.name,
           rostered_player_team: rostered.team,
-          rostered_weighted_score: rostered.weighted_score,
+          rostered_weighted_score: rostered.weighted_score ?? 0,
           league_id: leagueId,
           league_name: leagueName,
           team_id: rostered.team_id,
@@ -341,7 +356,15 @@ export async function getWaiverWireRecommendations(
   }
 
   // Sort by score difference (biggest improvements first)
+  // Null rostered scores (no data) are treated as high priority recommendations
   recommendations.sort((a, b) => {
+    const aRosteredHasNoData = a.rostered_weighted_score === 0;
+    const bRosteredHasNoData = b.rostered_weighted_score === 0;
+
+    // Prioritize recommendations where rostered player has no data
+    if (aRosteredHasNoData && !bRosteredHasNoData) return -1;
+    if (!aRosteredHasNoData && bRosteredHasNoData) return 1;
+
     const diffA = a.waiver_weighted_score - a.rostered_weighted_score;
     const diffB = b.waiver_weighted_score - b.rostered_weighted_score;
     return diffB - diffA;
@@ -395,38 +418,46 @@ async function getRosteredPlayersWithScores(
     return [];
   }
 
-  // Fetch weighted scores for rostered players
+  // Fetch weighted scores for rostered players - get all scores for this season
+  // to find the most recent score for each player
   const { data: scoresData, error: scoresError } = await supabase
     .from('league_calcs')
     .select(
-      'player_id, weighted_score, fantasy_points, recent_mean, recent_std'
+      'player_id, weighted_score, fantasy_points, recent_mean, recent_std, week'
     )
     .eq('league_id', leagueId)
     .eq('season_year', seasonYear)
-    .eq('week', currentWeek)
+    .lte('week', currentWeek)
     .in('player_id', playerIds)
-    .not('weighted_score', 'is', null);
+    .not('weighted_score', 'is', null)
+    .order('week', { ascending: false });
 
-  if (scoresError || !scoresData) {
+  if (scoresError) {
     logger.warn('Failed to fetch roster scores for waiver comparison', {
       error: scoresError,
     });
     return [];
   }
 
-  // Create a map of player_id -> score data
-  const scoresMap = new Map<string, LeagueCalcScore>(
-    (scoresData as LeagueCalcScore[]).map((s) => [s.player_id, s])
-  );
+  // Create a map of player_id -> most recent score data
+  // Since results are ordered by week desc, the first entry for each player is the most recent
+  const scoresMap = new Map<string, LeagueCalcScore>();
+  for (const score of (scoresData as (LeagueCalcScore & { week: number })[]) ||
+    []) {
+    if (!scoresMap.has(score.player_id)) {
+      scoresMap.set(score.player_id, score);
+    }
+  }
 
   // Combine roster entries with scores
+  // Include players even if they have no scores (score will be null)
   const result: RosteredPlayerWithScore[] = [];
   for (const entry of rosterEntries) {
     const player = entry.players;
     const team = entry.teams;
     const scoreData = scoresMap.get(entry.player_id);
 
-    if (!player || !team || !scoreData || !player.position) {
+    if (!player || !team || !player.position) {
       continue;
     }
 
@@ -437,10 +468,10 @@ async function getRosteredPlayersWithScores(
       position: player.position,
       team: player.team,
       slot: entry.slot,
-      weighted_score: scoreData.weighted_score,
-      fantasy_points: scoreData.fantasy_points,
-      recent_mean: scoreData.recent_mean,
-      recent_std: scoreData.recent_std,
+      weighted_score: scoreData?.weighted_score ?? null,
+      fantasy_points: scoreData?.fantasy_points ?? null,
+      recent_mean: scoreData?.recent_mean ?? null,
+      recent_std: scoreData?.recent_std ?? null,
       team_id: team.id,
       team_name: team.name,
     });
@@ -458,14 +489,26 @@ async function getRosteredPlayersWithScores(
  */
 function generateWaiverWireReason(
   waiverPlayer: WaiverWirePlayer,
-  rosteredPlayer: RosteredPlayerWithScore
+  rosteredPlayer: RosteredPlayerWithScore,
+  _currentWeek: number
 ): string {
-  const scoreDiff = waiverPlayer.weighted_score - rosteredPlayer.weighted_score;
-  const percentImprovement = (scoreDiff / rosteredPlayer.weighted_score) * 100;
+  let reason = '';
 
-  let reason = `${waiverPlayer.name} (${waiverPlayer.team}) has a higher weighted score than ${rosteredPlayer.name} (${rosteredPlayer.team}): `;
-  reason += `${waiverPlayer.weighted_score.toFixed(2)} vs ${rosteredPlayer.weighted_score.toFixed(2)} `;
-  reason += `(+${scoreDiff.toFixed(2)} points, ${percentImprovement.toFixed(1)}% improvement). `;
+  // Handle case where rostered player has no score data
+  if (rosteredPlayer.weighted_score === null) {
+    reason = `${waiverPlayer.name} (${waiverPlayer.team}) has a weighted score of ${waiverPlayer.weighted_score.toFixed(2)}, `;
+    reason += `while ${rosteredPlayer.name} (${rosteredPlayer.team}) has no scoring data this season. `;
+    reason += `Consider picking up ${waiverPlayer.name} as a more reliable option. `;
+  } else {
+    const scoreDiff =
+      waiverPlayer.weighted_score - rosteredPlayer.weighted_score;
+    const percentImprovement =
+      (scoreDiff / rosteredPlayer.weighted_score) * 100;
+
+    reason = `${waiverPlayer.name} (${waiverPlayer.team}) has a higher weighted score than ${rosteredPlayer.name} (${rosteredPlayer.team}): `;
+    reason += `${waiverPlayer.weighted_score.toFixed(2)} vs ${rosteredPlayer.weighted_score.toFixed(2)} `;
+    reason += `(+${scoreDiff.toFixed(2)} points, ${percentImprovement.toFixed(1)}% improvement). `;
+  }
 
   // Add context based on position
   reason += getPositionContext(waiverPlayer.position, rosteredPlayer);
