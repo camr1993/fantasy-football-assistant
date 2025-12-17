@@ -139,8 +139,12 @@ function RecommendationIcon({
           ...styles.iconButton,
           backgroundColor: bgColor,
         }}
-        onClick={() => setIsModalOpen(true)}
-        title="View Fantasy Assistant recommendations"
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          setIsModalOpen(true);
+        }}
+        title="View FantasyEdge recommendations"
       >
         {icon}
       </button>
@@ -198,6 +202,7 @@ const styles: Record<string, React.CSSProperties> = {
     maxHeight: '80vh',
     overflow: 'auto',
     boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+    cursor: 'default',
   },
   header: {
     display: 'flex',

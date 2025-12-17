@@ -181,7 +181,7 @@ function Popup() {
 
   return (
     <div style={{ padding: '1rem', width: '300px' }}>
-      <h3>Fantasy Assistant</h3>
+      <h3>FantasyEdge</h3>
 
       {!isAuthenticated ? (
         <div>
