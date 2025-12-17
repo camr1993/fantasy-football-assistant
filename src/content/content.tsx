@@ -433,7 +433,7 @@ async function init(forceRefresh = false) {
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === 'TIPS_READY') {
     console.log('[Fantasy Assistant] Tips ready notification received');
-    init();
+    init(true); // Force refresh to ensure fresh tips are displayed
   }
 
   if (message.type === 'TIPS_UPDATED') {

@@ -132,14 +132,14 @@ class ApiClient {
 
       console.log('Starting periodic roster sync (all teams)...');
 
-      // Call the sync-league-data function with immediate-roster-all
+      // Call the sync-league-data function with job-roster-all
       // This syncs all teams synchronously in the edge function
       const { data, error } = await supabase.functions.invoke(
         'sync-league-data',
         {
           body: {
             userId,
-            syncType: 'immediate-roster-all',
+            syncType: 'job-roster-all',
           },
         }
       );

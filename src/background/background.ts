@@ -7,9 +7,6 @@ chrome.runtime.onInstalled.addListener(() => {
 
   // Set up periodic roster sync (every 120 minutes)
   chrome.alarms.create('roster-sync', { periodInMinutes: 120 });
-
-  // Set up periodic tips refresh (every 60 minutes)
-  chrome.alarms.create('tips-refresh', { periodInMinutes: 120 });
 });
 
 // Listen for tab updates to detect when user navigates to Yahoo Fantasy Football
@@ -20,22 +17,35 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     if (tab.url.startsWith('https://football.fantasysports.yahoo.com/')) {
       console.log('User is on Yahoo Fantasy Football:', tab.url);
 
-      // Check if we have tips cached, if not fetch them
-      const result = await chrome.storage.local.get([
-        'tips_data',
-        'tips_timestamp',
-      ]);
-      const now = Date.now();
-      const maxAge = 120 * 60 * 1000; // 120 minutes
+      // Try to extract league and team IDs from URL
+      // URL format: /f1/{leagueId}/{teamId}/...
+      const urlMatch = tab.url.match(/\/f1\/(\d+)\/(\d+)/);
 
-      if (
-        !result.tips_data ||
-        !result.tips_timestamp ||
-        now - result.tips_timestamp > maxAge
-      ) {
-        console.log('Tips data stale or missing, fetching fresh tips...');
-        await fetchAndStoreTips();
+      if (urlMatch) {
+        const [, yahooLeagueId, yahooTeamId] = urlMatch;
+        console.log(
+          `Page loaded/refreshed, syncing roster for league ${yahooLeagueId}, team ${yahooTeamId}...`
+        );
+
+        // Sync roster first, then fetch tips
+        const syncResult = await apiClient.syncTeamRosterImmediate(
+          yahooLeagueId,
+          yahooTeamId
+        );
+
+        if (syncResult.success) {
+          console.log('Roster sync completed, now fetching tips...');
+        } else {
+          console.error('Roster sync failed:', syncResult.error);
+        }
+      } else {
+        console.log(
+          'Could not extract league/team IDs from URL, skipping roster sync'
+        );
       }
+
+      // Fetch fresh tips (whether roster sync succeeded or not)
+      await fetchAndStoreTips();
 
       // Notify the content script that it can inject recommendations
       chrome.tabs.sendMessage(tabId, { type: 'TIPS_READY' }).catch(() => {
@@ -209,11 +219,5 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     console.log('Periodic roster sync triggered');
     // Periodic roster syncs are done synchronously in the edge function
     await apiClient.triggerPeriodicRosterSync();
-  }
-
-  if (alarm.name === 'tips-refresh') {
-    console.log('Periodic tips refresh triggered (creating VM job)');
-    // Periodic tips refresh creates a job for the VM to process
-    await apiClient.triggerPeriodicTipsRefresh();
   }
 });
