@@ -326,7 +326,7 @@ function Popup() {
         status: 'initializing',
         percentage: 0,
         currentStep: isFirstTimeUser
-          ? 'Setting up your leagues for the first time...'
+          ? 'Setting up your leagues for the first time. This may take a few minutes...'
           : 'Syncing your league data...',
         startTime,
         estimatedDuration,
