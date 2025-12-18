@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Fantasy Assistant",
+  "name": "FantasyEdge",
   "version": "0.1",
-  "description": "Injects fantasy football tips into Yahoo.",
+  "description": "FantasyEdge is a Chrome extension that helps you manage your fantasy football leagues.",
   "permissions": [
     "scripting",
     "activeTab",

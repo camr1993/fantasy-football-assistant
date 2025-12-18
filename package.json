@@ -8,6 +8,8 @@
     "build": "vite build --mode production && vite build --config vite.content.config.ts --mode production",
     "build:popup": "vite build --mode production",
     "build:content": "vite build --config vite.content.config.ts --mode production",
+    "zip": "cd dist && zip -r ../fantasy-assistant-extension.zip . && cd ..",
+    "build:zip": "npm run build && npm run zip",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
