@@ -110,6 +110,17 @@ Deno.serve(async (req) => {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // FIRST-TIME INITIALIZATION: Create all jobs needed for a new user
+    // Used when syncType is 'full' or 'initialize' and user has no existing data
+    // ─────────────────────────────────────────────────────────────────────────
+    if (syncType === 'full' || syncType === 'initialize') {
+      const needsInit = await needsInitialization(userId);
+      if (needsInit) {
+        return await handleFirstTimeInitialization(timer, userId);
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // JOB-BASED SYNC: Create a job for the VM to process
     // Used for full syncs (leagues, teams, settings, etc.)
     // ─────────────────────────────────────────────────────────────────────────
@@ -318,4 +329,122 @@ async function handleJobBasedSync(
       },
     }
   );
+}
+
+/**
+ * Handle first-time user initialization
+ * Creates all the jobs needed to fully set up a user's league data
+ */
+async function handleFirstTimeInitialization(
+  timer: ReturnType<typeof performance.start>,
+  userId: string
+): Promise<Response> {
+  logger.info('Starting first-time user initialization', { userId });
+
+  // Step 1: Create the sync-league-data job (highest priority)
+  const { data: leagueSyncJob, error: leagueSyncError } = await supabase
+    .from('jobs')
+    .insert({
+      name: 'sync-league-data',
+      status: 'pending',
+      user_id: userId,
+      priority: 1, // Highest priority - must run first
+    })
+    .select()
+    .single();
+
+  if (leagueSyncError) {
+    logger.error('Failed to create league sync job', {
+      userId,
+      error: leagueSyncError,
+    });
+    timer.end();
+    return new Response(
+      JSON.stringify({
+        success: false,
+        message: 'Failed to create initialization jobs',
+        error: leagueSyncError.message,
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
+  }
+
+  // Step 2: Create the "all weeks" calculation jobs
+  // These run in sequence after league data is synced
+  const initJobs = [
+    { name: 'fantasy-points-calc-all-weeks', priority: 10 },
+    { name: 'sync-defense-points-against-all-weeks', priority: 20 },
+    { name: 'sync-team-offensive-stats-all-weeks', priority: 30 },
+    { name: 'league-calcs-all-weeks', priority: 40 },
+  ];
+
+  const { error: initJobsError } = await supabase.from('jobs').insert(
+    initJobs.map((job) => ({
+      name: job.name,
+      status: 'pending',
+      user_id: userId,
+      priority: job.priority,
+    }))
+  );
+
+  if (initJobsError) {
+    logger.error('Failed to create initialization jobs', {
+      userId,
+      error: initJobsError,
+    });
+    // Don't fail completely - the league sync job was already created
+  }
+
+  logger.info('Created initialization jobs', {
+    userId,
+    leagueSyncJobId: leagueSyncJob.id,
+    initJobCount: initJobs.length,
+  });
+
+  // Step 3: Start the VM to process all jobs
+  await startVM();
+
+  const duration = timer.end();
+  logger.info('First-time initialization setup complete', {
+    duration: `${duration}ms`,
+    userId,
+  });
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      message: 'First-time initialization started',
+      status: 'initializing',
+      total_jobs: initJobs.length + 1, // +1 for the league sync job
+    }),
+    {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    }
+  );
+}
+
+/**
+ * Check if a user needs first-time initialization
+ */
+async function needsInitialization(userId: string): Promise<boolean> {
+  // Check if user has any teams (leagues) set up
+  const { data: userTeams, error } = await supabase
+    .from('teams')
+    .select('id')
+    .eq('user_id', userId)
+    .limit(1);
+
+  if (error) {
+    logger.error('Error checking if user needs initialization', {
+      userId,
+      error,
+    });
+    return false; // Assume no initialization needed on error
+  }
+
+  // If user has no teams, they need initialization
+  return !userTeams || userTeams.length === 0;
 }

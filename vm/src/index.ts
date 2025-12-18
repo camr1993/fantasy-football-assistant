@@ -12,10 +12,22 @@ import {
   syncUserLeagues,
   syncTeamRosterOnly,
 } from './sync-functions/leagueSync.ts';
-import { syncDefensePointsAgainst } from './sync-functions/syncDefensePointsAgainst.ts';
-import { syncTeamOffensiveStats } from './sync-functions/syncTeamOffensiveStats.ts';
-import { calculateAllLeaguesFantasyPoints } from './sync-functions/fantasyPointsCalc.ts';
-import { calculateRecentStatsOnly } from './sync-functions/leagueCalcs/index.ts';
+import {
+  syncDefensePointsAgainst,
+  syncDefensePointsAgainstAllWeeks,
+} from './sync-functions/syncDefensePointsAgainst.ts';
+import {
+  syncTeamOffensiveStats,
+  syncTeamOffensiveStatsAllWeeks,
+} from './sync-functions/syncTeamOffensiveStats.ts';
+import {
+  calculateAllLeaguesFantasyPoints,
+  calculateAllLeaguesFantasyPointsAllWeeks,
+} from './sync-functions/fantasyPointsCalc.ts';
+import {
+  calculateRecentStatsOnly,
+  calculateRecentStatsAllWeeks,
+} from './sync-functions/leagueCalcs/index.ts';
 import { getMostRecentNFLWeek } from '../../supabase/functions/utils/syncHelpers.ts';
 import { createServer } from 'node:http';
 
@@ -93,6 +105,36 @@ const SYNC_FUNCTIONS: Record<string, SyncFunction> = {
     name: 'league-calcs',
     fn: (_yahooToken: string, week?: number) =>
       calculateRecentStatsOnly(undefined, new Date().getFullYear(), week),
+  },
+  // "All weeks" variants for initial league setup (scoped to user's leagues)
+  'fantasy-points-calc-all-weeks': {
+    name: 'fantasy-points-calc-all-weeks',
+    fn: (_yahooToken: string, week?: number, userId?: string) =>
+      calculateAllLeaguesFantasyPointsAllWeeks(
+        new Date().getFullYear(),
+        week,
+        userId
+      ),
+  },
+  'sync-defense-points-against-all-weeks': {
+    name: 'sync-defense-points-against-all-weeks',
+    fn: (_yahooToken: string, week?: number, userId?: string) =>
+      syncDefensePointsAgainstAllWeeks(week, userId),
+  },
+  'sync-team-offensive-stats-all-weeks': {
+    name: 'sync-team-offensive-stats-all-weeks',
+    fn: (_yahooToken: string, week?: number, userId?: string) =>
+      syncTeamOffensiveStatsAllWeeks(week, userId),
+  },
+  'league-calcs-all-weeks': {
+    name: 'league-calcs-all-weeks',
+    fn: (_yahooToken: string, week?: number, userId?: string) =>
+      calculateRecentStatsAllWeeks(
+        undefined,
+        new Date().getFullYear(),
+        week,
+        userId
+      ),
   },
 };
 

@@ -871,6 +871,7 @@ export async function syncUserLeagues(
     // Fetch user's leagues
     const yahooLeagues = await fetchUserLeagues(accessToken);
     const syncedLeagues = [];
+    const newlyCreatedLeagues: Record<string, unknown>[] = []; // Track only NEW leagues
     const syncedTeams = [];
 
     for (const yahooLeague of yahooLeagues) {
@@ -949,6 +950,7 @@ export async function syncUserLeagues(
 
         leagueId = newLeague.id;
         syncedLeagues.push(newLeague);
+        newlyCreatedLeagues.push(newLeague); // Track as newly created
       }
 
       // Fetch and sync league settings (including stat modifiers and roster positions)
@@ -1112,6 +1114,12 @@ export async function syncUserLeagues(
       teamsSynced: syncedTeams.length,
     });
 
+    // Create initialization records ONLY for newly created leagues
+    // (not for existing leagues that were just updated)
+    if (newlyCreatedLeagues.length > 0) {
+      await createLeagueInitializationRecords(userId, newlyCreatedLeagues);
+    }
+
     return {
       leagues: syncedLeagues as Record<string, unknown>[],
       teams: syncedTeams as Record<string, unknown>[],
@@ -1119,5 +1127,55 @@ export async function syncUserLeagues(
   } catch (error) {
     logger.error('Error syncing user leagues and teams', { userId, error });
     throw error;
+  }
+}
+
+/**
+ * Create initialization records for newly synced leagues
+ * These track progress for the first-time user setup flow
+ */
+async function createLeagueInitializationRecords(
+  userId: string,
+  leagues: Record<string, unknown>[]
+): Promise<void> {
+  try {
+    // The total jobs is 4: fantasy-points, defense-points, team-offensive, league-calcs
+    const TOTAL_INIT_JOBS = 4;
+
+    const initRecords = leagues.map((league) => ({
+      league_id: league.id as string,
+      user_id: userId,
+      status: 'in_progress',
+      total_jobs: TOTAL_INIT_JOBS,
+      completed_jobs: 0,
+      current_step: 'League data synced, calculating fantasy points...',
+    }));
+
+    const { error } = await supabase
+      .from('league_initialization')
+      .upsert(initRecords, {
+        onConflict: 'league_id,user_id',
+        ignoreDuplicates: false,
+      });
+
+    if (error) {
+      logger.error('Failed to create initialization records', {
+        userId,
+        leagueCount: leagues.length,
+        error,
+      });
+      // Don't throw - this is not critical to the sync operation
+    } else {
+      logger.info('Created initialization records', {
+        userId,
+        leagueCount: leagues.length,
+      });
+    }
+  } catch (error) {
+    logger.error('Error creating initialization records', {
+      userId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Don't throw - this is not critical to the sync operation
   }
 }

@@ -133,6 +133,104 @@ export async function recalculateAllFantasyPoints(
 }
 
 /**
+ * Calculate fantasy points for all weeks from week 1 to the specified week (or current week)
+ * Used for initial league setup when a user first logs in
+ * @param userId - If provided, only process leagues this user is a member of
+ */
+export async function calculateAllLeaguesFantasyPointsAllWeeks(
+  seasonYear?: number,
+  upToWeek?: number,
+  userId?: string
+): Promise<{ totalUpdated: number; weeksProcessed: number }> {
+  const currentYear = seasonYear || new Date().getFullYear();
+  const targetWeek = upToWeek || getMostRecentNFLWeek();
+
+  // If userId is provided, get only leagues the user is a member of
+  let leagueIds: string[] | undefined;
+  if (userId) {
+    const { data: userTeams, error } = await supabase
+      .from('teams')
+      .select('league_id')
+      .eq('user_id', userId);
+
+    if (error) {
+      logger.error('Failed to fetch user leagues', { userId, error });
+      throw new Error(`Failed to fetch user leagues: ${error.message}`);
+    }
+
+    const userLeagueIds =
+      userTeams?.map((t: { league_id: string }) => t.league_id) || [];
+    leagueIds = [...new Set<string>(userLeagueIds)];
+    logger.info('Filtering fantasy points calculation to user leagues', {
+      userId,
+      leagueCount: leagueIds.length,
+    });
+
+    if (leagueIds.length === 0) {
+      logger.warn('No leagues found for user', { userId });
+      return { totalUpdated: 0, weeksProcessed: 0 };
+    }
+  }
+
+  logger.info('Calculating fantasy points for leagues, all weeks', {
+    seasonYear: currentYear,
+    upToWeek: targetWeek,
+    userId,
+    leagueCount: leagueIds?.length || 'all',
+  });
+
+  let totalUpdated = 0;
+  let weeksProcessed = 0;
+
+  for (let week = 1; week <= targetWeek; week++) {
+    try {
+      logger.info(`Processing fantasy points for week ${week}/${targetWeek}`);
+
+      if (leagueIds) {
+        // Process only specific leagues
+        for (const leagueId of leagueIds) {
+          const updated = await calculateLeagueFantasyPoints(
+            leagueId,
+            currentYear,
+            week
+          );
+          totalUpdated += updated;
+        }
+      } else {
+        // Process all leagues
+        const results = await calculateAllLeaguesFantasyPoints(
+          currentYear,
+          week
+        );
+        const weekUpdated = results.reduce(
+          (sum, r) => sum + (r.updated_count || 0),
+          0
+        );
+        totalUpdated += weekUpdated;
+      }
+      weeksProcessed++;
+
+      logger.info(`Completed fantasy points for week ${week}`, {
+        totalUpdated,
+      });
+    } catch (error) {
+      logger.error(`Failed to calculate fantasy points for week ${week}`, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Continue with other weeks even if one fails
+    }
+  }
+
+  logger.info('Completed fantasy points calculation for all weeks', {
+    totalUpdated,
+    weeksProcessed,
+    targetWeek,
+  });
+
+  return { totalUpdated, weeksProcessed };
+}
+
+/**
  * Main function to handle fantasy points calculations based on request parameters
  */
 export async function handleFantasyPointsCalculations(request: {

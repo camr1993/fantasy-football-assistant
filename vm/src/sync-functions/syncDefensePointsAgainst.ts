@@ -27,22 +27,34 @@ interface DefensePointsAgainst {
 /**
  * Sync defense points against for all defense players
  * Calculates weekly fantasy points allowed by position against each defense
+ * @param week - The week to process
+ * @param leagueIds - If provided, only process these specific leagues
  */
-export async function syncDefensePointsAgainst(week?: number): Promise<number> {
+export async function syncDefensePointsAgainst(
+  week?: number,
+  leagueIds?: string[]
+): Promise<number> {
   const currentYear = new Date().getFullYear();
   const currentWeek = week ?? getMostRecentNFLWeek();
 
   logger.info('Starting defense points against sync', {
     week: currentWeek,
     seasonYear: currentYear,
+    leagueIds: leagueIds?.length || 'all',
   });
 
   try {
-    // Get all leagues for the current season
-    const { data: leagues, error: leaguesError } = await supabase
+    // Get leagues for the current season (optionally filtered)
+    let leaguesQuery = supabase
       .from('leagues')
       .select('id, name, season_year')
       .eq('season_year', currentYear);
+
+    if (leagueIds && leagueIds.length > 0) {
+      leaguesQuery = leaguesQuery.in('id', leagueIds);
+    }
+
+    const { data: leagues, error: leaguesError } = await leaguesQuery;
 
     if (leaguesError) {
       logger.error('Failed to fetch leagues', { error: leaguesError });
@@ -589,4 +601,83 @@ async function upsertDefensePointsAgainst(
     });
     throw error;
   }
+}
+
+/**
+ * Sync defense points against for all weeks from week 1 to the specified week (or current week)
+ * Used for initial league setup when a user first logs in
+ * @param upToWeek - The week to process up to
+ * @param userId - If provided, only process leagues this user is a member of
+ */
+export async function syncDefensePointsAgainstAllWeeks(
+  upToWeek?: number,
+  userId?: string
+): Promise<{ totalProcessed: number; weeksProcessed: number }> {
+  const currentWeek = upToWeek ?? getMostRecentNFLWeek();
+
+  // If userId is provided, get only leagues the user is a member of
+  let leagueIds: string[] | undefined;
+  if (userId) {
+    const { data: userTeams, error } = await supabase
+      .from('teams')
+      .select('league_id')
+      .eq('user_id', userId);
+
+    if (error) {
+      logger.error('Failed to fetch user leagues', { userId, error });
+      throw new Error(`Failed to fetch user leagues: ${error.message}`);
+    }
+
+    const userLeagueIds =
+      userTeams?.map((t: { league_id: string }) => t.league_id) || [];
+    leagueIds = [...new Set<string>(userLeagueIds)];
+    logger.info('Filtering defense points against to user leagues', {
+      userId,
+      leagueCount: leagueIds.length,
+    });
+
+    if (leagueIds.length === 0) {
+      logger.warn('No leagues found for user', { userId });
+      return { totalProcessed: 0, weeksProcessed: 0 };
+    }
+  }
+
+  logger.info('Syncing defense points against for all weeks', {
+    upToWeek: currentWeek,
+    userId,
+    leagueCount: leagueIds?.length || 'all',
+  });
+
+  let totalProcessed = 0;
+  let weeksProcessed = 0;
+
+  for (let week = 1; week <= currentWeek; week++) {
+    try {
+      logger.info(
+        `Processing defense points against for week ${week}/${currentWeek}`
+      );
+
+      const processed = await syncDefensePointsAgainst(week, leagueIds);
+      totalProcessed += processed;
+      weeksProcessed++;
+
+      logger.info(`Completed defense points against for week ${week}`, {
+        processed,
+        totalProcessed,
+      });
+    } catch (error) {
+      logger.error(`Failed to sync defense points against for week ${week}`, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Continue with other weeks even if one fails
+    }
+  }
+
+  logger.info('Completed defense points against sync for all weeks', {
+    totalProcessed,
+    weeksProcessed,
+    targetWeek: currentWeek,
+  });
+
+  return { totalProcessed, weeksProcessed };
 }

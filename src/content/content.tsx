@@ -5,6 +5,189 @@ import type {
   PlayerRecommendations,
 } from '../types/tips';
 
+interface InitializationProgress {
+  status: 'idle' | 'initializing' | 'ready' | 'error';
+  percentage: number;
+  currentStep: string;
+  errorMessage?: string;
+  startTime?: number;
+  estimatedDuration?: number;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Initialization Banner Component
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface InitializationBannerProps {
+  progress: InitializationProgress;
+  onDismiss: () => void;
+}
+
+function InitializationBanner({
+  progress,
+  onDismiss,
+}: InitializationBannerProps) {
+  const percentage = Math.round(progress.percentage || 0);
+
+  if (progress.status === 'idle') return null;
+
+  return (
+    <div style={bannerStyles.container}>
+      <style>
+        {`
+          @keyframes fantasy-edge-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}
+      </style>
+      <div style={bannerStyles.content}>
+        {progress.status === 'initializing' && (
+          <>
+            <div style={bannerStyles.spinnerContainer}>
+              <div style={bannerStyles.spinner} />
+            </div>
+            <div style={bannerStyles.textContainer}>
+              <span style={bannerStyles.title}>
+                FantasyEdge is setting up your league data...
+              </span>
+              <span style={bannerStyles.step}>{progress.currentStep}</span>
+            </div>
+            <div style={bannerStyles.progressContainer}>
+              <div style={bannerStyles.progressBar}>
+                <div
+                  style={{
+                    ...bannerStyles.progressFill,
+                    width: `${percentage}%`,
+                  }}
+                />
+              </div>
+              <span style={bannerStyles.progressText}>{percentage}%</span>
+            </div>
+          </>
+        )}
+
+        {progress.status === 'ready' && (
+          <>
+            <span style={bannerStyles.successIcon}>✓</span>
+            <span style={bannerStyles.successText}>
+              FantasyEdge is ready! Refresh the page to see recommendations.
+            </span>
+            <button style={bannerStyles.dismissButton} onClick={onDismiss}>
+              ×
+            </button>
+          </>
+        )}
+
+        {progress.status === 'error' && (
+          <>
+            <span style={bannerStyles.errorIcon}>⚠</span>
+            <span style={bannerStyles.errorText}>
+              FantasyEdge setup encountered an error. Please try again later.
+            </span>
+            <button style={bannerStyles.dismissButton} onClick={onDismiss}>
+              ×
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const bannerStyles: Record<string, React.CSSProperties> = {
+  container: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#7c3aed',
+    color: 'white',
+    zIndex: 999998,
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+  },
+  content: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '12px 20px',
+    maxWidth: '1200px',
+    margin: '0 auto',
+    gap: '16px',
+  },
+  spinnerContainer: {
+    flexShrink: 0,
+  },
+  spinner: {
+    width: '20px',
+    height: '20px',
+    borderRadius: '50%',
+    border: '2px solid rgba(255, 255, 255, 0.3)',
+    borderTopColor: 'white',
+    animation: 'fantasy-edge-spin 1s linear infinite',
+  },
+  textContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+  },
+  title: {
+    fontWeight: 600,
+    fontSize: '14px',
+  },
+  step: {
+    fontSize: '12px',
+    opacity: 0.9,
+  },
+  progressContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    flexShrink: 0,
+  },
+  progressBar: {
+    width: '100px',
+    height: '6px',
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: '3px',
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: 'white',
+    borderRadius: '3px',
+    transition: 'width 0.3s ease',
+  },
+  progressText: {
+    fontSize: '12px',
+    fontWeight: 600,
+    minWidth: '35px',
+  },
+  successIcon: {
+    fontSize: '18px',
+    fontWeight: 'bold',
+  },
+  successText: {
+    fontSize: '14px',
+  },
+  errorIcon: {
+    fontSize: '18px',
+  },
+  errorText: {
+    fontSize: '14px',
+  },
+  dismissButton: {
+    background: 'none',
+    border: 'none',
+    color: 'white',
+    fontSize: '20px',
+    cursor: 'pointer',
+    padding: '0 4px',
+    opacity: 0.8,
+    marginLeft: 'auto',
+  },
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Modal Component
 // ─────────────────────────────────────────────────────────────────────────────
@@ -442,13 +625,97 @@ chrome.runtime.onMessage.addListener((message) => {
     );
     init(true); // Force refresh to update existing icons
   }
+
+  if (message.type === 'INITIALIZATION_PROGRESS') {
+    console.log(
+      '[Fantasy Assistant] Initialization progress update:',
+      message.progress
+    );
+    updateInitializationBanner(message.progress);
+  }
+
+  if (message.type === 'INITIALIZATION_COMPLETE') {
+    console.log('[Fantasy Assistant] Initialization complete');
+    updateInitializationBanner({
+      status: 'ready',
+      percentage: 100,
+      currentStep: 'All data ready!',
+    });
+    // Re-init to fetch and display tips
+    init(true);
+  }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Initialization Banner Management
+// ─────────────────────────────────────────────────────────────────────────────
+
+let bannerRoot: ReactDOM.Root | null = null;
+const BANNER_CONTAINER_ID = 'fantasy-assistant-init-banner';
+
+function updateInitializationBanner(progress: InitializationProgress): void {
+  let container = document.getElementById(BANNER_CONTAINER_ID);
+
+  // If dismissing or idle, remove the banner
+  if (progress.status === 'idle') {
+    if (container && bannerRoot) {
+      bannerRoot.unmount();
+      container.remove();
+      bannerRoot = null;
+    }
+    return;
+  }
+
+  // Create container if it doesn't exist
+  if (!container) {
+    container = document.createElement('div');
+    container.id = BANNER_CONTAINER_ID;
+    document.body.prepend(container);
+    bannerRoot = ReactDOM.createRoot(container);
+  }
+
+  // Render the banner
+  if (bannerRoot) {
+    bannerRoot.render(
+      <InitializationBanner
+        progress={progress}
+        onDismiss={() => {
+          updateInitializationBanner({ ...progress, status: 'idle' });
+          // Clear from storage
+          chrome.storage.local.remove(['initialization_progress']);
+        }}
+      />
+    );
+  }
+}
+
+// Check for ongoing initialization on page load
+async function checkAndShowInitializationBanner(): Promise<void> {
+  try {
+    const result = await chrome.storage.local.get(['initialization_progress']);
+    if (
+      result.initialization_progress &&
+      result.initialization_progress.status !== 'idle'
+    ) {
+      updateInitializationBanner(result.initialization_progress);
+    }
+  } catch (error) {
+    console.error(
+      '[Fantasy Assistant] Error checking initialization status:',
+      error
+    );
+  }
+}
 
 // Run on page load
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => init());
+  document.addEventListener('DOMContentLoaded', () => {
+    init();
+    checkAndShowInitializationBanner();
+  });
 } else {
   init();
+  checkAndShowInitializationBanner();
 }
 
 // Re-inject when page content changes (for SPA navigation)
