@@ -222,3 +222,90 @@ export async function calculateRecentStatsOnly(
     };
   }
 }
+
+/**
+ * Calculate league calculations for all weeks from week 1 to the specified week (or current week)
+ * Used for initial league setup when a user first logs in
+ * @param leagueId - If provided, only process this specific league
+ * @param seasonYear - The season year to process
+ * @param upToWeek - The week to process up to
+ * @param userId - If provided, process all leagues this user is a member of
+ */
+export async function calculateRecentStatsAllWeeks(
+  leagueId?: string,
+  seasonYear?: number,
+  upToWeek?: number,
+  userId?: string
+): Promise<{ success: boolean; weeksProcessed: number }> {
+  const currentYear = seasonYear || new Date().getFullYear();
+  const targetWeek = upToWeek || getMostRecentNFLWeek();
+
+  // If userId is provided, get all leagues the user is a member of
+  let leagueIds: string[] = [];
+  if (userId) {
+    const { data: userTeams, error } = await supabase
+      .from('teams')
+      .select('league_id')
+      .eq('user_id', userId);
+
+    if (error) {
+      logger.error('Failed to fetch user leagues', { userId, error });
+      throw new Error(`Failed to fetch user leagues: ${error.message}`);
+    }
+
+    const userLeagueIds =
+      userTeams?.map((t: { league_id: string }) => t.league_id) || [];
+    leagueIds = [...new Set<string>(userLeagueIds)];
+    logger.info('Processing league calcs for user leagues', {
+      userId,
+      leagueCount: leagueIds.length,
+    });
+
+    if (leagueIds.length === 0) {
+      logger.warn('No leagues found for user', { userId });
+      return { success: true, weeksProcessed: 0 };
+    }
+  } else if (leagueId) {
+    leagueIds = [leagueId];
+  }
+
+  logger.info('Calculating recent stats for all weeks', {
+    leagueIds: leagueIds.length > 0 ? leagueIds : 'all',
+    seasonYear: currentYear,
+    upToWeek: targetWeek,
+  });
+
+  let weeksProcessed = 0;
+
+  for (let week = 1; week <= targetWeek; week++) {
+    try {
+      logger.info(`Processing league calcs for week ${week}/${targetWeek}`);
+
+      if (leagueIds.length > 0) {
+        // Process specific leagues
+        for (const lid of leagueIds) {
+          await calculateRecentStatsOnly(lid, currentYear, week);
+        }
+      } else {
+        // Process all leagues
+        await calculateRecentStatsOnly(undefined, currentYear, week);
+      }
+      weeksProcessed++;
+
+      logger.info(`Completed league calcs for week ${week}`);
+    } catch (error) {
+      logger.error(`Failed to calculate league calcs for week ${week}`, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Continue with other weeks even if one fails
+    }
+  }
+
+  logger.info('Completed league calcs for all weeks', {
+    weeksProcessed,
+    targetWeek,
+    leagueIds: leagueIds.length > 0 ? leagueIds : 'all',
+  });
+
+  return { success: true, weeksProcessed };
+}

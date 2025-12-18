@@ -1,7 +1,107 @@
 import { ApiResponse } from '../types/api';
 import { supabase } from '../supabaseClient';
 
+interface OAuthCallbackResponse {
+  success: boolean;
+  isFirstTimeUser?: boolean;
+  user?: {
+    id: string;
+    name?: string;
+    email?: string;
+  };
+  error?: string;
+}
+
+interface OAuthInitResponse {
+  auth_url: string;
+  nonce: string;
+}
+
 class ApiClient {
+  /**
+   * Initiate OAuth flow and get the auth URL
+   */
+  async initiateOAuth(): Promise<ApiResponse<OAuthInitResponse>> {
+    try {
+      const { data, error } = await supabase.functions.invoke('oauth/auth');
+
+      if (error) {
+        return {
+          success: false,
+          error: { error: error.message || 'Failed to initiate OAuth' },
+        };
+      }
+
+      if (data?.auth_url && data?.nonce) {
+        return {
+          success: true,
+          data: data,
+        };
+      } else {
+        return {
+          success: false,
+          error: { error: 'Failed to get OAuth URL or nonce' },
+        };
+      }
+    } catch (error) {
+      console.error('OAuth initiation error:', error);
+      return {
+        success: false,
+        error: {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+      };
+    }
+  }
+
+  /**
+   * Exchange OAuth authorization code for tokens
+   */
+  async exchangeOAuthCode(
+    code: string,
+    nonce: string
+  ): Promise<ApiResponse<OAuthCallbackResponse>> {
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        'oauth/callback',
+        {
+          body: {
+            code,
+            state: 'fantasy-football-assistant',
+            nonce,
+          },
+        }
+      );
+
+      if (error) {
+        return {
+          success: false,
+          error: { error: error.message || 'Token exchange failed' },
+        };
+      }
+
+      if (data?.success) {
+        return {
+          success: true,
+          data: data,
+        };
+      } else {
+        return {
+          success: false,
+          error: { error: data?.error || 'Token exchange failed' },
+        };
+      }
+    } catch (error) {
+      console.error('OAuth callback error:', error);
+      return {
+        success: false,
+        error: {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+      };
+    }
+  }
+
   /**
    * Sync league data (leagues, teams, rosters) via edge function
    */
@@ -237,6 +337,61 @@ class ApiClient {
         return {
           success: false,
           error: { error: error.message || 'Failed to get tips' },
+        };
+      }
+
+      return {
+        success: true,
+        data: data,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+      };
+    }
+  }
+
+  /**
+   * Check initialization status for a user's leagues
+   * Used to poll for completion during first-time setup
+   */
+  async checkInitializationStatus(): Promise<
+    ApiResponse<{
+      all_ready: boolean;
+      leagues: {
+        league_id: string;
+        league_name: string;
+        status: 'pending' | 'in_progress' | 'ready' | 'error';
+        total_jobs: number;
+        completed_jobs: number;
+        current_step: string | null;
+        error_message: string | null;
+      }[];
+    }>
+  > {
+    try {
+      const userId = await this.getUserId();
+      if (!userId) {
+        return {
+          success: false,
+          error: { error: 'No user found' },
+        };
+      }
+
+      const { data, error } = await supabase.functions.invoke(
+        'check-initialization-status',
+        {
+          body: { userId },
+        }
+      );
+
+      if (error) {
+        return {
+          success: false,
+          error: { error: error.message || 'Failed to check status' },
         };
       }
 

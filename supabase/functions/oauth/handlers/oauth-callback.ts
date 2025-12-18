@@ -390,12 +390,33 @@ export async function handleOAuthCallback(req: Request) {
     // Note: All data syncing (leagues, teams, rosters) is now handled
     // by the comprehensive sync function triggered from the popup
 
+    // Check if this is a first-time user by checking if they have any teams
+    let isFirstTimeUser = false;
+    if (userId) {
+      const { data: existingTeams, error: teamsError } = await supabase
+        .from('teams')
+        .select('id')
+        .eq('user_id', userId)
+        .limit(1);
+
+      if (teamsError) {
+        logger.warn('Error checking for existing teams', { error: teamsError });
+        // Default to first-time user if we can't determine
+        isFirstTimeUser = true;
+      } else {
+        isFirstTimeUser = !existingTeams || existingTeams.length === 0;
+      }
+
+      logger.info('First-time user check', { userId, isFirstTimeUser });
+    }
+
     // Return success response with user info and tokens
     timer.end();
     return new Response(
       JSON.stringify({
         success: true,
         message: 'User authenticated and created successfully',
+        isFirstTimeUser,
         user: {
           id: user.user?.id,
           email: user.user?.email,
