@@ -3,14 +3,7 @@
   "name": "FantasyEdge",
   "version": "0.1",
   "description": "FantasyEdge is a Chrome extension that helps you manage your fantasy football leagues.",
-  "permissions": [
-    "scripting",
-    "activeTab",
-    "tabs",
-    "storage",
-    "alarms",
-    "webRequest"
-  ],
+  "permissions": ["activeTab", "tabs", "storage", "alarms", "webRequest"],
   "host_permissions": ["https://football.fantasysports.yahoo.com/*"],
   "background": {
     "service_worker": "background.js",

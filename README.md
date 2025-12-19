@@ -1,79 +1,159 @@
-# Fantasy Football Data Sync System
+# FantasyEdge
 
-This system has been refactored to use a job-based architecture with a VM that processes sync tasks on-demand.
+A Chrome extension that provides personalized fantasy football recommendations for Yahoo Fantasy Football users. FantasyEdge analyzes your roster and league data to offer start/bench advice and waiver wire suggestions directly on Yahoo Fantasy pages.
 
-## Architecture Overview
+## Features
 
-### 🏗️ Components
+- **Start/Bench Recommendations**: Get advice on which players to start or bench based on matchups, recent performance, and league scoring
+- **Waiver Wire Suggestions**: See upgrade opportunities comparing your rostered players to available free agents
+- **In-Page Integration**: Recommendations appear as icons directly next to players on Yahoo Fantasy pages
+- **Automatic Sync**: Roster data syncs automatically when you make changes or periodically in the background
 
-1. **Jobs Table**: Central job queue in Supabase
-2. **VM (Virtual Machine)**: Processes jobs and shuts down when complete
-3. **Edge Functions**: Create jobs and start the VM
-4. **Autostop**: VM automatically stops when idle (based on [Fly.io autostop/autostart](https://fly.io/docs/launch/autostop-autostart/))
-
-### 📊 Database Schema
-
-#### `jobs` table
-
-- `id`: UUID primary key
-- `name`: Job type (sync-players, sync-injuries, etc.)
-- `status`: pending, running, completed, failed
-- `week`: Optional week parameter
-- `created_at`, `updated_at`: Timestamps
-
-#### `job_history` table
-
-- Stores completed/failed jobs for historical tracking
-- Automatically populated via database triggers
-
-### 🔄 Workflow
-
-1. **Cron triggers edge function** → Creates jobs in database
-2. **Edge function starts VM** → VM polls for jobs
-3. **VM processes jobs** → Updates job status
-4. **VM shuts down** → When no more jobs or timeout reached
-
-## 📁 File Structure
+## Architecture
 
 ```
-vm/
-├── src/
-│   ├── index.ts                    # Main VM job processor
-│   └── sync-functions/             # All sync logic (moved from edge functions)
-│       ├── sync-players/
-│       ├── sync-injuries/
-│       ├── sync-player-stats/
-│       ├── sync-nfl-matchups/
-│       ├── sync-opponents/
-│       ├── sync-league-data/
-│       ├── sync-defense-points-against/
-│       └── league-calcs/
-├── package.json
-├── tsconfig.json
-├── Dockerfile
-├── fly.toml                        # VM configuration with autostop
-└── README.md
-
-supabase/functions/
-├── daily-data-sync/                # Creates daily jobs (injuries)
-├── weekly-data-sync/               # Creates weekly jobs (players, stats, etc.)
-├── annual-data-sync/               # Creates annual jobs (matchups)
-└── utils/                          # Shared utilities
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         Chrome Extension                                 │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────────┐  │
+│  │   Popup UI   │  │  Background  │  │  Content Script (Yahoo FF)   │  │
+│  │  (React)     │  │  Service     │  │  - Injects recommendation    │  │
+│  │  - Auth      │  │  Worker      │  │    icons next to players     │  │
+│  │  - Status    │  │  - Sync      │  │  - Shows modals with details │  │
+│  └──────────────┘  │  - Tips      │  └──────────────────────────────┘  │
+│                    └──────────────┘                                     │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         Supabase Backend                                 │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │  Edge Functions                                                    │  │
+│  │  - oauth/         OAuth flow with Yahoo                           │  │
+│  │  - sync-league-data/  Sync leagues, teams, rosters               │  │
+│  │  - tips/          Compute start/bench & waiver recommendations    │  │
+│  │  - daily-data-sync/   Cron job for injuries                      │  │
+│  │  - weekly-data-sync/  Cron job for player stats                  │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │  PostgreSQL Database                                               │  │
+│  │  - Users, leagues, teams, rosters                                 │  │
+│  │  - Player stats, injuries, matchups                               │  │
+│  │  - Computed league calculations & recommendations                 │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         Fly.io VM (Job Processor)                        │
+│  - Processes long-running sync jobs (players, stats, matchups)          │
+│  - Auto-starts when jobs are queued, auto-stops when idle               │
+│  - Handles Yahoo API rate limits and large data fetches                 │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-## 🚀 Deployment
+## Project Structure
 
-### 1. Deploy Database Migration
+```
+├── src/                          # Chrome extension source
+│   ├── api/
+│   │   └── client.ts             # API client for Supabase functions
+│   ├── background/
+│   │   └── background.ts         # Service worker (sync, messaging)
+│   ├── content/
+│   │   └── content.tsx           # Content script (UI injection)
+│   ├── popup/
+│   │   ├── popup.html            # Extension popup HTML
+│   │   └── popup.tsx             # Popup UI (auth, status)
+│   ├── types/                    # TypeScript types
+│   └── supabaseClient.ts         # Supabase client config
+│
+├── supabase/functions/           # Supabase Edge Functions
+│   ├── oauth/                    # Yahoo OAuth flow
+│   ├── sync-league-data/         # League/team/roster sync
+│   ├── tips/                     # Recommendation engine
+│   ├── check-initialization-status/
+│   ├── daily-data-sync/          # Daily cron (injuries)
+│   ├── weekly-data-sync/         # Weekly cron (stats)
+│   ├── annual-data-sync/         # Annual cron (schedule)
+│   └── utils/                    # Shared utilities
+│
+├── vm/                           # Fly.io VM job processor
+│   └── src/
+│       ├── index.ts              # Job queue processor
+│       └── sync-functions/       # Sync implementations
+│           ├── playerSync.ts
+│           ├── injurySync.ts
+│           ├── leagueSync.ts
+│           ├── sync-player-stats/
+│           ├── leagueCalcs/
+│           └── ...
+│
+├── public/                       # Extension icons
+├── manifest.json                 # Chrome extension manifest
+├── vite.config.ts                # Vite config for popup
+├── vite.content.config.ts        # Vite config for content script
+└── fly.toml                      # Fly.io VM configuration
+```
+
+## Development
+
+### Prerequisites
+
+- Node.js 18+
+- [Supabase CLI](https://supabase.com/docs/guides/cli)
+- [Fly.io CLI](https://fly.io/docs/hands-on/install-flyctl/) (for VM deployment)
+
+### Extension Development
 
 ```bash
+# Install dependencies
+npm install
+
+# Build extension (outputs to dist/)
+npm run build
+
+# Build and create zip for Chrome Web Store
+npm run build:zip
+```
+
+### Load Extension in Chrome
+
+1. Build the extension: `npm run build`
+2. Open Chrome → `chrome://extensions`
+3. Enable "Developer mode"
+4. Click "Load unpacked" → select the `dist/` folder
+
+### Supabase Development
+
+```bash
+# Start local Supabase
+supabase start
+
+# Deploy edge functions
+supabase functions deploy
+
+# Run database migrations
 supabase db push
 ```
 
-### 2. Deploy VM
+## Deployment
+
+### Edge Functions
 
 ```bash
-cd vm
-fly apps create fantasy-football-assistant-vm
+supabase functions deploy oauth
+supabase functions deploy sync-league-data
+supabase functions deploy tips
+supabase functions deploy check-initialization-status
+supabase functions deploy daily-data-sync
+supabase functions deploy weekly-data-sync
+supabase functions deploy annual-data-sync
+```
+
+### VM (Fly.io)
+
+```bash
+# Set secrets
 fly secrets set SUPABASE_URL=your_supabase_url
 fly secrets set SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 fly secrets set YAHOO_CLIENT_ID=your_yahoo_client_id
@@ -81,47 +161,41 @@ fly secrets set YAHOO_CLIENT_SECRET=your_yahoo_client_secret
 fly secrets set SUPER_ADMIN_USER_ID=your_admin_user_id
 fly secrets set FLY_API_TOKEN=your_fly_api_token
 fly secrets set VM_APP_NAME=fantasy-football-assistant-vm
+
+# Deploy
 fly deploy
 ```
 
-### 3. Deploy Edge Functions
+### Chrome Web Store
 
-```bash
-supabase functions deploy daily-data-sync
-supabase functions deploy weekly-data-sync
-supabase functions deploy annual-data-sync
-```
+1. Build the extension: `npm run build:zip`
+2. Upload `fantasy-assistant-extension.zip` to Chrome Web Store Developer Dashboard
 
-## ⚙️ Configuration
+## Environment Variables
 
-### VM Autostop Settings
+### Supabase Edge Functions
 
-The VM is configured with [Fly.io autostop/autostart](https://fly.io/docs/launch/autostop-autostart/):
+| Variable              | Description                        |
+| --------------------- | ---------------------------------- |
+| `YAHOO_CLIENT_ID`     | Yahoo API client ID                |
+| `YAHOO_CLIENT_SECRET` | Yahoo API client secret            |
+| `FLY_API_TOKEN`       | Fly.io API token for VM control    |
+| `VM_APP_NAME`         | Name of the Fly.io VM app          |
+| `CRON_JOB_SECRET`     | Secret for cron job authentication |
 
-- `auto_stop_machines = "stop"`: VM stops when idle
-- `auto_start_machines = true`: VM starts when jobs are created
-- `min_machines_running = 0`: No minimum running machines
+### VM
 
-### Job Types
+| Variable                    | Description                     |
+| --------------------------- | ------------------------------- |
+| `SUPABASE_URL`              | Supabase project URL            |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role key                |
+| `YAHOO_CLIENT_ID`           | Yahoo API client ID             |
+| `YAHOO_CLIENT_SECRET`       | Yahoo API client secret         |
+| `SUPER_ADMIN_USER_ID`       | Admin user ID with Yahoo tokens |
+| `FLY_API_TOKEN`             | Fly.io API token                |
+| `VM_APP_NAME`               | Name of the VM app              |
 
-#### Daily Jobs (`daily-data-sync`)
-
-- `sync-injuries`: Updates player injury status
-
-#### Weekly Jobs (`weekly-data-sync`)
-
-- `sync-players`: Updates player information
-- `sync-player-stats`: Updates player statistics for specific week
-- `sync-opponents`: Updates opponent matchups
-- `sync-league-data`: Updates league-specific data
-- `sync-defense-points-against`: Updates defense statistics
-- `league-calcs`: Calculates league-specific metrics
-
-#### Annual Jobs (`annual-data-sync`)
-
-- `sync-nfl-matchups`: Updates NFL schedule/matchups
-
-## 🔍 Monitoring
+## Monitoring
 
 ### VM Status
 
@@ -136,65 +210,10 @@ fly logs
 -- Check pending jobs
 SELECT * FROM jobs WHERE status = 'pending' ORDER BY created_at;
 
--- Check job history
+-- Check recent job history
 SELECT * FROM job_history ORDER BY completed_at DESC LIMIT 10;
 ```
 
-### Health Check
+## License
 
-The VM exposes a health endpoint at `/health` for monitoring.
-
-## 🛡️ Safety Features
-
-1. **Timeout Protection**: VM stops after 30 minutes maximum runtime
-2. **Job Limit**: Maximum 50 jobs per VM run to prevent infinite loops
-3. **Error Handling**: Failed jobs are logged and VM continues with next job
-4. **Graceful Shutdown**: VM properly closes HTTP server and exits
-5. **Autostop**: VM automatically stops when idle (no jobs)
-
-## 🔧 Environment Variables
-
-### VM Secrets
-
-- `SUPABASE_URL`: Supabase project URL
-- `SUPABASE_SERVICE_ROLE_KEY`: Service role key
-- `YAHOO_CLIENT_ID`: Yahoo API client ID
-- `YAHOO_CLIENT_SECRET`: Yahoo API client secret
-- `SUPER_ADMIN_USER_ID`: Admin user ID with Yahoo tokens
-- `FLY_API_TOKEN`: Fly.io API token for VM control
-- `VM_APP_NAME`: Name of the VM app
-
-### Edge Function Secrets
-
-- `CRON_JOB_SECRET`: Secret for cron job authentication
-- `VM_APP_NAME`: Name of the VM app to start
-- `FLY_API_TOKEN`: Fly.io API token for VM control
-
-## 📈 Benefits
-
-1. **Cost Efficient**: VM only runs when there's work to do
-2. **Scalable**: Can handle multiple jobs in sequence
-3. **Reliable**: Automatic retry and error handling
-4. **Maintainable**: All sync logic centralized in VM
-5. **Observable**: Comprehensive logging and job tracking
-6. **Modular**: Easy to add new sync functions
-
-## 🚨 Troubleshooting
-
-### VM Not Starting
-
-- Check Fly API token permissions
-- Verify VM app name matches configuration
-- Check Fly.io logs for startup errors
-
-### Jobs Not Processing
-
-- Check VM logs: `fly logs`
-- Verify database connection
-- Check Yahoo API token validity
-
-### Jobs Stuck in Running State
-
-- VM may have crashed - check logs
-- Manually update job status in database
-- Restart VM if needed
+Private - All rights reserved
