@@ -24,9 +24,18 @@ export const WR_WEIGHTS = {
 export const RB_WEIGHTS = {
   recent_mean: { weight: 0.3, label: 'Recent Production' }, // baseline production (z-score)
   volatility: { weight: -0.04, label: 'Consistency' }, // smaller penalty (z-score, clip ±2)
-  weighted_opportunity: { weight: 0.36, label: 'Workload' }, // workload (rushes + target value) — increased
-  touchdown_production: { weight: 0.18, label: 'TD Production' }, // TD upside important for RBs
-  receiving_profile: { weight: 0.08, label: 'Receiving Work' }, // receiving work (receptions + yards)
+  weighted_opportunity: {
+    weight: 0.36,
+    label: 'Workload (rushing attempts + targets)',
+  }, // workload (rushes + target value) — increased
+  touchdown_production: {
+    weight: 0.18,
+    label: 'TD Production (rushing touchdowns + receiving touchdowns)',
+  }, // TD upside important for RBs
+  receiving_profile: {
+    weight: 0.08,
+    label: 'Receiving Work (receptions + receiving yards)',
+  }, // receiving work (receptions + receiving yards)
   efficiency: { weight: 0.06, label: 'Efficiency' }, // YPC / YPT efficiency
   opponent_difficulty: { weight: 0.06, label: 'Matchup' }, // matchup vs run defense
 } as const;
@@ -36,7 +45,7 @@ export const TE_WEIGHTS = {
   recent_mean: { weight: 0.36, label: 'Recent Production' }, // production (z-score)
   volatility: { weight: -0.08, label: 'Consistency' }, // TE usage can be spotty — keep stronger penalty but clip ±2
   targets_per_game: { weight: 0.3, label: 'Target Volume' }, // target share matters a lot
-  receiving_touchdowns: { weight: 0.2, label: 'TD Upside' }, // TE TD upside is meaningful
+  receiving_touchdowns: { weight: 0.2, label: 'Receiving TDs' }, // TE TD upside is meaningful
   yards_per_target: { weight: 0.12, label: 'Yards per Target' }, // efficiency / matchup help
   opponent_difficulty: { weight: 0.1, label: 'Matchup' }, // matchup importance
 } as const;
@@ -47,7 +56,10 @@ export const QB_WEIGHTS = {
   volatility: { weight: -0.05, label: 'Consistency' }, // modest penalty (z-score, clip ±2)
   passing_efficiency: { weight: 0.45, label: 'Passing Efficiency' }, // heavier: TD rate & yards/att are key
   turnovers: { weight: -0.15, label: 'Turnover Avoidance' }, // big negative for INTs/fumbles
-  rushing_upside: { weight: 0.15, label: 'Rushing Upside' }, // dual-threat value still useful
+  rushing_upside: {
+    weight: 0.15,
+    label: 'Rushing Upside (rushing yards + 6 × rushing touchdowns)',
+  }, // dual-threat value still useful
   opponent_difficulty: { weight: 0.1, label: 'Matchup' }, // matchup vs pass defense
 } as const;
 
@@ -55,7 +67,10 @@ export const QB_WEIGHTS = {
 export const K_WEIGHTS = {
   recent_mean: { weight: 0.65, label: 'Recent Production' }, // overall production (z-score)
   volatility: { weight: -0.1, label: 'Consistency' }, // keep stronger penalty (clip ±2)
-  fg_profile: { weight: 0.4, label: 'FG Profile' }, // attempts & distance profile
+  fg_profile: {
+    weight: 0.4,
+    label: 'FG Profile (fgs weighted by distance)',
+  }, // attempts & distance profile
   fg_pat_misses: { weight: -0.1, label: 'Accuracy' }, // misses are negative signal
   fg_attempts: { weight: 0.15, label: 'Opportunities' }, // team opportunity
   opponent_difficulty: { weight: 0.1, label: 'Matchup' }, // weather / defense / stadium
