@@ -16,7 +16,7 @@ export interface UserTokens {
 /**
  * Get user's Yahoo tokens by email or user ID
  */
-export async function getUserTokens(
+export async function getYahooUserTokens(
   userId: string
 ): Promise<UserTokens | null> {
   try {

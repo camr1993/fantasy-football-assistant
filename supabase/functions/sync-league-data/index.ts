@@ -1,7 +1,8 @@
 import { logger, performance } from '../utils/logger.ts';
 import { corsHeaders } from '../utils/constants.ts';
 import { supabase } from '../utils/supabase.ts';
-import { getUserTokens } from '../utils/userTokenManager.ts';
+import { getYahooUserTokens } from '../utils/userTokenManager.ts';
+import { getUserFromRequest, createAuthErrorResponse } from '../utils/auth.ts';
 import { startVM } from '../utils/vmManager.ts';
 import {
   fetchTeamRoster,
@@ -38,24 +39,24 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Get user data from request body
-    const body = await req.json();
-    const { userId, syncType = 'full', yahooLeagueId, yahooTeamId } = body;
+    // Authenticate the request using JWT from Authorization header
+    const { user, error: authError } = await getUserFromRequest(req);
 
-    if (!userId) {
-      logger.error('Missing userId in request body');
+    if (authError || !user) {
+      logger.error('Authentication failed', { error: authError });
       timer.end();
-      return new Response(
-        JSON.stringify({
-          code: 400,
-          message: 'Missing userId',
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
+      return createAuthErrorResponse(
+        authError || 'Authentication required',
+        corsHeaders
       );
     }
+
+    const userId = user.id;
+    logger.info('Request authenticated via JWT', { userId });
+
+    // Get request body for other parameters (syncType, etc.)
+    const body = await req.json();
+    const { syncType = 'full', yahooLeagueId, yahooTeamId } = body;
 
     logger.info('League data sync request for user', {
       userId,
@@ -64,15 +65,16 @@ Deno.serve(async (req) => {
       yahooTeamId,
     });
 
-    // Get user's tokens (with automatic refresh if needed) to validate authentication
-    const userTokens = await getUserTokens(userId);
+    // Get user's Yahoo tokens (with automatic refresh if needed)
+    const userTokens = await getYahooUserTokens(userId);
     if (!userTokens) {
-      logger.error('Failed to get user tokens', { userId });
+      logger.error('Failed to get user Yahoo tokens', { userId });
       timer.end();
       return new Response(
         JSON.stringify({
           code: 401,
-          message: 'Failed to get user tokens. Please re-authenticate.',
+          message:
+            'Failed to get user tokens. Please re-authenticate with Yahoo.',
         }),
         {
           status: 401,
@@ -81,7 +83,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    logger.info('User authentication validated', { userId });
+    logger.info('User Yahoo tokens validated', { userId });
 
     // ─────────────────────────────────────────────────────────────────────────
     // IMMEDIATE SINGLE TEAM SYNC: Synchronously sync a single team's roster

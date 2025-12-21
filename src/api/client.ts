@@ -1,5 +1,9 @@
 import { ApiResponse } from '../types/api';
-import { supabase } from '../supabaseClient';
+import {
+  supabase,
+  setSupabaseSession,
+  getSupabaseSession,
+} from '../supabaseClient';
 
 interface OAuthCallbackResponse {
   success: boolean;
@@ -8,6 +12,12 @@ interface OAuthCallbackResponse {
     id: string;
     name?: string;
     email?: string;
+  };
+  session?: {
+    access_token: string;
+    refresh_token: string;
+    expires_at: number;
+    expires_in: number;
   };
   error?: string;
 }
@@ -80,7 +90,21 @@ class ApiClient {
         };
       }
 
-      if (data?.success) {
+      if (data?.success && data?.session) {
+        // Set up the Supabase session for future authenticated requests
+        const { error: sessionError } = await setSupabaseSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+
+        if (sessionError) {
+          console.error('Failed to set Supabase session:', sessionError);
+          return {
+            success: false,
+            error: { error: 'Failed to establish session' },
+          };
+        }
+
         return {
           success: true,
           data: data,
@@ -104,14 +128,16 @@ class ApiClient {
 
   /**
    * Sync league data (leagues, teams, rosters) via edge function
+   * Authentication is handled via Supabase JWT in Authorization header
    */
   async syncLeagueData(): Promise<ApiResponse<any>> {
     try {
-      const userId = await this.getUserId();
-      if (!userId) {
+      // Verify we have an active session before making the request
+      const session = await getSupabaseSession();
+      if (!session) {
         return {
           success: false,
-          error: { error: 'No user found' },
+          error: { error: 'No authenticated session' },
         };
       }
 
@@ -119,7 +145,6 @@ class ApiClient {
         'sync-league-data',
         {
           body: {
-            userId,
             syncType: 'full',
           },
         }
@@ -150,18 +175,19 @@ class ApiClient {
    * Trigger immediate roster sync for a specific team
    * Used for post-triggered syncs (e.g., after user edits roster)
    * This is synchronous and waits for the sync to complete
+   * Authentication is handled via Supabase JWT in Authorization header
    */
   async syncTeamRosterImmediate(
     yahooLeagueId: string,
     yahooTeamId: string
   ): Promise<ApiResponse<any>> {
     try {
-      const userId = await this.getUserId();
-      if (!userId) {
-        console.log('No user found, skipping immediate roster sync');
+      const session = await getSupabaseSession();
+      if (!session) {
+        console.log('No authenticated session, skipping immediate roster sync');
         return {
           success: false,
-          error: { error: 'No user found' },
+          error: { error: 'No authenticated session' },
         };
       }
 
@@ -173,7 +199,6 @@ class ApiClient {
         'sync-league-data',
         {
           body: {
-            userId,
             syncType: 'immediate-roster',
             yahooLeagueId,
             yahooTeamId,
@@ -209,6 +234,7 @@ class ApiClient {
   /**
    * Trigger periodic roster sync for all teams
    * Syncs all teams synchronously in the edge function
+   * Authentication is handled via Supabase JWT in Authorization header
    */
   async triggerPeriodicRosterSync(): Promise<ApiResponse<any>> {
     try {
@@ -221,12 +247,12 @@ class ApiClient {
         };
       }
 
-      const userId = await this.getUserId();
-      if (!userId) {
-        console.log('No user found, skipping roster sync');
+      const session = await getSupabaseSession();
+      if (!session) {
+        console.log('No authenticated session, skipping roster sync');
         return {
           success: false,
-          error: { error: 'No user found' },
+          error: { error: 'No authenticated session' },
         };
       }
 
@@ -238,7 +264,6 @@ class ApiClient {
         'sync-league-data',
         {
           body: {
-            userId,
             syncType: 'job-roster-all',
           },
         }
@@ -315,20 +340,20 @@ class ApiClient {
   /**
    * Get fantasy tips (waiver wire recommendations and start/bench advice)
    * Computes tips synchronously and returns them immediately
+   * Authentication is handled via Supabase JWT in Authorization header
    */
   async getTips(): Promise<ApiResponse<any>> {
     try {
-      const userId = await this.getUserId();
-      if (!userId) {
+      const session = await getSupabaseSession();
+      if (!session) {
         return {
           success: false,
-          error: { error: 'No user found' },
+          error: { error: 'No authenticated session' },
         };
       }
 
       const { data, error } = await supabase.functions.invoke('tips', {
         body: {
-          userId,
           mode: 'immediate',
         },
       });
@@ -357,6 +382,7 @@ class ApiClient {
   /**
    * Check initialization status for a user's leagues
    * Used to poll for completion during first-time setup
+   * Authentication is handled via Supabase JWT in Authorization header
    */
   async checkInitializationStatus(): Promise<
     ApiResponse<{
@@ -373,18 +399,18 @@ class ApiClient {
     }>
   > {
     try {
-      const userId = await this.getUserId();
-      if (!userId) {
+      const session = await getSupabaseSession();
+      if (!session) {
         return {
           success: false,
-          error: { error: 'No user found' },
+          error: { error: 'No authenticated session' },
         };
       }
 
       const { data, error } = await supabase.functions.invoke(
         'check-initialization-status',
         {
-          body: { userId },
+          body: {},
         }
       );
 
@@ -412,15 +438,16 @@ class ApiClient {
   /**
    * Trigger periodic tips refresh via VM job
    * Creates a job in the database for the VM to process asynchronously
+   * Authentication is handled via Supabase JWT in Authorization header
    */
   async triggerPeriodicTipsRefresh(): Promise<ApiResponse<any>> {
     try {
-      const userId = await this.getUserId();
-      if (!userId) {
-        console.log('No user found, skipping tips refresh job');
+      const session = await getSupabaseSession();
+      if (!session) {
+        console.log('No authenticated session, skipping tips refresh job');
         return {
           success: false,
-          error: { error: 'No user found' },
+          error: { error: 'No authenticated session' },
         };
       }
 
@@ -428,7 +455,6 @@ class ApiClient {
 
       const { data, error } = await supabase.functions.invoke('tips', {
         body: {
-          userId,
           mode: 'job',
         },
       });
@@ -459,21 +485,19 @@ class ApiClient {
   }
 
   /**
-   * Get user ID from Chrome storage
+   * Get user ID from the current Supabase session
+   * Used internally when user ID is needed for local operations
    */
-  private async getUserId(): Promise<string | null> {
+  async getUserId(): Promise<string | null> {
     try {
-      const result = await chrome.storage.local.get(['yahoo_user']);
-      const user = result.yahoo_user;
-
-      if (!user || !user.id) {
-        console.error('No user found');
+      const session = await getSupabaseSession();
+      if (!session?.user?.id) {
+        console.error('No authenticated session or user ID');
         return null;
       }
-
-      return user.id;
+      return session.user.id;
     } catch (error) {
-      console.error('Error getting user ID:', error);
+      console.error('Error getting user ID from session:', error);
       return null;
     }
   }

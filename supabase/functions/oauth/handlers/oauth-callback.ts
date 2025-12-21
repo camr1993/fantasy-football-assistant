@@ -315,6 +315,70 @@ export async function handleOAuthCallback(req: Request) {
       });
     }
 
+    // Generate a Supabase session for the user
+    // We use generateLink + verifyOtp to create a session from the admin SDK
+    const sessionEmail = user.user?.email;
+    if (!sessionEmail) {
+      logger.error('No email found for user after creation/update');
+      return new Response('User email not found', {
+        status: 500,
+        headers: { ...corsHeaders },
+      });
+    }
+
+    logger.info('Generating Supabase session for user', {
+      userId: user.user?.id,
+      email: sessionEmail,
+    });
+
+    const { data: linkData, error: linkError } =
+      await supabase.auth.admin.generateLink({
+        type: 'magiclink',
+        email: sessionEmail,
+      });
+
+    if (linkError || !linkData?.properties?.hashed_token) {
+      logger.error('Failed to generate session link', { error: linkError });
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: 'Failed to generate session',
+          error: linkError?.message || 'No hashed token generated',
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    // Verify the OTP to create a session
+    const { data: sessionData, error: sessionError } =
+      await supabase.auth.verifyOtp({
+        token_hash: linkData.properties.hashed_token,
+        type: 'magiclink',
+      });
+
+    if (sessionError || !sessionData.session) {
+      logger.error('Failed to verify OTP for session', { error: sessionError });
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: 'Failed to create session',
+          error: sessionError?.message || 'No session created',
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    logger.info('Supabase session created successfully', {
+      userId: user.user?.id,
+      expiresAt: sessionData.session.expires_at,
+    });
+
     // Ensure user profile exists (create if new user, update if existing)
     const userId = user.user?.id;
     if (userId) {
@@ -410,7 +474,8 @@ export async function handleOAuthCallback(req: Request) {
       logger.info('First-time user check', { userId, isFirstTimeUser });
     }
 
-    // Return success response with user info and tokens
+    // Return success response with user info and Supabase session
+    // Note: Yahoo tokens are NOT returned - they stay server-side in user_metadata
     timer.end();
     return new Response(
       JSON.stringify({
@@ -421,10 +486,12 @@ export async function handleOAuthCallback(req: Request) {
           id: user.user?.id,
           email: user.user?.email,
           name: user.user?.user_metadata?.name,
-          yahoo_access_token: user.user?.user_metadata?.yahoo_access_token,
-          yahoo_refresh_token: user.user?.user_metadata?.yahoo_refresh_token,
-          yahoo_token_expires_at:
-            user.user?.user_metadata?.yahoo_token_expires_at,
+        },
+        session: {
+          access_token: sessionData.session.access_token,
+          refresh_token: sessionData.session.refresh_token,
+          expires_at: sessionData.session.expires_at,
+          expires_in: sessionData.session.expires_in,
         },
       }),
       {
