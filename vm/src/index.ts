@@ -1,6 +1,6 @@
 import { logger, performance } from '../../supabase/functions/utils/logger.ts';
 import { supabase } from '../../supabase/functions/utils/supabase.ts';
-import { getUserTokens } from '../../supabase/functions/utils/userTokenManager.ts';
+import { getYahooUserTokens } from '../../supabase/functions/utils/userTokenManager.ts';
 
 // Import all sync functions
 import { syncAllPlayers } from './sync-functions/playerSync.ts';
@@ -230,7 +230,7 @@ async function runJob(job: Job): Promise<boolean> {
       });
     }
 
-    const userTokens = await getUserTokens(userId);
+    const userTokens = await getYahooUserTokens(userId);
     if (!userTokens) {
       throw new Error(`Failed to get Yahoo tokens for user ${userId}`);
     }

@@ -1,6 +1,11 @@
 import { useEffect, useState, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import { apiClient } from '../api/client';
+import {
+  supabase,
+  getSupabaseSession,
+  signOutSupabase,
+} from '../supabaseClient';
 
 // Estimated times in milliseconds
 const FIRST_TIME_USER_ESTIMATED_MS = 120000; // 2 minutes for first-time users
@@ -96,6 +101,34 @@ function Popup() {
   useEffect(() => {
     checkAuthStatus();
 
+    // Listen for Supabase auth state changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event, session?.user?.id);
+
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setIsAuthenticated(false);
+        stopAnimation();
+        setInitProgress({
+          status: 'idle',
+          percentage: 0,
+          currentStep: '',
+        });
+      } else if (event === 'TOKEN_REFRESHED') {
+        console.log('Session token refreshed');
+      } else if (event === 'SIGNED_IN' && session?.user) {
+        // Update user state when signed in
+        setUser({
+          id: session.user.id,
+          email: session.user.email,
+          name: session.user.user_metadata?.name,
+        });
+        setIsAuthenticated(true);
+      }
+    });
+
     // Listen for storage changes from background script (completion signal)
     const storageListener = (
       changes: { [key: string]: chrome.storage.StorageChange },
@@ -129,23 +162,27 @@ function Popup() {
     chrome.storage.onChanged.addListener(storageListener);
 
     return () => {
+      subscription.unsubscribe();
       chrome.storage.onChanged.removeListener(storageListener);
     };
   }, []);
 
   async function checkAuthStatus() {
-    // Check if user is already authenticated
-    // This could be stored in chrome.storage.local or checked via API
+    // Check if user has an active Supabase session
     try {
-      const result = await chrome.storage.local.get([
-        'yahoo_user',
-        'initialization_progress',
-      ]);
-      if (result.yahoo_user) {
-        setUser(result.yahoo_user);
+      const session = await getSupabaseSession();
+
+      if (session?.user) {
+        // User has an active session
+        setUser({
+          id: session.user.id,
+          email: session.user.email,
+          name: session.user.user_metadata?.name,
+        });
         setIsAuthenticated(true);
 
         // Check if there's ongoing initialization from storage
+        const result = await chrome.storage.local.get(['initialization_progress']);
         if (result.initialization_progress) {
           const storedProgress = result.initialization_progress;
 
@@ -253,12 +290,12 @@ function Popup() {
       );
 
       if (response.success && response.data?.user) {
+        // Session is automatically set by apiClient.exchangeOAuthCode via setSupabaseSession
+        // The onAuthStateChange listener will update the user state
         setUser(response.data.user);
         setIsAuthenticated(true);
         setError(null);
         setAuthCode('');
-        // Store user data in chrome storage
-        chrome.storage.local.set({ yahoo_user: response.data.user });
         // Clean up OAuth session data
         chrome.storage.local.remove(['oauth_nonce', 'oauth_timestamp']);
 
@@ -281,13 +318,15 @@ function Popup() {
     }
   }
 
-  function signOut() {
+  async function signOut() {
     // Stop any running animation
     stopAnimation();
 
-    // Clear all cached data from Chrome storage
+    // Sign out from Supabase (clears session from chrome.storage via adapter)
+    await signOutSupabase();
+
+    // Clear other cached data from Chrome storage
     chrome.storage.local.remove([
-      'yahoo_user',
       // Tips cache (background.ts)
       'tips_data',
       'player_recommendations',
@@ -300,6 +339,8 @@ function Popup() {
       // Initialization progress
       'initialization_progress',
     ]);
+
+    // State updates will be handled by onAuthStateChange listener
     setUser(null);
     setIsAuthenticated(false);
     setInitProgress({

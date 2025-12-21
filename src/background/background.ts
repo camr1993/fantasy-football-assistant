@@ -1,15 +1,24 @@
 // Background script for Chrome extension
 import { apiClient } from '../api/client';
+import { supabase } from '../supabaseClient';
 import type { TipsResponse, PlayerRecommendationsMap } from '../types/tips';
 
-chrome.runtime.onInstalled.addListener(() => {
-  console.log('Fantasy Assistant installed!');
+// Listen for auth state changes in the background
+supabase.auth.onAuthStateChange((event, session) => {
+  console.log('Background: Auth state changed:', event);
 
-  // Set up periodic roster sync (every 120 minutes)
-  chrome.alarms.create('roster-sync', { periodInMinutes: 120 });
-
-  // Note: init-status-poll alarm is created dynamically only when initialization starts
-  // (see startInitializationPolling function)
+  if (event === 'SIGNED_OUT') {
+    console.log('User signed out, stopping background tasks');
+    // Clear any pending alarms
+    chrome.alarms.clear('roster-sync');
+    chrome.alarms.clear('init-status-poll');
+  } else if (event === 'TOKEN_REFRESHED') {
+    console.log('Background: Session token refreshed');
+  } else if (event === 'SIGNED_IN') {
+    console.log('Background: User signed in, starting periodic sync alarm');
+    // Re-create the periodic sync alarm
+    chrome.alarms.create('roster-sync', { periodInMinutes: 120 });
+  }
 });
 
 // Listen for tab updates to detect when user navigates to Yahoo Fantasy Football
