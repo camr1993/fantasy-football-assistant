@@ -1,4 +1,74 @@
 import type { PlayerGroup } from './types.ts';
+import {
+  calculateScoreBreakdown,
+  comparePlayerBreakdowns,
+  generateDetailedComparisonReason,
+  getTopFactors,
+} from './scoreBreakdown.ts';
+
+/**
+ * Build a score breakdown from player's normalized stats
+ */
+function buildPlayerBreakdown(player: PlayerGroup) {
+  const normalizedStats = player.normalizedStats;
+  if (!normalizedStats) {
+    return {
+      playerId: player.player_id,
+      position: player.position,
+      weightedScore: player.weighted_score,
+      components: [],
+    };
+  }
+
+  // Convert NormalizedStatsData to the format expected by calculateScoreBreakdown
+  const leagueCalcs = {
+    player_id: player.player_id,
+    recent_mean_norm: normalizedStats.recent_mean_norm,
+    recent_std_norm: normalizedStats.recent_std_norm,
+    weighted_score: player.weighted_score,
+  };
+
+  const playerStats = {
+    player_id: player.player_id,
+    passing_efficiency_3wk_avg_norm:
+      normalizedStats.passing_efficiency_3wk_avg_norm,
+    turnovers_3wk_avg_norm: normalizedStats.turnovers_3wk_avg_norm,
+    rushing_upside_3wk_avg_norm: normalizedStats.rushing_upside_3wk_avg_norm,
+    targets_per_game_3wk_avg_norm:
+      normalizedStats.targets_per_game_3wk_avg_norm,
+    catch_rate_3wk_avg_norm: normalizedStats.catch_rate_3wk_avg_norm,
+    yards_per_target_3wk_avg_norm:
+      normalizedStats.yards_per_target_3wk_avg_norm,
+    weighted_opportunity_3wk_avg_norm:
+      normalizedStats.weighted_opportunity_3wk_avg_norm,
+    touchdown_production_3wk_avg_norm:
+      normalizedStats.touchdown_production_3wk_avg_norm,
+    receiving_profile_3wk_avg_norm:
+      normalizedStats.receiving_profile_3wk_avg_norm,
+    yards_per_touch_3wk_avg_norm: normalizedStats.yards_per_touch_3wk_avg_norm,
+    receiving_touchdowns_3wk_avg_norm:
+      normalizedStats.receiving_touchdowns_3wk_avg_norm,
+    fg_profile_3wk_avg_norm: normalizedStats.fg_profile_3wk_avg_norm,
+    fg_pat_misses_3wk_avg_norm: normalizedStats.fg_pat_misses_3wk_avg_norm,
+    fg_attempts_3wk_avg_norm: normalizedStats.fg_attempts_3wk_avg_norm,
+    sacks_per_game_3wk_avg_norm: normalizedStats.sacks_per_game_3wk_avg_norm,
+    turnovers_forced_3wk_avg_norm:
+      normalizedStats.turnovers_forced_3wk_avg_norm,
+    dst_tds_3wk_avg_norm: normalizedStats.dst_tds_3wk_avg_norm,
+    points_allowed_3wk_avg_norm: normalizedStats.points_allowed_3wk_avg_norm,
+    yards_allowed_3wk_avg_norm: normalizedStats.yards_allowed_3wk_avg_norm,
+    block_kicks_3wk_avg_norm: normalizedStats.block_kicks_3wk_avg_norm,
+    safeties_3wk_avg_norm: normalizedStats.safeties_3wk_avg_norm,
+  };
+
+  return calculateScoreBreakdown(
+    player.player_id,
+    player.position,
+    leagueCalcs,
+    playerStats,
+    0 // opponent difficulty not available in current data flow
+  );
+}
 
 /**
  * Generate detailed reason for starting a player at their position
@@ -9,16 +79,61 @@ export function generateStartReason(
   rank: number,
   startingSlots: number
 ): string {
-  const { stats, position, weighted_score } = player;
-  const worsePlayers = sortedPlayers.slice(rank + 1, startingSlots);
+  const { position, weighted_score, name } = player;
 
-  let reason = `Ranked #${rank + 1} of ${sortedPlayers.length} ${position}s with weighted score ${weighted_score.toFixed(2)} (top ${startingSlots} should start). `;
+  // Find the best player currently not starting (who should be starting)
+  const playerToBenchIndex = sortedPlayers.findIndex(
+    (p, idx) =>
+      idx >= startingSlots &&
+      p.slot &&
+      !['BENCH', 'IR', 'BN'].includes(p.slot.toUpperCase())
+  );
 
-  reason += getPositionStats(position, stats, player.fantasy_points, 'start');
+  // Or find the worst starter (last player who should start)
+  const worstStarterIndex = Math.min(
+    startingSlots - 1,
+    sortedPlayers.length - 1
+  );
+  const comparisonPlayerIndex =
+    playerToBenchIndex >= 0 ? playerToBenchIndex : worstStarterIndex;
 
-  if (worsePlayers.length > 0) {
-    const worsePlayer = worsePlayers[0];
-    reason += `Better than ${worsePlayer.name} (${worsePlayer.weighted_score.toFixed(2)} vs ${weighted_score.toFixed(2)}).`;
+  if (comparisonPlayerIndex >= 0 && comparisonPlayerIndex !== rank) {
+    const comparisonPlayer = sortedPlayers[comparisonPlayerIndex];
+
+    // Build breakdowns and compare
+    const playerBreakdown = buildPlayerBreakdown(player);
+    const comparisonBreakdown = buildPlayerBreakdown(comparisonPlayer);
+
+    if (
+      playerBreakdown.components.length > 0 &&
+      comparisonBreakdown.components.length > 0
+    ) {
+      const comparison = comparePlayerBreakdowns(
+        playerBreakdown,
+        comparisonBreakdown
+      );
+      return generateDetailedComparisonReason(
+        comparison,
+        name,
+        comparisonPlayer.name,
+        true
+      );
+    }
+  }
+
+  // Fallback to simpler reason with score driver summary
+  const breakdown = buildPlayerBreakdown(player);
+  const topFactors = getTopFactors(breakdown, 2);
+
+  let reason = `Ranked #${rank + 1} ${position} with score ${weighted_score.toFixed(2)}. `;
+
+  if (topFactors.length > 0) {
+    const factorLabels = topFactors.map((f) => f.label.toLowerCase());
+    if (factorLabels.length === 1) {
+      reason += `Strength: ${factorLabels[0]}.`;
+    } else {
+      reason += `Key strengths: ${factorLabels.join(' and ')}.`;
+    }
   }
 
   return reason.trim();
@@ -33,26 +148,45 @@ export function generateBenchReason(
   rank: number,
   startingSlots: number
 ): string {
-  const { stats, position, weighted_score } = player;
+  const { position, weighted_score, name } = player;
   const betterPlayers = sortedPlayers.slice(0, startingSlots);
 
-  let reason = `Ranked #${rank + 1} of ${sortedPlayers.length} ${position}s with weighted score ${weighted_score.toFixed(2)} (only top ${startingSlots} should start). `;
-
-  reason += getPositionStats(position, stats, player.fantasy_points, 'bench');
-
-  if (betterPlayers.length > 0) {
-    const betterPlayer = betterPlayers[betterPlayers.length - 1];
-    reason += `Worse than ${betterPlayer.name} (${weighted_score.toFixed(2)} vs ${betterPlayer.weighted_score.toFixed(2)}).`;
+  if (betterPlayers.length === 0) {
+    return `Ranked #${rank + 1} of ${sortedPlayers.length} ${position}s with weighted score ${weighted_score.toFixed(2)}.`;
   }
 
-  return reason.trim();
+  // Compare against the last starter (the threshold player)
+  const thresholdPlayer = betterPlayers[betterPlayers.length - 1];
+
+  // Build breakdowns and compare
+  const playerBreakdown = buildPlayerBreakdown(player);
+  const thresholdBreakdown = buildPlayerBreakdown(thresholdPlayer);
+
+  if (
+    playerBreakdown.components.length > 0 &&
+    thresholdBreakdown.components.length > 0
+  ) {
+    const comparison = comparePlayerBreakdowns(
+      thresholdBreakdown,
+      playerBreakdown
+    );
+    return generateDetailedComparisonReason(
+      comparison,
+      thresholdPlayer.name,
+      name,
+      false
+    );
+  }
+
+  // Fallback to generic reason
+  return `${name} trails ${thresholdPlayer.name} (${weighted_score.toFixed(2)} vs ${thresholdPlayer.weighted_score.toFixed(2)}). Not among top ${startingSlots} ${position}s.`;
 }
 
 /**
  * Generate reason for benching an injured player
  */
 export function generateInjuryReason(player: PlayerGroup): string {
-  return `${player.name} is currently injured and should not be started. Weighted score: ${player.weighted_score.toFixed(2)}.`;
+  return `${player.name} is currently injured and should not be started. Move to bench or IR slot.`;
 }
 
 /**
@@ -64,16 +198,50 @@ export function generateFlexStartReason(
   rank: number,
   flexSlots: number
 ): string {
-  const { stats, position, weighted_score } = player;
-  const worsePlayers = sortedPlayers.slice(rank + 1, flexSlots);
+  const { position, weighted_score, name } = player;
 
-  let reason = `Best available for W/R/T flex slot. Ranked #${rank + 1} of ${sortedPlayers.length} flex-eligible players (${position}) with weighted score ${weighted_score.toFixed(2)}. `;
+  // Find the player currently in the flex spot who shouldn't be
+  const playerToBenchIndex = sortedPlayers.findIndex(
+    (p, idx) =>
+      idx >= flexSlots &&
+      p.slot &&
+      !['BENCH', 'IR', 'BN'].includes(p.slot.toUpperCase())
+  );
 
-  reason += getFlexPositionStats(position, stats);
+  if (playerToBenchIndex >= 0) {
+    const comparisonPlayer = sortedPlayers[playerToBenchIndex];
 
-  if (worsePlayers.length > 0) {
-    const worsePlayer = worsePlayers[0];
-    reason += `Better flex option than ${worsePlayer.name} (${worsePlayer.position}) (${weighted_score.toFixed(2)} vs ${worsePlayer.weighted_score.toFixed(2)}).`;
+    // Build breakdowns and compare
+    const playerBreakdown = buildPlayerBreakdown(player);
+    const comparisonBreakdown = buildPlayerBreakdown(comparisonPlayer);
+
+    if (
+      playerBreakdown.components.length > 0 &&
+      comparisonBreakdown.components.length > 0
+    ) {
+      const comparison = comparePlayerBreakdowns(
+        playerBreakdown,
+        comparisonBreakdown
+      );
+      const detailedReason = generateDetailedComparisonReason(
+        comparison,
+        name,
+        comparisonPlayer.name,
+        true
+      );
+      return `Best flex option. ${detailedReason}`;
+    }
+  }
+
+  // Fallback reason
+  const breakdown = buildPlayerBreakdown(player);
+  const topFactors = getTopFactors(breakdown, 2);
+
+  let reason = `Best available for W/R/T flex. Ranked #${rank + 1} flex-eligible (${position}) with score ${weighted_score.toFixed(2)}. `;
+
+  if (topFactors.length > 0) {
+    const factorLabels = topFactors.map((f) => f.label.toLowerCase());
+    reason += `Strengths: ${factorLabels.join(', ')}.`;
   }
 
   return reason.trim();
@@ -88,145 +256,37 @@ export function generateFlexBenchReason(
   rank: number,
   flexSlots: number
 ): string {
-  const { stats, position, weighted_score } = player;
+  const { position, weighted_score, name } = player;
   const betterPlayers = sortedPlayers.slice(0, flexSlots);
 
-  let reason = `Not the best option for W/R/T flex slot. Ranked #${rank + 1} of ${sortedPlayers.length} flex-eligible players (${position}) with weighted score ${weighted_score.toFixed(2)}. `;
-
-  reason += getFlexPositionStats(position, stats);
-
-  if (betterPlayers.length > 0) {
-    const betterPlayer = betterPlayers[betterPlayers.length - 1];
-    reason += `Worse flex option than ${betterPlayer.name} (${betterPlayer.position}) (${weighted_score.toFixed(2)} vs ${betterPlayer.weighted_score.toFixed(2)}).`;
+  if (betterPlayers.length === 0) {
+    return `Ranked #${rank + 1} of ${sortedPlayers.length} flex-eligible players (${position}) with weighted score ${weighted_score.toFixed(2)}.`;
   }
 
-  return reason.trim();
-}
+  // Compare against the last flex starter
+  const thresholdPlayer = betterPlayers[betterPlayers.length - 1];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper functions for position-specific stats
-// ─────────────────────────────────────────────────────────────────────────────
+  // Build breakdowns and compare
+  const playerBreakdown = buildPlayerBreakdown(player);
+  const thresholdBreakdown = buildPlayerBreakdown(thresholdPlayer);
 
-function getPositionStats(
-  position: string,
-  stats: PlayerGroup['stats'],
-  fantasyPoints: number,
-  type: 'start' | 'bench'
-): string {
-  if (!stats) return '';
-
-  switch (position) {
-    case 'QB':
-      return getQBStats(stats, type);
-    case 'RB':
-      return getRBStats(stats, type);
-    case 'WR':
-    case 'TE':
-      return getReceiverStats(stats, type);
-    case 'K':
-    case 'DEF':
-      return `Projected fantasy points: ${fantasyPoints.toFixed(2)}. `;
-    default:
-      return '';
-  }
-}
-
-function getQBStats(
-  stats: NonNullable<PlayerGroup['stats']>,
-  type: 'start' | 'bench'
-): string {
-  const yards = stats.passing_yards || 0;
-  const tds = stats.passing_touchdowns || 0;
-  const ints = stats.interceptions || 0;
-
-  let result = `Projected: ${yards} pass yds, ${tds} TDs, ${ints} INTs. `;
-
-  if (type === 'start' && stats.passing_efficiency_3wk_avg) {
-    result += `3-wk passing efficiency: ${stats.passing_efficiency_3wk_avg.toFixed(2)}. `;
-  } else if (type === 'bench' && stats.turnovers_3wk_avg) {
-    result += `3-wk avg turnovers: ${stats.turnovers_3wk_avg.toFixed(2)}. `;
+  if (
+    playerBreakdown.components.length > 0 &&
+    thresholdBreakdown.components.length > 0
+  ) {
+    const comparison = comparePlayerBreakdowns(
+      thresholdBreakdown,
+      playerBreakdown
+    );
+    const detailedReason = generateDetailedComparisonReason(
+      comparison,
+      thresholdPlayer.name,
+      name,
+      false
+    );
+    return `Not best flex option. ${detailedReason}`;
   }
 
-  return result;
-}
-
-function getRBStats(
-  stats: NonNullable<PlayerGroup['stats']>,
-  type: 'start' | 'bench'
-): string {
-  const rushYds = stats.rushing_yards || 0;
-  const rushTDs = stats.rushing_touchdowns || 0;
-  const rec = stats.receptions || 0;
-  const recYds = stats.receiving_yards || 0;
-
-  let result =
-    type === 'start'
-      ? `Projected: ${rushYds} rush yds, ${rushTDs} rush TDs, ${rec} rec, ${recYds} rec yds. `
-      : `Projected: ${rushYds} rush yds, ${rushTDs} rush TDs, ${rec} rec. `;
-
-  if (stats.yards_per_touch_3wk_avg) {
-    result += `3-wk avg: ${stats.yards_per_touch_3wk_avg.toFixed(1)} yds/touch. `;
-  }
-
-  return result;
-}
-
-function getReceiverStats(
-  stats: NonNullable<PlayerGroup['stats']>,
-  type: 'start' | 'bench'
-): string {
-  const targets = stats.targets || 0;
-  const rec = stats.receptions || 0;
-  const recYds = stats.receiving_yards || 0;
-  const recTDs = stats.receiving_touchdowns || 0;
-
-  let result =
-    type === 'start'
-      ? `Projected: ${targets} targets, ${rec} rec, ${recYds} rec yds, ${recTDs} rec TDs. `
-      : `Projected: ${targets} targets, ${rec} rec, ${recYds} rec yds. `;
-
-  if (stats.targets_per_game_3wk_avg) {
-    result += `3-wk avg: ${stats.targets_per_game_3wk_avg.toFixed(1)} targets/game`;
-    if (type === 'start' && stats.yards_per_target_3wk_avg) {
-      result += `, ${stats.yards_per_target_3wk_avg.toFixed(1)} yds/target`;
-    }
-    result += '. ';
-  }
-
-  return result;
-}
-
-function getFlexPositionStats(
-  position: string,
-  stats: PlayerGroup['stats']
-): string {
-  if (!stats) return '';
-
-  if (position === 'RB') {
-    const rushYds = stats.rushing_yards || 0;
-    const rushTDs = stats.rushing_touchdowns || 0;
-    const rec = stats.receptions || 0;
-    const recYds = stats.receiving_yards || 0;
-
-    let result = `Projected: ${rushYds} rush yds, ${rushTDs} rush TDs, ${rec} rec, ${recYds} rec yds. `;
-    if (stats.yards_per_touch_3wk_avg) {
-      result += `3-wk avg: ${stats.yards_per_touch_3wk_avg.toFixed(1)} yds/touch. `;
-    }
-    return result;
-  }
-
-  if (position === 'WR' || position === 'TE') {
-    const targets = stats.targets || 0;
-    const rec = stats.receptions || 0;
-    const recYds = stats.receiving_yards || 0;
-    const recTDs = stats.receiving_touchdowns || 0;
-
-    let result = `Projected: ${targets} targets, ${rec} rec, ${recYds} rec yds, ${recTDs} rec TDs. `;
-    if (stats.targets_per_game_3wk_avg) {
-      result += `3-wk avg: ${stats.targets_per_game_3wk_avg.toFixed(1)} targets/game. `;
-    }
-    return result;
-  }
-
-  return '';
+  // Fallback
+  return `${name} (${position}) trails ${thresholdPlayer.name} (${thresholdPlayer.position}) for flex: ${weighted_score.toFixed(2)} vs ${thresholdPlayer.weighted_score.toFixed(2)}.`;
 }

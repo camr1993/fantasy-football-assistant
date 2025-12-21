@@ -8,6 +8,7 @@ import {
   fetchRosterScores,
   fetchPlayerStats,
   fetchInjuredPlayerIds,
+  fetchNormalizedStats,
 } from './dataFetchers.ts';
 import {
   generateStartReason,
@@ -46,10 +47,11 @@ export async function getStartBenchRecommendations(
 
   if (playerIds.length === 0) return [];
 
-  const [scoresMap, statsMap, injuredPlayerIds, rosterSlots] =
+  const [scoresMap, statsMap, normalizedStatsMap, injuredPlayerIds, rosterSlots] =
     await Promise.all([
       fetchRosterScores(leagueId, seasonYear, currentWeek, playerIds),
       fetchPlayerStats(seasonYear, currentWeek, playerIds),
+      fetchNormalizedStats(leagueId, seasonYear, currentWeek, playerIds),
       fetchInjuredPlayerIds(),
       getLeagueRosterSlots(leagueId),
     ]);
@@ -59,6 +61,7 @@ export async function getStartBenchRecommendations(
     rosterEntries,
     scoresMap,
     statsMap,
+    normalizedStatsMap,
     leagueId,
     leagueName
   );
@@ -87,6 +90,7 @@ function groupPlayersByPositionAndTeam(
   rosterEntries: RosterEntryResponse[],
   scoresMap: Map<string, { weighted_score: number; fantasy_points: number }>,
   statsMap: Map<string, PlayerGroup['stats']>,
+  normalizedStatsMap: Map<string, PlayerGroup['normalizedStats']>,
   leagueId: string,
   leagueName: string
 ): Map<string, PlayerGroup[]> {
@@ -97,6 +101,7 @@ function groupPlayersByPositionAndTeam(
     const team = entry.teams;
     const scoreData = scoresMap.get(entry.player_id);
     const stats = statsMap.get(entry.player_id);
+    const normalizedStats = normalizedStatsMap.get(entry.player_id);
 
     if (!player?.position || !scoreData || !team) continue;
 
@@ -119,6 +124,7 @@ function groupPlayersByPositionAndTeam(
       team_id: team.id,
       team_name: team.name,
       stats,
+      normalizedStats,
     });
   }
 

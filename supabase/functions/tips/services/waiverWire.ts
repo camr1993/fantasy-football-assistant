@@ -1,6 +1,12 @@
 import { logger } from '../../utils/logger.ts';
 import { supabase } from '../../utils/supabase.ts';
 import { extractYahooPlayerId } from '../utils/yahooPlayerId.ts';
+import {
+  calculateScoreBreakdown,
+  comparePlayerBreakdowns,
+  generateDetailedComparisonReason,
+  type PlayerScoreBreakdown,
+} from './startBench/scoreBreakdown.ts';
 
 export interface WaiverWirePlayer {
   position: string;
@@ -54,7 +60,7 @@ interface LeagueCalcWithPlayer {
     position: string;
     team: string;
     yahoo_player_id: string;
-  } | null;
+  };
 }
 
 interface WaiverWireRpcResult {
@@ -91,6 +97,39 @@ interface LeagueCalcScore {
   recent_std: number | null;
 }
 
+interface NormalizedStats {
+  player_id: string;
+  recent_mean_norm: number | null;
+  recent_std_norm: number | null;
+  // QB
+  passing_efficiency_3wk_avg_norm: number | null;
+  turnovers_3wk_avg_norm: number | null;
+  rushing_upside_3wk_avg_norm: number | null;
+  // WR/TE
+  targets_per_game_3wk_avg_norm: number | null;
+  catch_rate_3wk_avg_norm: number | null;
+  yards_per_target_3wk_avg_norm: number | null;
+  // RB
+  weighted_opportunity_3wk_avg_norm: number | null;
+  touchdown_production_3wk_avg_norm: number | null;
+  receiving_profile_3wk_avg_norm: number | null;
+  yards_per_touch_3wk_avg_norm: number | null;
+  // TE
+  receiving_touchdowns_3wk_avg_norm: number | null;
+  // K
+  fg_profile_3wk_avg_norm: number | null;
+  fg_pat_misses_3wk_avg_norm: number | null;
+  fg_attempts_3wk_avg_norm: number | null;
+  // DEF
+  sacks_per_game_3wk_avg_norm: number | null;
+  turnovers_forced_3wk_avg_norm: number | null;
+  dst_tds_3wk_avg_norm: number | null;
+  points_allowed_3wk_avg_norm: number | null;
+  yards_allowed_3wk_avg_norm: number | null;
+  block_kicks_3wk_avg_norm: number | null;
+  safeties_3wk_avg_norm: number | null;
+}
+
 interface RosteredPlayerWithScore {
   player_id: string;
   yahoo_player_id: string;
@@ -104,6 +143,11 @@ interface RosteredPlayerWithScore {
   recent_std: number | null;
   team_id: string;
   team_name: string;
+  normalizedStats?: NormalizedStats;
+}
+
+interface WaiverPlayerWithStats extends WaiverWirePlayer {
+  normalizedStats?: NormalizedStats;
 }
 
 /**
@@ -230,7 +274,9 @@ async function getWaiverWirePlayersFallback(
 
   // Filter and group by position
   const playersByPosition = new Map<string, WaiverWirePlayer[]>();
-  for (const calc of (leagueCalcsData as LeagueCalcWithPlayer[] | null) || []) {
+  for (const rawCalc of leagueCalcsData || []) {
+    // Cast through unknown to handle Supabase type inference quirks
+    const calc = rawCalc as unknown as LeagueCalcWithPlayer;
     const player = calc.players;
     if (
       !player ||
@@ -292,14 +338,39 @@ export async function getWaiverWireRecommendations(
     return [];
   }
 
-  // Group waiver wire players by position for easy lookup
-  const waiverByPosition = new Map<string, WaiverWirePlayer[]>();
+  // Collect all player IDs for normalized stats fetching
+  const allPlayerIds = [
+    ...waiverWirePlayers
+      .filter((p) => p.league_id === leagueId)
+      .map((p) => p.player_id),
+    ...rosteredPlayers.map((p) => p.player_id),
+  ];
+
+  // Fetch normalized stats for detailed reason generation
+  const normalizedStatsMap = await fetchNormalizedStatsForPlayers(
+    leagueId,
+    seasonYear,
+    currentWeek,
+    allPlayerIds
+  );
+
+  // Attach normalized stats to rostered players
+  for (const rostered of rosteredPlayers) {
+    rostered.normalizedStats = normalizedStatsMap.get(rostered.player_id);
+  }
+
+  // Group waiver wire players by position with normalized stats
+  const waiverByPosition = new Map<string, WaiverPlayerWithStats[]>();
   for (const player of waiverWirePlayers) {
     if (player.league_id !== leagueId) continue;
     if (!waiverByPosition.has(player.position)) {
       waiverByPosition.set(player.position, []);
     }
-    waiverByPosition.get(player.position)!.push(player);
+    const playerWithStats: WaiverPlayerWithStats = {
+      ...player,
+      normalizedStats: normalizedStatsMap.get(player.player_id),
+    };
+    waiverByPosition.get(player.position)!.push(playerWithStats);
   }
 
   const recommendations: WaiverWireRecommendation[] = [];
@@ -325,11 +396,7 @@ export async function getWaiverWireRecommendations(
       }
 
       if (shouldRecommend) {
-        const reason = generateWaiverWireReason(
-          waiverPlayer,
-          rostered,
-          currentWeek
-        );
+        const reason = generateWaiverWireReason(waiverPlayer, rostered);
         recommendations.push({
           waiver_player_id: waiverPlayer.player_id,
           waiver_yahoo_player_id: extractYahooPlayerId(
@@ -481,92 +548,292 @@ async function getRosteredPlayersWithScores(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Normalized stats fetching
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Fetch normalized stats for players
+ */
+async function fetchNormalizedStatsForPlayers(
+  leagueId: string,
+  seasonYear: number,
+  currentWeek: number,
+  playerIds: string[]
+): Promise<Map<string, NormalizedStats>> {
+  if (playerIds.length === 0) {
+    return new Map();
+  }
+
+  // Fetch league_calcs data (recent_mean_norm, recent_std_norm)
+  const { data: leagueCalcsData } = await supabase
+    .from('league_calcs')
+    .select('player_id, recent_mean_norm, recent_std_norm')
+    .eq('league_id', leagueId)
+    .eq('season_year', seasonYear)
+    .eq('week', currentWeek)
+    .in('player_id', playerIds);
+
+  // Fetch player_stats normalized data
+  const { data: playerStatsData } = await supabase
+    .from('player_stats')
+    .select(
+      `
+      player_id,
+      passing_efficiency_3wk_avg_norm,
+      turnovers_3wk_avg_norm,
+      rushing_upside_3wk_avg_norm,
+      targets_per_game_3wk_avg_norm,
+      catch_rate_3wk_avg_norm,
+      yards_per_target_3wk_avg_norm,
+      weighted_opportunity_3wk_avg_norm,
+      touchdown_production_3wk_avg_norm,
+      receiving_profile_3wk_avg_norm,
+      yards_per_touch_3wk_avg_norm,
+      receiving_touchdowns_3wk_avg_norm,
+      fg_profile_3wk_avg_norm,
+      fg_pat_misses_3wk_avg_norm,
+      fg_attempts_3wk_avg_norm,
+      sacks_per_game_3wk_avg_norm,
+      turnovers_forced_3wk_avg_norm,
+      dst_tds_3wk_avg_norm,
+      points_allowed_3wk_avg_norm,
+      yards_allowed_3wk_avg_norm,
+      block_kicks_3wk_avg_norm,
+      safeties_3wk_avg_norm
+    `
+    )
+    .eq('season_year', seasonYear)
+    .eq('week', currentWeek)
+    .eq('source', 'actual')
+    .in('player_id', playerIds);
+
+  // Build lookup maps
+  const leagueCalcsMap = new Map<
+    string,
+    { recent_mean_norm: number | null; recent_std_norm: number | null }
+  >();
+  for (const calc of leagueCalcsData || []) {
+    leagueCalcsMap.set(calc.player_id, {
+      recent_mean_norm: calc.recent_mean_norm,
+      recent_std_norm: calc.recent_std_norm,
+    });
+  }
+
+  const statsMap = new Map<string, NormalizedStats>();
+  for (const stat of playerStatsData || []) {
+    const leagueCalc = leagueCalcsMap.get(stat.player_id);
+    statsMap.set(stat.player_id, {
+      player_id: stat.player_id,
+      recent_mean_norm: leagueCalc?.recent_mean_norm ?? null,
+      recent_std_norm: leagueCalc?.recent_std_norm ?? null,
+      passing_efficiency_3wk_avg_norm:
+        stat.passing_efficiency_3wk_avg_norm ?? null,
+      turnovers_3wk_avg_norm: stat.turnovers_3wk_avg_norm ?? null,
+      rushing_upside_3wk_avg_norm: stat.rushing_upside_3wk_avg_norm ?? null,
+      targets_per_game_3wk_avg_norm: stat.targets_per_game_3wk_avg_norm ?? null,
+      catch_rate_3wk_avg_norm: stat.catch_rate_3wk_avg_norm ?? null,
+      yards_per_target_3wk_avg_norm: stat.yards_per_target_3wk_avg_norm ?? null,
+      weighted_opportunity_3wk_avg_norm:
+        stat.weighted_opportunity_3wk_avg_norm ?? null,
+      touchdown_production_3wk_avg_norm:
+        stat.touchdown_production_3wk_avg_norm ?? null,
+      receiving_profile_3wk_avg_norm:
+        stat.receiving_profile_3wk_avg_norm ?? null,
+      yards_per_touch_3wk_avg_norm: stat.yards_per_touch_3wk_avg_norm ?? null,
+      receiving_touchdowns_3wk_avg_norm:
+        stat.receiving_touchdowns_3wk_avg_norm ?? null,
+      fg_profile_3wk_avg_norm: stat.fg_profile_3wk_avg_norm ?? null,
+      fg_pat_misses_3wk_avg_norm: stat.fg_pat_misses_3wk_avg_norm ?? null,
+      fg_attempts_3wk_avg_norm: stat.fg_attempts_3wk_avg_norm ?? null,
+      sacks_per_game_3wk_avg_norm: stat.sacks_per_game_3wk_avg_norm ?? null,
+      turnovers_forced_3wk_avg_norm: stat.turnovers_forced_3wk_avg_norm ?? null,
+      dst_tds_3wk_avg_norm: stat.dst_tds_3wk_avg_norm ?? null,
+      points_allowed_3wk_avg_norm: stat.points_allowed_3wk_avg_norm ?? null,
+      yards_allowed_3wk_avg_norm: stat.yards_allowed_3wk_avg_norm ?? null,
+      block_kicks_3wk_avg_norm: stat.block_kicks_3wk_avg_norm ?? null,
+      safeties_3wk_avg_norm: stat.safeties_3wk_avg_norm ?? null,
+    });
+  }
+
+  // Also add entries for players who have league_calcs but no player_stats
+  for (const [playerId, leagueCalc] of leagueCalcsMap) {
+    if (!statsMap.has(playerId)) {
+      statsMap.set(playerId, {
+        player_id: playerId,
+        recent_mean_norm: leagueCalc.recent_mean_norm,
+        recent_std_norm: leagueCalc.recent_std_norm,
+        passing_efficiency_3wk_avg_norm: null,
+        turnovers_3wk_avg_norm: null,
+        rushing_upside_3wk_avg_norm: null,
+        targets_per_game_3wk_avg_norm: null,
+        catch_rate_3wk_avg_norm: null,
+        yards_per_target_3wk_avg_norm: null,
+        weighted_opportunity_3wk_avg_norm: null,
+        touchdown_production_3wk_avg_norm: null,
+        receiving_profile_3wk_avg_norm: null,
+        yards_per_touch_3wk_avg_norm: null,
+        receiving_touchdowns_3wk_avg_norm: null,
+        fg_profile_3wk_avg_norm: null,
+        fg_pat_misses_3wk_avg_norm: null,
+        fg_attempts_3wk_avg_norm: null,
+        sacks_per_game_3wk_avg_norm: null,
+        turnovers_forced_3wk_avg_norm: null,
+        dst_tds_3wk_avg_norm: null,
+        points_allowed_3wk_avg_norm: null,
+        yards_allowed_3wk_avg_norm: null,
+        block_kicks_3wk_avg_norm: null,
+        safeties_3wk_avg_norm: null,
+      });
+    }
+  }
+
+  return statsMap;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Reason generation for waiver wire recommendations
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Generate a detailed reason for adding a waiver wire player over a rostered player
+ * Build a score breakdown from normalized stats
  */
-function generateWaiverWireReason(
-  waiverPlayer: WaiverWirePlayer,
-  rosteredPlayer: RosteredPlayerWithScore,
-  _currentWeek: number
-): string {
-  let reason = '';
-
-  // Handle case where rostered player has no score data
-  if (rosteredPlayer.weighted_score === null) {
-    reason = `${waiverPlayer.name} (${waiverPlayer.team}) has a weighted score of ${waiverPlayer.weighted_score.toFixed(2)}, `;
-    reason += `while ${rosteredPlayer.name} (${rosteredPlayer.team}) has no scoring data this season. `;
-    reason += `Consider picking up ${waiverPlayer.name} as a more reliable option. `;
-  } else {
-    const scoreDiff =
-      waiverPlayer.weighted_score - rosteredPlayer.weighted_score;
-    const percentImprovement =
-      (scoreDiff / rosteredPlayer.weighted_score) * 100;
-
-    reason = `${waiverPlayer.name} (${waiverPlayer.team}) has a higher weighted score than ${rosteredPlayer.name} (${rosteredPlayer.team}): `;
-    reason += `${waiverPlayer.weighted_score.toFixed(2)} vs ${rosteredPlayer.weighted_score.toFixed(2)} `;
-    reason += `(+${scoreDiff.toFixed(2)} points, ${percentImprovement.toFixed(1)}% improvement). `;
+function buildScoreBreakdown(
+  playerId: string,
+  position: string,
+  weightedScore: number,
+  normalizedStats?: NormalizedStats
+): PlayerScoreBreakdown {
+  if (!normalizedStats) {
+    return {
+      playerId,
+      position,
+      weightedScore,
+      components: [],
+    };
   }
 
-  // Add context based on position
-  reason += getPositionContext(waiverPlayer.position, rosteredPlayer);
+  const leagueCalcs = {
+    player_id: playerId,
+    recent_mean_norm: normalizedStats.recent_mean_norm,
+    recent_std_norm: normalizedStats.recent_std_norm,
+    weighted_score: weightedScore,
+  };
 
-  // Add slot context if rostered player is on bench
-  const benchSlots = ['BENCH', 'BN', 'IR'];
-  if (benchSlots.includes(rosteredPlayer.slot?.toUpperCase() || '')) {
-    reason += `${rosteredPlayer.name} is currently on your bench. `;
-  }
+  const playerStats = {
+    player_id: playerId,
+    passing_efficiency_3wk_avg_norm:
+      normalizedStats.passing_efficiency_3wk_avg_norm,
+    turnovers_3wk_avg_norm: normalizedStats.turnovers_3wk_avg_norm,
+    rushing_upside_3wk_avg_norm: normalizedStats.rushing_upside_3wk_avg_norm,
+    targets_per_game_3wk_avg_norm:
+      normalizedStats.targets_per_game_3wk_avg_norm,
+    catch_rate_3wk_avg_norm: normalizedStats.catch_rate_3wk_avg_norm,
+    yards_per_target_3wk_avg_norm:
+      normalizedStats.yards_per_target_3wk_avg_norm,
+    weighted_opportunity_3wk_avg_norm:
+      normalizedStats.weighted_opportunity_3wk_avg_norm,
+    touchdown_production_3wk_avg_norm:
+      normalizedStats.touchdown_production_3wk_avg_norm,
+    receiving_profile_3wk_avg_norm:
+      normalizedStats.receiving_profile_3wk_avg_norm,
+    yards_per_touch_3wk_avg_norm: normalizedStats.yards_per_touch_3wk_avg_norm,
+    receiving_touchdowns_3wk_avg_norm:
+      normalizedStats.receiving_touchdowns_3wk_avg_norm,
+    fg_profile_3wk_avg_norm: normalizedStats.fg_profile_3wk_avg_norm,
+    fg_pat_misses_3wk_avg_norm: normalizedStats.fg_pat_misses_3wk_avg_norm,
+    fg_attempts_3wk_avg_norm: normalizedStats.fg_attempts_3wk_avg_norm,
+    sacks_per_game_3wk_avg_norm: normalizedStats.sacks_per_game_3wk_avg_norm,
+    turnovers_forced_3wk_avg_norm:
+      normalizedStats.turnovers_forced_3wk_avg_norm,
+    dst_tds_3wk_avg_norm: normalizedStats.dst_tds_3wk_avg_norm,
+    points_allowed_3wk_avg_norm: normalizedStats.points_allowed_3wk_avg_norm,
+    yards_allowed_3wk_avg_norm: normalizedStats.yards_allowed_3wk_avg_norm,
+    block_kicks_3wk_avg_norm: normalizedStats.block_kicks_3wk_avg_norm,
+    safeties_3wk_avg_norm: normalizedStats.safeties_3wk_avg_norm,
+  };
 
-  // Add consistency context if available
-  if (
-    rosteredPlayer.recent_std !== null &&
-    rosteredPlayer.recent_mean !== null
-  ) {
-    const cv =
-      rosteredPlayer.recent_std / Math.max(rosteredPlayer.recent_mean, 0.1);
-    if (cv > 0.5) {
-      reason += `${rosteredPlayer.name} has been inconsistent recently (high variance). `;
-    }
-  }
-
-  return reason.trim();
+  return calculateScoreBreakdown(
+    playerId,
+    position,
+    leagueCalcs,
+    playerStats,
+    0
+  );
 }
 
 /**
- * Get position-specific context for the recommendation
+ * Generate a detailed reason for adding a waiver wire player over a rostered player
+ * Uses the same detailed score breakdown comparison as start/bench recommendations
  */
-function getPositionContext(
-  position: string,
+function generateWaiverWireReason(
+  waiverPlayer: WaiverPlayerWithStats,
   rosteredPlayer: RosteredPlayerWithScore
 ): string {
-  switch (position) {
-    case 'QB':
-      return `Consider upgrading your QB depth. `;
-    case 'RB':
-      if (
-        rosteredPlayer.recent_mean !== null &&
-        rosteredPlayer.recent_mean < 8
-      ) {
-        return `${rosteredPlayer.name} has been underperforming at RB. `;
-      }
-      return `This RB could provide better production. `;
-    case 'WR':
-      if (
-        rosteredPlayer.recent_mean !== null &&
-        rosteredPlayer.recent_mean < 6
-      ) {
-        return `${rosteredPlayer.name} hasn't seen much production at WR. `;
-      }
-      return `This WR offers more upside. `;
-    case 'TE':
-      return `TE is a thin position - consider this upgrade. `;
-    case 'K':
-      return `Kicker streaming can boost your weekly ceiling. `;
-    case 'DEF':
-      return `Consider streaming this defense for a better matchup. `;
-    default:
-      return '';
+  // Handle case where rostered player has no score data
+  if (rosteredPlayer.weighted_score === null) {
+    const waiverBreakdown = buildScoreBreakdown(
+      waiverPlayer.player_id,
+      waiverPlayer.position,
+      waiverPlayer.weighted_score,
+      waiverPlayer.normalizedStats
+    );
+
+    // Get top factors for the waiver player
+    const topFactors = waiverBreakdown.components
+      .filter((c) => c.contribution > 0)
+      .slice(0, 2)
+      .map((c) => c.label.toLowerCase());
+
+    let reason = `${waiverPlayer.name} (${waiverPlayer.team}) scores ${waiverPlayer.weighted_score.toFixed(2)}, `;
+    reason += `while ${rosteredPlayer.name} (${rosteredPlayer.team}) has no scoring data. `;
+
+    if (topFactors.length > 0) {
+      reason += `${waiverPlayer.name}'s score is driven by ${topFactors.join(' and ')}.`;
+    }
+
+    return reason.trim();
   }
+
+  // Build breakdowns for both players
+  const waiverBreakdown = buildScoreBreakdown(
+    waiverPlayer.player_id,
+    waiverPlayer.position,
+    waiverPlayer.weighted_score,
+    waiverPlayer.normalizedStats
+  );
+
+  const rosteredBreakdown = buildScoreBreakdown(
+    rosteredPlayer.player_id,
+    rosteredPlayer.position,
+    rosteredPlayer.weighted_score,
+    rosteredPlayer.normalizedStats
+  );
+
+  // If both have component data, use detailed comparison
+  if (
+    waiverBreakdown.components.length > 0 &&
+    rosteredBreakdown.components.length > 0
+  ) {
+    const comparison = comparePlayerBreakdowns(
+      waiverBreakdown,
+      rosteredBreakdown
+    );
+    return generateDetailedComparisonReason(
+      comparison,
+      waiverPlayer.name,
+      rosteredPlayer.name,
+      true // isStartRecommendation - we're recommending to add (start) the waiver player
+    );
+  }
+
+  // Fallback to simpler reason if no component data
+  const scoreDiff = waiverPlayer.weighted_score - rosteredPlayer.weighted_score;
+  const percentImprovement =
+    (scoreDiff / Math.abs(rosteredPlayer.weighted_score)) * 100;
+
+  let reason = `${waiverPlayer.name} (${waiverPlayer.team}) outscores ${rosteredPlayer.name} (${rosteredPlayer.team}): `;
+  reason += `${waiverPlayer.weighted_score.toFixed(2)} vs ${rosteredPlayer.weighted_score.toFixed(2)} `;
+  reason += `(+${scoreDiff.toFixed(2)}, ${percentImprovement.toFixed(0)}% better).`;
+
+  return reason.trim();
 }

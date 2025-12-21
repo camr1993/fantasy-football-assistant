@@ -353,13 +353,13 @@ export async function calculateWeightedScoresForLeagueRB(
 
     // Calculate weighted score using the formula
     const weightedScore =
-      POSITION_WEIGHTS.RB.recent_mean * recentMean +
-      POSITION_WEIGHTS.RB.volatility * recentStd +
-      POSITION_WEIGHTS.RB.weighted_opportunity * weightedOpportunityNorm +
-      POSITION_WEIGHTS.RB.touchdown_production * touchdownProductionNorm +
-      POSITION_WEIGHTS.RB.receiving_profile * receivingProfileNorm +
-      POSITION_WEIGHTS.RB.efficiency * efficiencyNorm +
-      POSITION_WEIGHTS.RB.opponent_difficulty * opponentDifficulty;
+      POSITION_WEIGHTS.RB.recent_mean.weight * recentMean +
+      POSITION_WEIGHTS.RB.volatility.weight * recentStd +
+      POSITION_WEIGHTS.RB.weighted_opportunity.weight * weightedOpportunityNorm +
+      POSITION_WEIGHTS.RB.touchdown_production.weight * touchdownProductionNorm +
+      POSITION_WEIGHTS.RB.receiving_profile.weight * receivingProfileNorm +
+      POSITION_WEIGHTS.RB.efficiency.weight * efficiencyNorm +
+      POSITION_WEIGHTS.RB.opponent_difficulty.weight * opponentDifficulty;
 
     updates.push({
       player_id: player.player_id,

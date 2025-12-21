@@ -3,6 +3,7 @@ import type {
   RosterEntryResponse,
   RosterScore,
   PlayerStatsData,
+  NormalizedStatsData,
 } from './types.ts';
 
 /**
@@ -162,4 +163,133 @@ export async function fetchInjuredPlayerIds(): Promise<Set<string>> {
     .in('status', ['O', 'IR', 'PUP-R', 'D', 'SUSP', 'NFI-R', 'IR-R']);
 
   return new Set((data || []).map((ip: { player_id: string }) => ip.player_id));
+}
+
+/**
+ * Fetch normalized stats for score breakdown analysis
+ */
+export async function fetchNormalizedStats(
+  leagueId: string,
+  seasonYear: number,
+  currentWeek: number,
+  playerIds: string[]
+): Promise<Map<string, NormalizedStatsData>> {
+  if (playerIds.length === 0) {
+    return new Map();
+  }
+
+  // Fetch league_calcs data (recent_mean_norm, recent_std_norm)
+  const { data: leagueCalcsData } = await supabase
+    .from('league_calcs')
+    .select('player_id, recent_mean_norm, recent_std_norm')
+    .eq('league_id', leagueId)
+    .eq('season_year', seasonYear)
+    .eq('week', currentWeek)
+    .in('player_id', playerIds);
+
+  // Fetch player_stats normalized data
+  const { data: playerStatsData } = await supabase
+    .from('player_stats')
+    .select(`
+      player_id,
+      passing_efficiency_3wk_avg_norm,
+      turnovers_3wk_avg_norm,
+      rushing_upside_3wk_avg_norm,
+      targets_per_game_3wk_avg_norm,
+      catch_rate_3wk_avg_norm,
+      yards_per_target_3wk_avg_norm,
+      weighted_opportunity_3wk_avg_norm,
+      touchdown_production_3wk_avg_norm,
+      receiving_profile_3wk_avg_norm,
+      yards_per_touch_3wk_avg_norm,
+      receiving_touchdowns_3wk_avg_norm,
+      fg_profile_3wk_avg_norm,
+      fg_pat_misses_3wk_avg_norm,
+      fg_attempts_3wk_avg_norm,
+      sacks_per_game_3wk_avg_norm,
+      turnovers_forced_3wk_avg_norm,
+      dst_tds_3wk_avg_norm,
+      points_allowed_3wk_avg_norm,
+      yards_allowed_3wk_avg_norm,
+      block_kicks_3wk_avg_norm,
+      safeties_3wk_avg_norm
+    `)
+    .eq('season_year', seasonYear)
+    .eq('week', currentWeek)
+    .eq('source', 'actual')
+    .in('player_id', playerIds);
+
+  // Build lookup maps
+  const leagueCalcsMap = new Map<string, { recent_mean_norm: number | null; recent_std_norm: number | null }>();
+  for (const calc of leagueCalcsData || []) {
+    leagueCalcsMap.set(calc.player_id, {
+      recent_mean_norm: calc.recent_mean_norm,
+      recent_std_norm: calc.recent_std_norm,
+    });
+  }
+
+  const statsMap = new Map<string, NormalizedStatsData>();
+  for (const stat of playerStatsData || []) {
+    const leagueCalc = leagueCalcsMap.get(stat.player_id);
+    statsMap.set(stat.player_id, {
+      player_id: stat.player_id,
+      recent_mean_norm: leagueCalc?.recent_mean_norm ?? null,
+      recent_std_norm: leagueCalc?.recent_std_norm ?? null,
+      passing_efficiency_3wk_avg_norm: stat.passing_efficiency_3wk_avg_norm ?? null,
+      turnovers_3wk_avg_norm: stat.turnovers_3wk_avg_norm ?? null,
+      rushing_upside_3wk_avg_norm: stat.rushing_upside_3wk_avg_norm ?? null,
+      targets_per_game_3wk_avg_norm: stat.targets_per_game_3wk_avg_norm ?? null,
+      catch_rate_3wk_avg_norm: stat.catch_rate_3wk_avg_norm ?? null,
+      yards_per_target_3wk_avg_norm: stat.yards_per_target_3wk_avg_norm ?? null,
+      weighted_opportunity_3wk_avg_norm: stat.weighted_opportunity_3wk_avg_norm ?? null,
+      touchdown_production_3wk_avg_norm: stat.touchdown_production_3wk_avg_norm ?? null,
+      receiving_profile_3wk_avg_norm: stat.receiving_profile_3wk_avg_norm ?? null,
+      yards_per_touch_3wk_avg_norm: stat.yards_per_touch_3wk_avg_norm ?? null,
+      receiving_touchdowns_3wk_avg_norm: stat.receiving_touchdowns_3wk_avg_norm ?? null,
+      fg_profile_3wk_avg_norm: stat.fg_profile_3wk_avg_norm ?? null,
+      fg_pat_misses_3wk_avg_norm: stat.fg_pat_misses_3wk_avg_norm ?? null,
+      fg_attempts_3wk_avg_norm: stat.fg_attempts_3wk_avg_norm ?? null,
+      sacks_per_game_3wk_avg_norm: stat.sacks_per_game_3wk_avg_norm ?? null,
+      turnovers_forced_3wk_avg_norm: stat.turnovers_forced_3wk_avg_norm ?? null,
+      dst_tds_3wk_avg_norm: stat.dst_tds_3wk_avg_norm ?? null,
+      points_allowed_3wk_avg_norm: stat.points_allowed_3wk_avg_norm ?? null,
+      yards_allowed_3wk_avg_norm: stat.yards_allowed_3wk_avg_norm ?? null,
+      block_kicks_3wk_avg_norm: stat.block_kicks_3wk_avg_norm ?? null,
+      safeties_3wk_avg_norm: stat.safeties_3wk_avg_norm ?? null,
+    });
+  }
+
+  // Also add entries for players who have league_calcs but no player_stats
+  for (const [playerId, leagueCalc] of leagueCalcsMap) {
+    if (!statsMap.has(playerId)) {
+      statsMap.set(playerId, {
+        player_id: playerId,
+        recent_mean_norm: leagueCalc.recent_mean_norm,
+        recent_std_norm: leagueCalc.recent_std_norm,
+        passing_efficiency_3wk_avg_norm: null,
+        turnovers_3wk_avg_norm: null,
+        rushing_upside_3wk_avg_norm: null,
+        targets_per_game_3wk_avg_norm: null,
+        catch_rate_3wk_avg_norm: null,
+        yards_per_target_3wk_avg_norm: null,
+        weighted_opportunity_3wk_avg_norm: null,
+        touchdown_production_3wk_avg_norm: null,
+        receiving_profile_3wk_avg_norm: null,
+        yards_per_touch_3wk_avg_norm: null,
+        receiving_touchdowns_3wk_avg_norm: null,
+        fg_profile_3wk_avg_norm: null,
+        fg_pat_misses_3wk_avg_norm: null,
+        fg_attempts_3wk_avg_norm: null,
+        sacks_per_game_3wk_avg_norm: null,
+        turnovers_forced_3wk_avg_norm: null,
+        dst_tds_3wk_avg_norm: null,
+        points_allowed_3wk_avg_norm: null,
+        yards_allowed_3wk_avg_norm: null,
+        block_kicks_3wk_avg_norm: null,
+        safeties_3wk_avg_norm: null,
+      });
+    }
+  }
+
+  return statsMap;
 }

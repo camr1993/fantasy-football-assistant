@@ -313,16 +313,16 @@ export async function calculateWeightedScoresForLeagueDEF(
 
     // Calculate weighted score using the formula
     const weightedScore =
-      POSITION_WEIGHTS.DEF.recent_mean * recentMean +
-      POSITION_WEIGHTS.DEF.volatility * recentStd +
-      POSITION_WEIGHTS.DEF.sacks_per_game * sacksPerGameNorm +
-      POSITION_WEIGHTS.DEF.turnovers_forced * turnoversForcedNorm +
-      POSITION_WEIGHTS.DEF.dst_tds * dstTdsNorm +
-      POSITION_WEIGHTS.DEF.points_allowed * pointsAllowedNorm +
-      POSITION_WEIGHTS.DEF.yards_allowed * yardsAllowedNorm +
-      POSITION_WEIGHTS.DEF.blocked_kicks * blockedKicksNorm +
-      POSITION_WEIGHTS.DEF.safeties * safetiesNorm +
-      POSITION_WEIGHTS.DEF.opponent_difficulty * opponentDifficulty;
+      POSITION_WEIGHTS.DEF.recent_mean.weight * recentMean +
+      POSITION_WEIGHTS.DEF.volatility.weight * recentStd +
+      POSITION_WEIGHTS.DEF.sacks_per_game.weight * sacksPerGameNorm +
+      POSITION_WEIGHTS.DEF.turnovers_forced.weight * turnoversForcedNorm +
+      POSITION_WEIGHTS.DEF.dst_tds.weight * dstTdsNorm +
+      POSITION_WEIGHTS.DEF.points_allowed.weight * pointsAllowedNorm +
+      POSITION_WEIGHTS.DEF.yards_allowed.weight * yardsAllowedNorm +
+      POSITION_WEIGHTS.DEF.blocked_kicks.weight * blockedKicksNorm +
+      POSITION_WEIGHTS.DEF.safeties.weight * safetiesNorm +
+      POSITION_WEIGHTS.DEF.opponent_difficulty.weight * opponentDifficulty;
 
     updates.push({
       player_id: player.player_id,

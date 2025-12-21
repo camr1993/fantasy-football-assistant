@@ -348,12 +348,12 @@ export async function calculateWeightedScoresForLeagueQB(
 
     // Calculate weighted score using the formula
     const weightedScore =
-      POSITION_WEIGHTS.QB.recent_mean * recentMean +
-      POSITION_WEIGHTS.QB.volatility * recentStd +
-      POSITION_WEIGHTS.QB.passing_efficiency * passingEfficiencyNorm +
-      POSITION_WEIGHTS.QB.turnovers * turnoversNorm +
-      POSITION_WEIGHTS.QB.rushing_upside * rushingUpsideNorm +
-      POSITION_WEIGHTS.QB.opponent_difficulty * opponentDifficulty;
+      POSITION_WEIGHTS.QB.recent_mean.weight * recentMean +
+      POSITION_WEIGHTS.QB.volatility.weight * recentStd +
+      POSITION_WEIGHTS.QB.passing_efficiency.weight * passingEfficiencyNorm +
+      POSITION_WEIGHTS.QB.turnovers.weight * turnoversNorm +
+      POSITION_WEIGHTS.QB.rushing_upside.weight * rushingUpsideNorm +
+      POSITION_WEIGHTS.QB.opponent_difficulty.weight * opponentDifficulty;
 
     updates.push({
       player_id: player.player_id,

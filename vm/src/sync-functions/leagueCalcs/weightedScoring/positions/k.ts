@@ -347,12 +347,12 @@ export async function calculateWeightedScoresForLeagueK(
 
     // Calculate weighted score using the formula
     const weightedScore =
-      POSITION_WEIGHTS.K.recent_mean * recentMean +
-      POSITION_WEIGHTS.K.volatility * recentStd +
-      POSITION_WEIGHTS.K.fg_profile * fgProfileNorm +
-      POSITION_WEIGHTS.K.fg_pat_misses * fgPatMissesNorm +
-      POSITION_WEIGHTS.K.fg_attempts * fgAttemptsNorm +
-      POSITION_WEIGHTS.K.opponent_difficulty * opponentDifficulty;
+      POSITION_WEIGHTS.K.recent_mean.weight * recentMean +
+      POSITION_WEIGHTS.K.volatility.weight * recentStd +
+      POSITION_WEIGHTS.K.fg_profile.weight * fgProfileNorm +
+      POSITION_WEIGHTS.K.fg_pat_misses.weight * fgPatMissesNorm +
+      POSITION_WEIGHTS.K.fg_attempts.weight * fgAttemptsNorm +
+      POSITION_WEIGHTS.K.opponent_difficulty.weight * opponentDifficulty;
 
     updates.push({
       player_id: player.player_id,

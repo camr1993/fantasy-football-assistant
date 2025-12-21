@@ -348,12 +348,12 @@ export async function calculateWeightedScoresForLeagueTE(
 
     // Calculate weighted score using the formula
     const weightedScore =
-      POSITION_WEIGHTS.TE.recent_mean * recentMean +
-      POSITION_WEIGHTS.TE.volatility * recentStd +
-      POSITION_WEIGHTS.TE.targets_per_game * targetsPerGameNorm +
-      POSITION_WEIGHTS.TE.receiving_touchdowns * receivingTouchdownsNorm +
-      POSITION_WEIGHTS.TE.yards_per_target * yardsPerTargetNorm +
-      POSITION_WEIGHTS.TE.opponent_difficulty * opponentDifficulty;
+      POSITION_WEIGHTS.TE.recent_mean.weight * recentMean +
+      POSITION_WEIGHTS.TE.volatility.weight * recentStd +
+      POSITION_WEIGHTS.TE.targets_per_game.weight * targetsPerGameNorm +
+      POSITION_WEIGHTS.TE.receiving_touchdowns.weight * receivingTouchdownsNorm +
+      POSITION_WEIGHTS.TE.yards_per_target.weight * yardsPerTargetNorm +
+      POSITION_WEIGHTS.TE.opponent_difficulty.weight * opponentDifficulty;
 
     updates.push({
       player_id: player.player_id,
