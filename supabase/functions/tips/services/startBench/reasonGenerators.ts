@@ -190,6 +190,13 @@ export function generateInjuryReason(player: PlayerGroup): string {
 }
 
 /**
+ * Generate reason for benching a player on bye week
+ */
+export function generateByeWeekReason(player: PlayerGroup): string {
+  return `${player.name} has a bye week and cannot play. Move to bench.`;
+}
+
+/**
  * Generate detailed reason for starting a player in flex (W/R/T) slot
  */
 export function generateFlexStartReason(

@@ -166,6 +166,26 @@ export async function fetchInjuredPlayerIds(): Promise<Set<string>> {
 }
 
 /**
+ * Fetch IDs of players on bye week (those who should not start)
+ */
+export async function fetchByeWeekPlayerIds(
+  currentWeek: number,
+  playerIds: string[]
+): Promise<Set<string>> {
+  if (playerIds.length === 0) {
+    return new Set();
+  }
+
+  const { data } = await supabase
+    .from('players')
+    .select('id, bye_week')
+    .in('id', playerIds)
+    .eq('bye_week', currentWeek);
+
+  return new Set((data || []).map((p: { id: string }) => p.id));
+}
+
+/**
  * Fetch normalized stats for score breakdown analysis
  */
 export async function fetchNormalizedStats(
@@ -190,7 +210,8 @@ export async function fetchNormalizedStats(
   // Fetch player_stats normalized data
   const { data: playerStatsData } = await supabase
     .from('player_stats')
-    .select(`
+    .select(
+      `
       player_id,
       passing_efficiency_3wk_avg_norm,
       turnovers_3wk_avg_norm,
@@ -213,14 +234,18 @@ export async function fetchNormalizedStats(
       yards_allowed_3wk_avg_norm,
       block_kicks_3wk_avg_norm,
       safeties_3wk_avg_norm
-    `)
+    `
+    )
     .eq('season_year', seasonYear)
     .eq('week', currentWeek)
     .eq('source', 'actual')
     .in('player_id', playerIds);
 
   // Build lookup maps
-  const leagueCalcsMap = new Map<string, { recent_mean_norm: number | null; recent_std_norm: number | null }>();
+  const leagueCalcsMap = new Map<
+    string,
+    { recent_mean_norm: number | null; recent_std_norm: number | null }
+  >();
   for (const calc of leagueCalcsData || []) {
     leagueCalcsMap.set(calc.player_id, {
       recent_mean_norm: calc.recent_mean_norm,
@@ -235,17 +260,22 @@ export async function fetchNormalizedStats(
       player_id: stat.player_id,
       recent_mean_norm: leagueCalc?.recent_mean_norm ?? null,
       recent_std_norm: leagueCalc?.recent_std_norm ?? null,
-      passing_efficiency_3wk_avg_norm: stat.passing_efficiency_3wk_avg_norm ?? null,
+      passing_efficiency_3wk_avg_norm:
+        stat.passing_efficiency_3wk_avg_norm ?? null,
       turnovers_3wk_avg_norm: stat.turnovers_3wk_avg_norm ?? null,
       rushing_upside_3wk_avg_norm: stat.rushing_upside_3wk_avg_norm ?? null,
       targets_per_game_3wk_avg_norm: stat.targets_per_game_3wk_avg_norm ?? null,
       catch_rate_3wk_avg_norm: stat.catch_rate_3wk_avg_norm ?? null,
       yards_per_target_3wk_avg_norm: stat.yards_per_target_3wk_avg_norm ?? null,
-      weighted_opportunity_3wk_avg_norm: stat.weighted_opportunity_3wk_avg_norm ?? null,
-      touchdown_production_3wk_avg_norm: stat.touchdown_production_3wk_avg_norm ?? null,
-      receiving_profile_3wk_avg_norm: stat.receiving_profile_3wk_avg_norm ?? null,
+      weighted_opportunity_3wk_avg_norm:
+        stat.weighted_opportunity_3wk_avg_norm ?? null,
+      touchdown_production_3wk_avg_norm:
+        stat.touchdown_production_3wk_avg_norm ?? null,
+      receiving_profile_3wk_avg_norm:
+        stat.receiving_profile_3wk_avg_norm ?? null,
       yards_per_touch_3wk_avg_norm: stat.yards_per_touch_3wk_avg_norm ?? null,
-      receiving_touchdowns_3wk_avg_norm: stat.receiving_touchdowns_3wk_avg_norm ?? null,
+      receiving_touchdowns_3wk_avg_norm:
+        stat.receiving_touchdowns_3wk_avg_norm ?? null,
       fg_profile_3wk_avg_norm: stat.fg_profile_3wk_avg_norm ?? null,
       fg_pat_misses_3wk_avg_norm: stat.fg_pat_misses_3wk_avg_norm ?? null,
       fg_attempts_3wk_avg_norm: stat.fg_attempts_3wk_avg_norm ?? null,
