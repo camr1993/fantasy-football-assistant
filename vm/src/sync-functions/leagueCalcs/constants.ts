@@ -69,7 +69,7 @@ export const K_WEIGHTS = {
   volatility: { weight: -0.1, label: 'Consistency' }, // keep stronger penalty (clip ±2)
   fg_profile: {
     weight: 0.4,
-    label: 'FG Profile (fgs weighted by distance)',
+    label: 'FG Profile (FGs weighted by distance)',
   }, // attempts & distance profile
   fg_pat_misses: { weight: -0.1, label: 'Accuracy' }, // misses are negative signal
   fg_attempts: { weight: 0.15, label: 'Opportunities' }, // team opportunity
