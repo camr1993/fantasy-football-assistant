@@ -286,9 +286,10 @@ export async function handleOAuthCallback(req: Request) {
       logger.info('User does not exist, creating new user');
 
       // Create new user
+      // Note: Don't set `id` - Yahoo's `sub` is not a UUID format, so let Supabase generate the UUID.
+      // The Yahoo ID is stored in user_metadata.yahoo_id for lookup purposes.
       const { data: newUser, error: createError } =
         await supabase.auth.admin.createUser({
-          id: userInfo.sub || userInfo.id,
           email: userEmail,
           email_confirm: true,
           user_metadata: {
