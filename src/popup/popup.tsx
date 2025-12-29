@@ -43,6 +43,7 @@ function Popup() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [authCode, setAuthCode] = useState('');
+  const [rosterUrl, setRosterUrl] = useState<string | null>(null);
   const [initProgress, setInitProgress] = useState<InitializationProgress>({
     status: 'idle',
     percentage: 0,
@@ -130,7 +131,7 @@ function Popup() {
     });
 
     // Listen for storage changes from background script (completion signal)
-    const storageListener = (
+    const storageListener = async (
       changes: { [key: string]: chrome.storage.StorageChange },
       areaName: string
     ) => {
@@ -154,7 +155,23 @@ function Popup() {
               currentStep: newProgress.currentStep || prev.currentStep,
               errorMessage: newProgress.errorMessage,
             }));
+
+            // If ready, fetch user_teams for the roster URL
+            if (newProgress.status === 'ready') {
+              const result = await chrome.storage.local.get(['user_teams']);
+              if (result.user_teams && result.user_teams.length > 0) {
+                setRosterUrl(result.user_teams[0].roster_url);
+              }
+            }
           }
+        }
+      }
+
+      // Also listen for user_teams changes
+      if (areaName === 'local' && changes.user_teams) {
+        const newUserTeams = changes.user_teams.newValue;
+        if (newUserTeams && newUserTeams.length > 0) {
+          setRosterUrl(newUserTeams[0].roster_url);
         }
       }
     };
@@ -181,8 +198,17 @@ function Popup() {
         });
         setIsAuthenticated(true);
 
-        // Check if there's ongoing initialization from storage
-        const result = await chrome.storage.local.get(['initialization_progress']);
+        // Check if there's ongoing initialization and user teams from storage
+        const result = await chrome.storage.local.get([
+          'initialization_progress',
+          'user_teams',
+        ]);
+
+        // Set roster URL from user_teams if available
+        if (result.user_teams && result.user_teams.length > 0) {
+          setRosterUrl(result.user_teams[0].roster_url);
+        }
+
         if (result.initialization_progress) {
           const storedProgress = result.initialization_progress;
 
@@ -613,7 +639,24 @@ function Popup() {
             >
               <span style={{ marginRight: '8px' }}>✓</span>
               <span style={{ color: '#065f46' }}>
-                Your league data is ready! Visit Yahoo Fantasy to see tips.
+                Your league data is ready! Visit your{' '}
+                {rosterUrl ? (
+                  <a
+                    href={rosterUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      color: '#065f46',
+                      fontWeight: 600,
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    roster page
+                  </a>
+                ) : (
+                  'Yahoo Fantasy'
+                )}{' '}
+                to see tips.
               </span>
             </div>
           )}

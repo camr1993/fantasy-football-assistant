@@ -50,10 +50,19 @@ export interface StartBenchRecommendation {
   injury_status?: string;
 }
 
+export interface UserTeamInfo {
+  team_id: string;
+  team_name: string;
+  league_id: string;
+  league_name: string;
+  roster_url: string;
+}
+
 export interface TipsResponse {
   waiver_wire: Record<string, WaiverWirePlayer[]>;
   waiver_wire_recommendations: WaiverWireRecommendation[];
   start_bench_recommendations: StartBenchRecommendation[];
+  user_teams: UserTeamInfo[];
   current_week: number;
   next_week: number;
   season_year: number;

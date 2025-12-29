@@ -20,11 +20,32 @@ interface InitializationProgress {
 
 interface InitializationBannerProps {
   progress: InitializationProgress;
+  rosterUrl: string | null;
   onDismiss: () => void;
+}
+
+/**
+ * Get the user's roster URL from stored user_teams data
+ * Returns the first team's roster URL, or null if no teams are stored
+ */
+async function getUserRosterUrl(): Promise<string | null> {
+  try {
+    const result = await chrome.storage.local.get(['user_teams']);
+    const userTeams = result.user_teams as
+      | Array<{ roster_url: string }>
+      | undefined;
+    if (userTeams && userTeams.length > 0) {
+      return userTeams[0].roster_url;
+    }
+  } catch (error) {
+    console.error('[Fantasy Assistant] Error getting user teams:', error);
+  }
+  return null;
 }
 
 function InitializationBanner({
   progress,
+  rosterUrl,
   onDismiss,
 }: InitializationBannerProps) {
   const percentage = Math.round(progress.percentage || 0);
@@ -71,7 +92,15 @@ function InitializationBanner({
           <>
             <span style={bannerStyles.successIcon}>✓</span>
             <span style={bannerStyles.successText}>
-              FantasyEdge is ready! Refresh the page to see recommendations.
+              FantasyEdge is ready! Refresh your{' '}
+              {rosterUrl ? (
+                <a href={rosterUrl} style={bannerStyles.rosterLink}>
+                  roster page
+                </a>
+              ) : (
+                'roster page'
+              )}{' '}
+              to see recommendations.
             </span>
             <button style={bannerStyles.dismissButton} onClick={onDismiss}>
               ×
@@ -169,6 +198,11 @@ const bannerStyles: Record<string, React.CSSProperties> = {
   },
   successText: {
     fontSize: '14px',
+  },
+  rosterLink: {
+    color: 'white',
+    textDecoration: 'underline',
+    fontWeight: 600,
   },
   errorIcon: {
     fontSize: '18px',
@@ -734,7 +768,9 @@ chrome.runtime.onMessage.addListener((message) => {
 let bannerRoot: ReactDOM.Root | null = null;
 const BANNER_CONTAINER_ID = 'fantasy-assistant-init-banner';
 
-function updateInitializationBanner(progress: InitializationProgress): void {
+async function updateInitializationBanner(
+  progress: InitializationProgress
+): Promise<void> {
   let container = document.getElementById(BANNER_CONTAINER_ID);
 
   // If dismissing or idle, remove the banner
@@ -757,9 +793,11 @@ function updateInitializationBanner(progress: InitializationProgress): void {
 
   // Render the banner
   if (bannerRoot) {
+    const rosterUrl = await getUserRosterUrl();
     bannerRoot.render(
       <InitializationBanner
         progress={progress}
+        rosterUrl={rosterUrl}
         onDismiss={() => {
           updateInitializationBanner({ ...progress, status: 'idle' });
           // Clear from storage

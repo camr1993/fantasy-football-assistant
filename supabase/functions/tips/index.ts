@@ -208,12 +208,44 @@ Deno.serve(async (req) => {
     // Get user teams for start/bench recommendations
     const { data: userTeams } = await supabase
       .from('teams')
-      .select('id, league_id')
+      .select('id, league_id, yahoo_team_id, name, leagues!inner(name)')
       .eq('user_id', userId);
 
     interface UserTeam {
       id: string;
       league_id: string;
+      yahoo_team_id: string;
+      name: string;
+      leagues: { name: string } | { name: string }[];
+    }
+
+    // Extract Yahoo roster URLs for user teams
+    interface UserTeamInfo {
+      team_id: string;
+      team_name: string;
+      league_id: string;
+      league_name: string;
+      roster_url: string;
+    }
+
+    const userTeamInfos: UserTeamInfo[] = [];
+    for (const team of (userTeams || []) as UserTeam[]) {
+      // Extract Yahoo league ID and team ID from yahoo_team_id
+      // Format: "422.l.869919.t.5" -> leagueId=869919, teamId=5
+      const match = team.yahoo_team_id?.match(/\.l\.(\d+)\.t\.(\d+)/);
+      if (match) {
+        const [, yahooLeagueId, yahooTeamId] = match;
+        const leagueData = Array.isArray(team.leagues)
+          ? team.leagues[0]
+          : team.leagues;
+        userTeamInfos.push({
+          team_id: team.id,
+          team_name: team.name,
+          league_id: team.league_id,
+          league_name: leagueData?.name || 'Unknown League',
+          roster_url: `https://football.fantasysports.yahoo.com/f1/${yahooLeagueId}/${yahooTeamId}`,
+        });
+      }
     }
 
     const allWaiverWireResults: WaiverWirePlayer[] = [];
@@ -275,6 +307,7 @@ Deno.serve(async (req) => {
         waiver_wire: waiverWireByPosition,
         waiver_wire_recommendations: allWaiverWireRecommendations,
         start_bench_recommendations: allStartBenchResults,
+        user_teams: userTeamInfos,
         current_week: currentWeek,
         next_week: nextWeek,
         season_year: seasonYear,

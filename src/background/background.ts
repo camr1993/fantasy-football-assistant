@@ -71,11 +71,12 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'GET_TIPS') {
     chrome.storage.local
-      .get(['tips_data', 'player_recommendations'])
+      .get(['tips_data', 'player_recommendations', 'user_teams'])
       .then((result) => {
         sendResponse({
           tips: result.tips_data || null,
           playerRecommendations: result.player_recommendations || {},
+          userTeams: result.user_teams || [],
         });
       });
     return true; // Keep the message channel open for async response
@@ -128,6 +129,7 @@ async function fetchAndStoreTips(): Promise<void> {
       await chrome.storage.local.set({
         tips_data: tips,
         player_recommendations: playerRecommendations,
+        user_teams: tips.user_teams || [],
         tips_timestamp: Date.now(),
       });
 
@@ -136,6 +138,7 @@ async function fetchAndStoreTips(): Promise<void> {
         waiverRecommendationsCount:
           tips.waiver_wire_recommendations?.length || 0,
         playerMapSize: Object.keys(playerRecommendations).length,
+        userTeamsCount: tips.user_teams?.length || 0,
       });
     } else {
       console.error('Failed to fetch tips:', result.error);
