@@ -118,7 +118,9 @@ function groupPlayersByPositionAndTeam(
     const stats = statsMap.get(entry.player_id);
     const normalizedStats = normalizedStatsMap.get(entry.player_id);
 
-    if (!player?.position || !scoreData || !team) continue;
+    // Skip only if missing essential player/team info
+    // Players without scoreData should still be included for injury/bye checks
+    if (!player?.position || !team) continue;
 
     const key = `${player.position}_${team.id}`;
     if (!positionGroups.has(key)) {
@@ -132,8 +134,8 @@ function groupPlayersByPositionAndTeam(
       position: player.position,
       team: player.team,
       slot: entry.slot,
-      weighted_score: scoreData.weighted_score,
-      fantasy_points: scoreData.fantasy_points,
+      weighted_score: scoreData?.weighted_score ?? 0,
+      fantasy_points: scoreData?.fantasy_points ?? 0,
       league_id: leagueId,
       league_name: leagueName,
       team_id: team.id,
