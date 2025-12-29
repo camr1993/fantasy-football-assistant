@@ -7,13 +7,15 @@ import {
   fetchRosterEntries,
   fetchRosterScores,
   fetchPlayerStats,
-  fetchInjuredPlayerIds,
+  fetchPlayerInjuries,
+  fetchByeWeekPlayerIds,
   fetchNormalizedStats,
 } from './dataFetchers.ts';
 import {
   generateStartReason,
   generateBenchReason,
   generateInjuryReason,
+  generateByeWeekReason,
   generateFlexStartReason,
   generateFlexBenchReason,
 } from './reasonGenerators.ts';
@@ -47,14 +49,24 @@ export async function getStartBenchRecommendations(
 
   if (playerIds.length === 0) return [];
 
-  const [scoresMap, statsMap, normalizedStatsMap, injuredPlayerIds, rosterSlots] =
-    await Promise.all([
-      fetchRosterScores(leagueId, seasonYear, currentWeek, playerIds),
-      fetchPlayerStats(seasonYear, currentWeek, playerIds),
-      fetchNormalizedStats(leagueId, seasonYear, currentWeek, playerIds),
-      fetchInjuredPlayerIds(),
-      getLeagueRosterSlots(leagueId),
-    ]);
+  const [
+    scoresMap,
+    statsMap,
+    normalizedStatsMap,
+    playerInjuries,
+    byeWeekPlayerIds,
+    rosterSlots,
+  ] = await Promise.all([
+    fetchRosterScores(leagueId, seasonYear, currentWeek, playerIds),
+    fetchPlayerStats(seasonYear, currentWeek, playerIds),
+    fetchNormalizedStats(leagueId, seasonYear, currentWeek, playerIds),
+    fetchPlayerInjuries(playerIds),
+    fetchByeWeekPlayerIds(currentWeek, playerIds),
+    getLeagueRosterSlots(leagueId),
+  ]);
+
+  // Destructure the combined injury data
+  const { statusMap: injuryStatusMap, injuredPlayerIds } = playerInjuries;
 
   // Group players by position and team
   const positionGroups = groupPlayersByPositionAndTeam(
@@ -68,7 +80,13 @@ export async function getStartBenchRecommendations(
 
   // Generate recommendations for standard positions
   const { recommendations, playersFillingPositionSlots } =
-    processStandardPositions(positionGroups, rosterSlots, injuredPlayerIds);
+    processStandardPositions(
+      positionGroups,
+      rosterSlots,
+      injuredPlayerIds,
+      byeWeekPlayerIds,
+      injuryStatusMap
+    );
 
   // Generate recommendations for flex positions
   const flexRecommendations = processFlexPositions(
@@ -76,7 +94,9 @@ export async function getStartBenchRecommendations(
     rosterSlots.flexSlots,
     playersFillingPositionSlots,
     injuredPlayerIds,
-    recommendations
+    byeWeekPlayerIds,
+    recommendations,
+    injuryStatusMap
   );
 
   return [...recommendations, ...flexRecommendations];
@@ -103,7 +123,9 @@ function groupPlayersByPositionAndTeam(
     const stats = statsMap.get(entry.player_id);
     const normalizedStats = normalizedStatsMap.get(entry.player_id);
 
-    if (!player?.position || !scoreData || !team) continue;
+    // Skip only if missing essential player/team info
+    // Players without scoreData should still be included for injury/bye checks
+    if (!player?.position || !team) continue;
 
     const key = `${player.position}_${team.id}`;
     if (!positionGroups.has(key)) {
@@ -117,8 +139,8 @@ function groupPlayersByPositionAndTeam(
       position: player.position,
       team: player.team,
       slot: entry.slot,
-      weighted_score: scoreData.weighted_score,
-      fantasy_points: scoreData.fantasy_points,
+      weighted_score: scoreData?.weighted_score ?? 0,
+      fantasy_points: scoreData?.fantasy_points ?? 0,
       league_id: leagueId,
       league_name: leagueName,
       team_id: team.id,
@@ -134,7 +156,9 @@ function groupPlayersByPositionAndTeam(
 function processStandardPositions(
   positionGroups: Map<string, PlayerGroup[]>,
   rosterSlots: { positions: Map<string, number>; flexSlots: number },
-  injuredPlayerIds: Set<string>
+  injuredPlayerIds: Set<string>,
+  byeWeekPlayerIds: Set<string>,
+  injuryStatusMap: Map<string, string>
 ): {
   recommendations: StartBenchRecommendation[];
   playersFillingPositionSlots: Map<string, Set<string>>;
@@ -164,19 +188,40 @@ function processStandardPositions(
       const isInFlexSlot = isFlexSlot(player.slot);
       const isPositionStartingSlot = !isBenchSlot && !isInFlexSlot;
       const shouldStartAtPosition = rank < startingSlots;
+      const isInjured = injuredPlayerIds.has(player.player_id);
+      const isOnBye = byeWeekPlayerIds.has(player.player_id);
+      const injuryStatus = injuryStatusMap.get(player.player_id);
 
-      // Track players filling position slots
-      if (shouldStartAtPosition && !injuredPlayerIds.has(player.player_id)) {
+      // Track players filling position slots (exclude injured and bye week players)
+      if (shouldStartAtPosition && !isInjured && !isOnBye) {
         playersFillingPositionSlots.get(teamId)!.add(player.player_id);
       }
 
       // Skip flex-slotted players - evaluated in flex section
       if (isInFlexSlot && !shouldStartAtPosition) continue;
 
-      // Handle injured players
-      if (shouldStartAtPosition && injuredPlayerIds.has(player.player_id)) {
+      // Handle injured players currently in a starting slot
+      if (isPositionStartingSlot && isInjured) {
         recommendations.push(
-          createRecommendation(player, 'BENCH', generateInjuryReason(player))
+          createRecommendation(
+            player,
+            'BENCH',
+            generateInjuryReason(player),
+            injuryStatus
+          )
+        );
+        continue;
+      }
+
+      // Handle players on bye week currently in a starting slot
+      if (isPositionStartingSlot && isOnBye) {
+        recommendations.push(
+          createRecommendation(
+            player,
+            'BENCH',
+            generateByeWeekReason(player),
+            injuryStatus
+          )
         );
         continue;
       }
@@ -191,7 +236,8 @@ function processStandardPositions(
           createRecommendation(
             player,
             shouldStartAtPosition ? 'START' : 'BENCH',
-            reason
+            reason,
+            injuryStatus
           )
         );
       }
@@ -206,14 +252,16 @@ function processFlexPositions(
   flexSlots: number,
   playersFillingPositionSlots: Map<string, Set<string>>,
   injuredPlayerIds: Set<string>,
-  existingRecommendations: StartBenchRecommendation[]
+  byeWeekPlayerIds: Set<string>,
+  existingRecommendations: StartBenchRecommendation[],
+  injuryStatusMap: Map<string, string>
 ): StartBenchRecommendation[] {
   if (flexSlots <= 0) return [];
 
   const recommendations: StartBenchRecommendation[] = [];
   const flexEligibleByTeam = new Map<string, PlayerGroup[]>();
 
-  // Collect flex-eligible players
+  // Collect flex-eligible players (exclude injured and bye week players from flex consideration)
   for (const [, players] of positionGroups) {
     for (const player of players) {
       if (!FLEX_ELIGIBLE_POSITIONS.includes(player.position)) continue;
@@ -222,11 +270,58 @@ function processFlexPositions(
       )
         continue;
       if (injuredPlayerIds.has(player.player_id)) continue;
+      if (byeWeekPlayerIds.has(player.player_id)) continue;
 
       if (!flexEligibleByTeam.has(player.team_id)) {
         flexEligibleByTeam.set(player.team_id, []);
       }
       flexEligibleByTeam.get(player.team_id)!.push(player);
+    }
+  }
+
+  // Check for injured or bye week players currently in flex slots that need to be benched
+  for (const [, players] of positionGroups) {
+    for (const player of players) {
+      if (!FLEX_ELIGIBLE_POSITIONS.includes(player.position)) continue;
+
+      const slotUpper = player.slot?.toUpperCase() || '';
+      const isBenchSlot = BENCH_SLOTS.includes(slotUpper);
+      const isInFlexSlot = isFlexSlot(player.slot);
+      const isInjured = injuredPlayerIds.has(player.player_id);
+      const isOnBye = byeWeekPlayerIds.has(player.player_id);
+      const injuryStatus = injuryStatusMap.get(player.player_id);
+
+      // Skip if already recommended
+      const alreadyRecommended = existingRecommendations.some(
+        (r) => r.player_id === player.player_id && r.team_id === player.team_id
+      );
+      if (alreadyRecommended) continue;
+
+      // Handle injured players currently in a flex slot
+      if (isInFlexSlot && !isBenchSlot && isInjured) {
+        recommendations.push(
+          createRecommendation(
+            player,
+            'BENCH',
+            generateInjuryReason(player),
+            injuryStatus
+          )
+        );
+        continue;
+      }
+
+      // Handle players on bye week currently in a flex slot
+      if (isInFlexSlot && !isBenchSlot && isOnBye) {
+        recommendations.push(
+          createRecommendation(
+            player,
+            'BENCH',
+            generateByeWeekReason(player),
+            injuryStatus
+          )
+        );
+        continue;
+      }
     }
   }
 
@@ -242,11 +337,13 @@ function processFlexPositions(
         player.slot?.toUpperCase() || ''
       );
       const shouldStartAsFlex = i < flexSlots;
+      const injuryStatus = injuryStatusMap.get(player.player_id);
 
-      // Skip if already recommended
-      const alreadyRecommended = existingRecommendations.some(
-        (r) => r.player_id === player.player_id && r.team_id === teamId
-      );
+      // Skip if already recommended (including from injured/bye check above)
+      const alreadyRecommended = [
+        ...existingRecommendations,
+        ...recommendations,
+      ].some((r) => r.player_id === player.player_id && r.team_id === teamId);
       if (alreadyRecommended) continue;
 
       if (isStartingSlot !== shouldStartAsFlex) {
@@ -258,7 +355,8 @@ function processFlexPositions(
           createRecommendation(
             player,
             shouldStartAsFlex ? 'START' : 'BENCH',
-            reason
+            reason,
+            injuryStatus
           )
         );
       }
@@ -271,7 +369,8 @@ function processFlexPositions(
 function createRecommendation(
   player: PlayerGroup,
   recommendation: 'START' | 'BENCH',
-  reason: string
+  reason: string,
+  injuryStatus?: string
 ): StartBenchRecommendation {
   return {
     player_id: player.player_id,
@@ -287,5 +386,6 @@ function createRecommendation(
     team_name: player.team_name,
     recommendation,
     reason,
+    injury_status: injuryStatus,
   };
 }
