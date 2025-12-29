@@ -286,10 +286,15 @@ export async function handleOAuthCallback(req: Request) {
       logger.info('User does not exist, creating new user');
 
       // Create new user
+      // Note: Don't set `id` - Yahoo's `sub` is not a UUID format, so let Supabase generate the UUID.
+      // The Yahoo ID is stored in user_metadata.yahoo_id for lookup purposes.
+      // Generate a secure random password - we use magic links for auth so this won't be used,
+      // but Supabase requires a password for user creation to pass validation.
+      const randomPassword = crypto.randomUUID() + crypto.randomUUID();
       const { data: newUser, error: createError } =
         await supabase.auth.admin.createUser({
-          id: userInfo.sub || userInfo.id,
           email: userEmail,
+          password: randomPassword,
           email_confirm: true,
           user_metadata: {
             name: userInfo.name || userInfo.given_name || 'Yahoo User',
