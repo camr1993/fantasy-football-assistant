@@ -189,6 +189,55 @@ const bannerStyles: Record<string, React.CSSProperties> = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Injury Status Helper
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Get human-readable injury status label
+ */
+function getInjuryStatusLabel(status: string): string {
+  const statusMap: Record<string, string> = {
+    Q: 'Questionable',
+    D: 'Doubtful',
+    O: 'Out',
+    IR: 'Injured Reserve',
+    'IR-R': 'IR - Designated to Return',
+    'PUP-R': 'PUP - Designated to Return',
+    SUSP: 'Suspended',
+    'NFI-R': 'NFI - Designated to Return',
+    GTD: 'Game-Time Decision',
+  };
+  return statusMap[status] || status;
+}
+
+/**
+ * Check if injury status warrants a warning note
+ */
+function shouldShowInjuryWarning(status?: string): boolean {
+  if (!status) return false;
+  // Show warning for questionable, doubtful, or game-time decision statuses
+  return ['Q', 'D', 'GTD'].includes(status);
+}
+
+interface InjuryNoteProps {
+  status: string;
+  playerName: string;
+}
+
+function InjuryNote({ status, playerName }: InjuryNoteProps) {
+  return (
+    <div style={styles.injuryNote}>
+      <span style={styles.injuryIcon}>⚠️</span>
+      <span>
+        <strong>{playerName}</strong> is listed as{' '}
+        <strong>{getInjuryStatusLabel(status)}</strong>. Check injury reports
+        before making lineup decisions.
+      </span>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Modal Component
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -231,6 +280,12 @@ function RecommendationModal({
                 {startBench.recommendation}
               </div>
               <p style={styles.reason}>{startBench.reason}</p>
+              {shouldShowInjuryWarning(startBench.injury_status) && (
+                <InjuryNote
+                  status={startBench.injury_status!}
+                  playerName={startBench.name}
+                />
+              )}
               <p style={styles.meta}>
                 League: {startBench.league_name} • Team: {startBench.team_name}
               </p>
@@ -260,6 +315,13 @@ function RecommendationModal({
                     </span>
                   </div>
                   <p style={styles.reason}>{upgrade.reason}</p>
+                  {/* Show injury warnings for players in waiver recommendations */}
+                  {shouldShowInjuryWarning(upgrade.waiver_injury_status) && (
+                    <InjuryNote
+                      status={upgrade.waiver_injury_status!}
+                      playerName={upgrade.waiver_player_name}
+                    />
+                  )}
                   <p style={styles.meta}>
                     League: {upgrade.league_name} • Team: {upgrade.team_name}
                   </p>
@@ -493,6 +555,25 @@ const styles: Record<string, React.CSSProperties> = {
   noRecs: {
     color: '#6b7280',
     fontStyle: 'italic',
+  },
+  injuryNote: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '8px',
+    backgroundColor: '#fef3c7',
+    border: '1px solid #f59e0b',
+    borderRadius: '6px',
+    padding: '8px 12px',
+    marginTop: '8px',
+    marginBottom: '8px',
+    fontSize: '13px',
+    color: '#92400e',
+    lineHeight: 1.4,
+    whiteSpace: 'normal',
+  },
+  injuryIcon: {
+    flexShrink: 0,
+    fontSize: '14px',
   },
 };
 

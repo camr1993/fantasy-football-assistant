@@ -26,11 +26,13 @@ export interface WaiverWireRecommendation {
   waiver_player_team: string;
   waiver_player_position: string;
   waiver_weighted_score: number;
+  waiver_injury_status?: string;
   rostered_player_id: string;
   rostered_yahoo_player_id: string;
   rostered_player_name: string;
   rostered_player_team: string;
   rostered_weighted_score: number;
+  rostered_injury_status?: string;
   league_id: string;
   league_name: string;
   team_id: string;
@@ -346,13 +348,11 @@ export async function getWaiverWireRecommendations(
     ...rosteredPlayers.map((p) => p.player_id),
   ];
 
-  // Fetch normalized stats for detailed reason generation
-  const normalizedStatsMap = await fetchNormalizedStatsForPlayers(
-    leagueId,
-    seasonYear,
-    currentWeek,
-    allPlayerIds
-  );
+  // Fetch normalized stats and injury statuses in parallel
+  const [normalizedStatsMap, injuryStatusMap] = await Promise.all([
+    fetchNormalizedStatsForPlayers(leagueId, seasonYear, currentWeek, allPlayerIds),
+    fetchPlayerInjuryStatuses(allPlayerIds),
+  ]);
 
   // Attach normalized stats to rostered players
   for (const rostered of rosteredPlayers) {
@@ -406,11 +406,13 @@ export async function getWaiverWireRecommendations(
           waiver_player_team: waiverPlayer.team,
           waiver_player_position: waiverPlayer.position,
           waiver_weighted_score: waiverPlayer.weighted_score,
+          waiver_injury_status: injuryStatusMap.get(waiverPlayer.player_id),
           rostered_player_id: rostered.player_id,
           rostered_yahoo_player_id: rostered.yahoo_player_id,
           rostered_player_name: rostered.name,
           rostered_player_team: rostered.team,
           rostered_weighted_score: rostered.weighted_score ?? 0,
+          rostered_injury_status: injuryStatusMap.get(rostered.player_id),
           league_id: leagueId,
           league_name: leagueName,
           team_id: rostered.team_id,
@@ -688,6 +690,29 @@ async function fetchNormalizedStatsForPlayers(
   }
 
   return statsMap;
+}
+
+/**
+ * Fetch injury statuses for players
+ */
+async function fetchPlayerInjuryStatuses(
+  playerIds: string[]
+): Promise<Map<string, string>> {
+  if (playerIds.length === 0) {
+    return new Map();
+  }
+
+  const { data } = await supabase
+    .from('player_injuries')
+    .select('player_id, status')
+    .in('player_id', playerIds);
+
+  return new Map(
+    (data || []).map((ip: { player_id: string; status: string }) => [
+      ip.player_id,
+      ip.status,
+    ])
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

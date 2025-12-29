@@ -18,11 +18,13 @@ export interface WaiverWireRecommendation {
   waiver_player_team: string;
   waiver_player_position: string;
   waiver_weighted_score: number;
+  waiver_injury_status?: string;
   rostered_player_id: string;
   rostered_yahoo_player_id: string;
   rostered_player_name: string;
   rostered_player_team: string;
   rostered_weighted_score: number;
+  rostered_injury_status?: string;
   league_id: string;
   league_name: string;
   team_id: string;
@@ -45,6 +47,7 @@ export interface StartBenchRecommendation {
   team_name: string;
   recommendation: 'START' | 'BENCH';
   reason: string;
+  injury_status?: string;
 }
 
 export interface TipsResponse {

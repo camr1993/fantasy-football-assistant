@@ -12,6 +12,7 @@ export interface StartBenchRecommendation {
   team_name: string;
   recommendation: 'START' | 'BENCH';
   reason: string;
+  injury_status?: string; // Q, D, O, IR, etc.
 }
 
 export interface RosterEntryResponse {

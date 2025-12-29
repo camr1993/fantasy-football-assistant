@@ -153,16 +153,50 @@ export async function fetchPlayerStats(
   return statsMap;
 }
 
+// Statuses that indicate a player should not start
+const SEVERE_INJURY_STATUSES = [
+  'O',
+  'IR',
+  'PUP-R',
+  'D',
+  'SUSP',
+  'NFI-R',
+  'IR-R',
+];
+
+export interface PlayerInjuryData {
+  statusMap: Map<string, string>;
+  injuredPlayerIds: Set<string>;
+}
+
 /**
- * Fetch IDs of injured players (those who should not start)
+ * Fetch injury data for players in a single query
+ * Returns both the status map (for displaying injury notes) and
+ * the set of severely injured player IDs (those who should not start)
  */
-export async function fetchInjuredPlayerIds(): Promise<Set<string>> {
+export async function fetchPlayerInjuries(
+  playerIds: string[]
+): Promise<PlayerInjuryData> {
+  if (playerIds.length === 0) {
+    return { statusMap: new Map(), injuredPlayerIds: new Set() };
+  }
+
   const { data } = await supabase
     .from('player_injuries')
     .select('player_id, status')
-    .in('status', ['O', 'IR', 'PUP-R', 'D', 'SUSP', 'NFI-R', 'IR-R']);
+    .in('player_id', playerIds);
 
-  return new Set((data || []).map((ip: { player_id: string }) => ip.player_id));
+  const statusMap = new Map<string, string>();
+  const injuredPlayerIds = new Set<string>();
+
+  for (const ip of (data || []) as { player_id: string; status: string }[]) {
+    statusMap.set(ip.player_id, ip.status);
+    if (SEVERE_INJURY_STATUSES.includes(ip.status)) {
+      injuredPlayerIds.add(ip.player_id);
+    }
+  }
+
+  return { statusMap, injuredPlayerIds };
 }
 
 /**
