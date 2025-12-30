@@ -1,3 +1,8 @@
+export interface RecommendationConfidence {
+  level: 1 | 2 | 3;
+  label: string;
+}
+
 export interface StartBenchRecommendation {
   player_id: string;
   yahoo_player_id: string;
@@ -6,12 +11,15 @@ export interface StartBenchRecommendation {
   team: string;
   slot: string;
   weighted_score: number;
+  comparison_score: number; // Score of the player they should swap with
+  comparison_name: string; // Name of the player they should swap with
   league_id: string;
   league_name: string;
   team_id: string;
   team_name: string;
   recommendation: 'START' | 'BENCH';
   reason: string;
+  confidence: RecommendationConfidence;
   injury_status?: string; // Q, D, O, IR, etc.
 }
 

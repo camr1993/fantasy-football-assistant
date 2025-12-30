@@ -1,5 +1,10 @@
 // Tips Response Types
 
+export interface RecommendationConfidence {
+  level: 1 | 2 | 3;
+  label: string;
+}
+
 export interface WaiverWirePlayer {
   position: string;
   player_id: string;
@@ -31,6 +36,7 @@ export interface WaiverWireRecommendation {
   team_name: string;
   recommendation: 'ADD';
   reason: string;
+  confidence: RecommendationConfidence;
 }
 
 export interface StartBenchRecommendation {
@@ -41,12 +47,15 @@ export interface StartBenchRecommendation {
   team: string;
   slot: string;
   weighted_score: number;
+  comparison_score: number;
+  comparison_name: string;
   league_id: string;
   league_name: string;
   team_id: string;
   team_name: string;
   recommendation: 'START' | 'BENCH';
   reason: string;
+  confidence: RecommendationConfidence;
   injury_status?: string;
 }
 

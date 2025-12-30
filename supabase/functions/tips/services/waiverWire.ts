@@ -19,6 +19,35 @@ export interface WaiverWirePlayer {
   league_name: string;
 }
 
+export interface RecommendationConfidence {
+  level: 1 | 2 | 3;
+  label: string;
+}
+
+/**
+ * Calculate confidence level for waiver wire recommendations
+ */
+function calculateWaiverConfidence(
+  waiverScore: number,
+  rosteredScore: number
+): RecommendationConfidence {
+  // Calculate percentage improvement
+  const improvement =
+    rosteredScore > 0
+      ? ((waiverScore - rosteredScore) / rosteredScore) * 100
+      : waiverScore > 0
+        ? 100
+        : 0;
+
+  if (improvement >= 25) {
+    return { level: 3, label: 'Strong Upgrade' };
+  } else if (improvement >= 10) {
+    return { level: 2, label: 'Good Upgrade' };
+  } else {
+    return { level: 1, label: 'Slight Upgrade' };
+  }
+}
+
 export interface WaiverWireRecommendation {
   waiver_player_id: string;
   waiver_yahoo_player_id: string;
@@ -39,6 +68,7 @@ export interface WaiverWireRecommendation {
   team_name: string;
   recommendation: 'ADD';
   reason: string;
+  confidence: RecommendationConfidence;
 }
 
 interface RosteredPlayer {
@@ -350,7 +380,12 @@ export async function getWaiverWireRecommendations(
 
   // Fetch normalized stats and injury statuses in parallel
   const [normalizedStatsMap, injuryStatusMap] = await Promise.all([
-    fetchNormalizedStatsForPlayers(leagueId, seasonYear, currentWeek, allPlayerIds),
+    fetchNormalizedStatsForPlayers(
+      leagueId,
+      seasonYear,
+      currentWeek,
+      allPlayerIds
+    ),
     fetchPlayerInjuryStatuses(allPlayerIds),
   ]);
 
@@ -397,6 +432,10 @@ export async function getWaiverWireRecommendations(
 
       if (shouldRecommend) {
         const reason = generateWaiverWireReason(waiverPlayer, rostered);
+        const confidence = calculateWaiverConfidence(
+          waiverPlayer.weighted_score,
+          rostered.weighted_score ?? 0
+        );
         recommendations.push({
           waiver_player_id: waiverPlayer.player_id,
           waiver_yahoo_player_id: extractYahooPlayerId(
@@ -419,6 +458,7 @@ export async function getWaiverWireRecommendations(
           team_name: rostered.team_name,
           recommendation: 'ADD',
           reason,
+          confidence,
         });
       }
     }

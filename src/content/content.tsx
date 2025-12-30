@@ -301,6 +301,55 @@ function InjuryNote({ status, playerName }: InjuryNoteProps) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Confidence Indicator Component
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface ConfidenceIndicatorProps {
+  level: 1 | 2 | 3;
+  label: string;
+  type: 'start' | 'bench' | 'add';
+}
+
+/**
+ * Get color based on confidence level and recommendation type
+ */
+function getConfidenceColor(
+  level: 1 | 2 | 3,
+  type: 'start' | 'bench' | 'add'
+): string {
+  if (type === 'bench') {
+    // Red shades for bench
+    const colors = { 1: '#fca5a5', 2: '#ef4444', 3: '#dc2626' };
+    return colors[level];
+  } else {
+    // Green shades for start/add
+    const colors = { 1: '#86efac', 2: '#22c55e', 3: '#16a34a' };
+    return colors[level];
+  }
+}
+
+function ConfidenceIndicator({ level, label, type }: ConfidenceIndicatorProps) {
+  const color = getConfidenceColor(level, type);
+
+  return (
+    <div style={styles.strengthContainer}>
+      <div style={styles.strengthDots}>
+        {[1, 2, 3].map((dot) => (
+          <span
+            key={dot}
+            style={{
+              ...styles.strengthDot,
+              backgroundColor: dot <= level ? color : '#e5e7eb',
+            }}
+          />
+        ))}
+      </div>
+      <span style={{ ...styles.strengthLabel, color }}>{label}</span>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Player Search URL Helper
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -379,6 +428,13 @@ function RecommendationModal({
                 </div>
               </div>
               <div style={styles.rosterCard}>
+                <ConfidenceIndicator
+                  level={startBench.confidence.level}
+                  label={startBench.confidence.label}
+                  type={
+                    startBench.recommendation === 'START' ? 'start' : 'bench'
+                  }
+                />
                 <p
                   style={{
                     ...styles.reason,
@@ -430,15 +486,11 @@ function RecommendationModal({
                       ({upgrade.waiver_player_team})
                     </span>
                   </div>
-                  <div style={styles.scoreComparison}>
-                    <span style={styles.scoreUp}>
-                      {upgrade.waiver_weighted_score.toFixed(2)}
-                    </span>
-                    <span style={styles.vs}>vs</span>
-                    <span style={styles.scoreDown}>
-                      {upgrade.rostered_weighted_score.toFixed(2)}
-                    </span>
-                  </div>
+                  <ConfidenceIndicator
+                    level={upgrade.confidence.level}
+                    label={upgrade.confidence.label}
+                    type="add"
+                  />
                   <p style={styles.reason}>{upgrade.reason}</p>
                   {/* Show injury warnings for players in waiver recommendations */}
                   {shouldShowInjuryWarning(upgrade.waiver_injury_status) && (
@@ -688,25 +740,24 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     color: '#1f2937',
   },
-  scoreComparison: {
+  strengthContainer: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
     marginBottom: '8px',
   },
-  scoreUp: {
-    color: '#22c55e',
+  strengthDots: {
+    display: 'flex',
+    gap: '4px',
+  },
+  strengthDot: {
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
+  },
+  strengthLabel: {
+    fontSize: '13px',
     fontWeight: 600,
-    fontSize: '16px',
-  },
-  scoreDown: {
-    color: '#ef4444',
-    fontWeight: 500,
-    fontSize: '14px',
-  },
-  vs: {
-    color: '#9ca3af',
-    fontSize: '12px',
   },
   noRecs: {
     color: '#6b7280',

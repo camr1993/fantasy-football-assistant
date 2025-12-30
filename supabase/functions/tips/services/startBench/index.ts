@@ -23,6 +23,7 @@ import type {
   StartBenchRecommendation,
   RosterEntryResponse,
   PlayerGroup,
+  RecommendationConfidence,
 } from './types.ts';
 import { extractYahooPlayerId } from '../../utils/yahooPlayerId.ts';
 
@@ -192,21 +193,35 @@ function processStandardPositions(
       const isOnBye = byeWeekPlayerIds.has(player.player_id);
       const injuryStatus = injuryStatusMap.get(player.player_id);
 
-      // Track players filling position slots (exclude injured and bye week players)
+      // Skip flex-slotted players entirely - they're already starting and will be evaluated in flex section
+      if (isInFlexSlot) continue;
+
+      // Track players filling position slots (exclude injured, bye week, and flex players)
       if (shouldStartAtPosition && !isInjured && !isOnBye) {
         playersFillingPositionSlots.get(teamId)!.add(player.player_id);
       }
 
-      // Skip flex-slotted players - evaluated in flex section
-      if (isInFlexSlot && !shouldStartAtPosition) continue;
-
       // Handle injured players currently in a starting slot
       if (isPositionStartingSlot && isInjured) {
+        // Find the best available player to replace them (anyone healthy, not on bye)
+        const replacement = sorted.find(
+          (p) =>
+            p.player_id !== player.player_id &&
+            !injuredPlayerIds.has(p.player_id) &&
+            !byeWeekPlayerIds.has(p.player_id)
+        );
+        // For injured players, confidence is high by default (they can't play!)
+        // Compare to the best healthy replacement
+        const comparison = replacement
+          ? { score: replacement.weighted_score, name: replacement.name }
+          : { score: 100, name: 'any healthy player' }; // High score = high confidence to bench
+
         recommendations.push(
           createRecommendation(
             player,
             'BENCH',
             generateInjuryReason(player),
+            comparison,
             injuryStatus
           )
         );
@@ -215,11 +230,25 @@ function processStandardPositions(
 
       // Handle players on bye week currently in a starting slot
       if (isPositionStartingSlot && isOnBye) {
+        // Find the best available player to replace them (anyone not on bye, not injured)
+        const replacement = sorted.find(
+          (p) =>
+            p.player_id !== player.player_id &&
+            !injuredPlayerIds.has(p.player_id) &&
+            !byeWeekPlayerIds.has(p.player_id)
+        );
+        // For bye week players, confidence is high by default (they can't play!)
+        // Compare to the best available replacement
+        const comparison = replacement
+          ? { score: replacement.weighted_score, name: replacement.name }
+          : { score: 100, name: 'any available player' }; // High score = high confidence to bench
+
         recommendations.push(
           createRecommendation(
             player,
             'BENCH',
             generateByeWeekReason(player),
+            comparison,
             injuryStatus
           )
         );
@@ -232,11 +261,35 @@ function processStandardPositions(
           ? generateStartReason(player, sorted, rank, startingSlots)
           : generateBenchReason(player, sorted, rank, startingSlots);
 
+        // For START: compare to the player they're replacing (worst player who shouldn't start)
+        // For BENCH: compare to the player who should take their spot (best player who should start)
+        let comparison: ComparisonInfo;
+        if (shouldStartAtPosition) {
+          // Player should start - compare to the first "should NOT start" player (they're replacing them)
+          const playerToReplace = sorted[startingSlots];
+          comparison = playerToReplace
+            ? {
+                score: playerToReplace.weighted_score,
+                name: playerToReplace.name,
+              }
+            : { score: 0, name: 'starter' };
+        } else {
+          // Player should bench - compare to the last "should start" player (who should take their spot)
+          const playerTakingSpot = sorted[startingSlots - 1];
+          comparison = playerTakingSpot
+            ? {
+                score: playerTakingSpot.weighted_score,
+                name: playerTakingSpot.name,
+              }
+            : { score: 0, name: 'bench' };
+        }
+
         recommendations.push(
           createRecommendation(
             player,
             shouldStartAtPosition ? 'START' : 'BENCH',
             reason,
+            comparison,
             injuryStatus
           )
         );
@@ -299,11 +352,20 @@ function processFlexPositions(
 
       // Handle injured players currently in a flex slot
       if (isInFlexSlot && !isBenchSlot && isInjured) {
+        // Find best available flex replacement from team's flex-eligible players
+        const teamFlexPlayers = flexEligibleByTeam.get(player.team_id) || [];
+        const replacement = teamFlexPlayers[0]; // Already sorted by score, first is best
+        // For injured players, confidence is high by default (they can't play!)
+        const comparison = replacement
+          ? { score: replacement.weighted_score, name: replacement.name }
+          : { score: 100, name: 'any healthy player' };
+
         recommendations.push(
           createRecommendation(
             player,
             'BENCH',
             generateInjuryReason(player),
+            comparison,
             injuryStatus
           )
         );
@@ -312,11 +374,20 @@ function processFlexPositions(
 
       // Handle players on bye week currently in a flex slot
       if (isInFlexSlot && !isBenchSlot && isOnBye) {
+        // Find best available flex replacement from team's flex-eligible players
+        const teamFlexPlayers = flexEligibleByTeam.get(player.team_id) || [];
+        const replacement = teamFlexPlayers[0]; // Already sorted by score, first is best
+        // For bye week players, confidence is high by default (they can't play!)
+        const comparison = replacement
+          ? { score: replacement.weighted_score, name: replacement.name }
+          : { score: 100, name: 'any available player' };
+
         recommendations.push(
           createRecommendation(
             player,
             'BENCH',
             generateByeWeekReason(player),
+            comparison,
             injuryStatus
           )
         );
@@ -351,11 +422,35 @@ function processFlexPositions(
           ? generateFlexStartReason(player, sortedFlex, i, flexSlots)
           : generateFlexBenchReason(player, sortedFlex, i, flexSlots);
 
+        // For flex START: compare to player they're replacing (first who shouldn't start)
+        // For flex BENCH: compare to player taking their spot (last who should start)
+        let comparison: ComparisonInfo;
+        if (shouldStartAsFlex) {
+          // Player should start in flex - compare to the player they're replacing
+          const playerToReplace = sortedFlex[flexSlots];
+          comparison = playerToReplace
+            ? {
+                score: playerToReplace.weighted_score,
+                name: playerToReplace.name,
+              }
+            : { score: 0, name: 'flex starter' };
+        } else {
+          // Player should bench from flex - compare to player who should take their spot
+          const playerTakingSpot = sortedFlex[flexSlots - 1];
+          comparison = playerTakingSpot
+            ? {
+                score: playerTakingSpot.weighted_score,
+                name: playerTakingSpot.name,
+              }
+            : { score: 0, name: 'flex bench' };
+        }
+
         recommendations.push(
           createRecommendation(
             player,
             shouldStartAsFlex ? 'START' : 'BENCH',
             reason,
+            comparison,
             injuryStatus
           )
         );
@@ -366,12 +461,59 @@ function processFlexPositions(
   return recommendations;
 }
 
+/**
+ * Calculate confidence level based on percentage difference between scores
+ */
+function calculateConfidence(
+  playerScore: number,
+  comparisonScore: number,
+  recommendation: 'START' | 'BENCH'
+): RecommendationConfidence {
+  // For START: how much better is the benched player vs the current starter
+  // For BENCH: how much better is the bench alternative vs the current starter
+  const scoreDiff = Math.abs(playerScore - comparisonScore);
+  const baseScore = Math.max(playerScore, comparisonScore, 1); // Avoid division by zero
+  const percentDiff = (scoreDiff / baseScore) * 100;
+
+  if (recommendation === 'START') {
+    // Player should start - they're better than current starter
+    if (percentDiff >= 25) {
+      return { level: 3, label: 'Must Start' };
+    } else if (percentDiff >= 10) {
+      return { level: 2, label: 'Strong Start' };
+    } else {
+      return { level: 1, label: 'Lean Start' };
+    }
+  } else {
+    // Player should be benched - someone else is better
+    if (percentDiff >= 25) {
+      return { level: 3, label: 'Must Bench' };
+    } else if (percentDiff >= 10) {
+      return { level: 2, label: 'Strong Bench' };
+    } else {
+      return { level: 1, label: 'Lean Bench' };
+    }
+  }
+}
+
+interface ComparisonInfo {
+  score: number;
+  name: string;
+}
+
 function createRecommendation(
   player: PlayerGroup,
   recommendation: 'START' | 'BENCH',
   reason: string,
+  comparison: ComparisonInfo,
   injuryStatus?: string
 ): StartBenchRecommendation {
+  const confidence = calculateConfidence(
+    player.weighted_score,
+    comparison.score,
+    recommendation
+  );
+
   return {
     player_id: player.player_id,
     yahoo_player_id: player.yahoo_player_id,
@@ -380,12 +522,15 @@ function createRecommendation(
     team: player.team,
     slot: player.slot,
     weighted_score: player.weighted_score,
+    comparison_score: comparison.score,
+    comparison_name: comparison.name,
     league_id: player.league_id,
     league_name: player.league_name,
     team_id: player.team_id,
     team_name: player.team_name,
     recommendation,
     reason,
+    confidence,
     injury_status: injuryStatus,
   };
 }
