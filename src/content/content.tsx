@@ -361,38 +361,56 @@ function RecommendationModal({
           {/* Start/Bench Recommendation */}
           {startBench && (
             <div style={styles.section}>
-              <div
-                style={{
-                  ...styles.badge,
-                  backgroundColor:
-                    startBench.recommendation === 'START'
-                      ? '#22c55e'
-                      : '#ef4444',
-                }}
-              >
-                {startBench.recommendation}
+              <div style={styles.rosterHeader}>
+                <h4 style={styles.sectionTitle}>
+                  {startBench.recommendation === 'START' ? '▲' : '▼'} Roster
+                  Suggestions
+                </h4>
+                <div
+                  style={{
+                    ...styles.badge,
+                    backgroundColor:
+                      startBench.recommendation === 'START'
+                        ? '#22c55e'
+                        : '#ef4444',
+                  }}
+                >
+                  {startBench.recommendation}
+                </div>
               </div>
-              <p style={styles.reason}>{startBench.reason}</p>
-              {shouldShowInjuryWarning(startBench.injury_status) && (
-                <InjuryNote
-                  status={startBench.injury_status!}
-                  playerName={startBench.name}
-                />
-              )}
-              <p style={styles.meta}>
-                League: {startBench.league_name} • Team: {startBench.team_name}
-              </p>
+              <div style={styles.rosterCard}>
+                <p
+                  style={{
+                    ...styles.reason,
+                    marginTop: '0px',
+                  }}
+                >
+                  {startBench.reason}
+                </p>
+                {shouldShowInjuryWarning(startBench.injury_status) && (
+                  <InjuryNote
+                    status={startBench.injury_status!}
+                    playerName={startBench.name}
+                  />
+                )}
+                <p style={styles.meta}>
+                  League: {startBench.league_name} • Team:{' '}
+                  {startBench.team_name}
+                </p>
+              </div>
             </div>
           )}
 
           {/* Waiver Wire Upgrades */}
           {waiverUpgrades && waiverUpgrades.length > 0 && (
             <div style={styles.section}>
-              <h4 style={styles.sectionTitle}>🔄 Waiver Wire Upgrades</h4>
+              <div style={styles.rosterHeader}>
+                <h4 style={styles.sectionTitle}>🔄 Waiver Wire Upgrades</h4>
+                <span style={styles.addBadge}>ADD</span>
+              </div>
               {waiverUpgrades.map((upgrade, index) => (
                 <div key={index} style={styles.upgradeCard}>
                   <div style={styles.upgradeHeader}>
-                    <span style={styles.addBadge}>ADD</span>
                     <span style={styles.playerName}>
                       {yahooLeagueId ? (
                         <a
@@ -608,8 +626,8 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '14px',
     fontWeight: 600,
     color: '#374151',
-    marginBottom: '12px',
     marginTop: 0,
+    marginBottom: '8px',
   },
   badge: {
     display: 'inline-block',
@@ -632,6 +650,18 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#9ca3af',
     margin: '4px 0 0 0',
   },
+  rosterCard: {
+    backgroundColor: '#f9fafb',
+    borderRadius: '8px',
+    padding: '12px',
+    marginBottom: '12px',
+    whiteSpace: 'normal',
+  },
+  rosterHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
   upgradeCard: {
     backgroundColor: '#f9fafb',
     borderRadius: '8px',
@@ -648,10 +678,11 @@ const styles: Record<string, React.CSSProperties> = {
   addBadge: {
     backgroundColor: '#22c55e',
     color: 'white',
-    padding: '2px 8px',
-    borderRadius: '4px',
-    fontSize: '11px',
+    padding: '4px 12px',
+    borderRadius: '9999px',
+    fontSize: '12px',
     fontWeight: 600,
+    marginBottom: '8px',
   },
   playerName: {
     fontWeight: 600,
