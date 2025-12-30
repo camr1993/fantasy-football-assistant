@@ -67,5 +67,3 @@ export async function isOnboardingComplete(): Promise<boolean> {
   const state = await getOnboardingState();
   return state.hasSeenIconTooltip;
 }
-
-
