@@ -10,7 +10,7 @@ import {
   getWaiverWireRecommendations,
   WaiverWirePlayer,
   WaiverWireRecommendation,
-} from './services/waiverWire.ts';
+} from './services/waiverWire/index.ts';
 import {
   getStartBenchRecommendations,
   StartBenchRecommendation,
