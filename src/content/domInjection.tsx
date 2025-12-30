@@ -1,0 +1,164 @@
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import type { PlayerRecommendationsMap } from '../types/tips';
+import type { InitializationProgress } from './types';
+import { getUserRosterUrl } from './utils/userTeams';
+import { InitializationBanner } from './components/InitializationBanner';
+import { RecommendationIcon } from './components/RecommendationIcon';
+
+// Store mounted React roots so we can clean them up
+const mountedRoots: Map<string, ReactDOM.Root> = new Map();
+
+/**
+ * Clean up all injected recommendation icons
+ */
+export function cleanupInjectedIcons(): void {
+  mountedRoots.forEach((root, containerId) => {
+    root.unmount();
+    const container = document.getElementById(containerId);
+    if (container) {
+      container.remove();
+    }
+  });
+  mountedRoots.clear();
+  console.log('[Fantasy Assistant] Cleaned up existing recommendation icons');
+}
+
+/**
+ * Inject recommendation icons next to players on the page
+ */
+export function injectRecommendations(
+  playerRecommendations: PlayerRecommendationsMap,
+  forceRefresh = false
+): void {
+  // If force refresh, clean up existing icons first
+  if (forceRefresh && mountedRoots.size > 0) {
+    cleanupInjectedIcons();
+  }
+  // Find all player note elements on the page by aria-label pattern
+  const playerNoteElements = document.querySelectorAll(
+    '[aria-label*="Open player notes for"]'
+  );
+
+  console.log(
+    `[Fantasy Assistant] Found ${playerNoteElements.length} player elements on page`
+  );
+
+  let injectedCount = 0;
+
+  playerNoteElements.forEach((element) => {
+    // Extract player ID from the element
+    const playerId =
+      element.getAttribute('data-ys-playerid') ||
+      element.id?.replace('playernote-', '');
+
+    if (!playerId) return;
+
+    // Check if we have recommendations for this player
+    const recommendations = playerRecommendations[playerId];
+    if (!recommendations) return;
+
+    // Check if we've already injected for this player
+    const containerId = `fantasy-assistant-${playerId}`;
+    if (document.getElementById(containerId)) return;
+
+    const playerName =
+      playerRecommendations[playerId]?.startBench?.name ||
+      playerRecommendations[playerId]?.waiverUpgrades?.[0]
+        ?.rostered_player_name ||
+      `Player ${playerId}`;
+
+    // Create container for our React component
+    const container = document.createElement('span');
+    container.id = containerId;
+    container.style.display = 'inline-block';
+    container.style.verticalAlign = 'middle';
+
+    // Insert after the player note element
+    element.insertAdjacentElement('afterend', container);
+
+    // Mount React component
+    const root = ReactDOM.createRoot(container);
+    root.render(
+      <RecommendationIcon
+        recommendations={recommendations}
+        playerName={playerName}
+      />
+    );
+
+    mountedRoots.set(containerId, root);
+    injectedCount++;
+  });
+
+  console.log(
+    `[Fantasy Assistant] Injected ${injectedCount} recommendation icons`
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Initialization Banner Management
+// ─────────────────────────────────────────────────────────────────────────────
+
+let bannerRoot: ReactDOM.Root | null = null;
+const BANNER_CONTAINER_ID = 'fantasy-assistant-init-banner';
+
+export async function updateInitializationBanner(
+  progress: InitializationProgress
+): Promise<void> {
+  let container = document.getElementById(BANNER_CONTAINER_ID);
+
+  // If dismissing or idle, remove the banner
+  if (progress.status === 'idle') {
+    if (container && bannerRoot) {
+      bannerRoot.unmount();
+      container.remove();
+      bannerRoot = null;
+    }
+    return;
+  }
+
+  // Create container if it doesn't exist
+  if (!container) {
+    container = document.createElement('div');
+    container.id = BANNER_CONTAINER_ID;
+    document.body.prepend(container);
+    bannerRoot = ReactDOM.createRoot(container);
+  }
+
+  // Render the banner
+  if (bannerRoot) {
+    const rosterUrl = await getUserRosterUrl();
+    bannerRoot.render(
+      <InitializationBanner
+        progress={progress}
+        rosterUrl={rosterUrl}
+        onDismiss={() => {
+          updateInitializationBanner({ ...progress, status: 'idle' });
+          // Clear from storage
+          chrome.storage.local.remove(['initialization_progress']);
+        }}
+      />
+    );
+  }
+}
+
+/**
+ * Check for ongoing initialization on page load
+ */
+export async function checkAndShowInitializationBanner(): Promise<void> {
+  try {
+    const result = await chrome.storage.local.get(['initialization_progress']);
+    if (
+      result.initialization_progress &&
+      result.initialization_progress.status !== 'idle'
+    ) {
+      updateInitializationBanner(result.initialization_progress);
+    }
+  } catch (error) {
+    console.error(
+      '[Fantasy Assistant] Error checking initialization status:',
+      error
+    );
+  }
+}
+

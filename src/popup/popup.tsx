@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { apiClient } from '../api/client';
 import {
@@ -6,42 +6,22 @@ import {
   getSupabaseSession,
   signOutSupabase,
 } from '../supabaseClient';
-
-// Estimated times in milliseconds
-const FIRST_TIME_USER_ESTIMATED_MS = 120000; // 2 minutes for first-time users
-const RETURNING_USER_ESTIMATED_MS = 30000; // 30 seconds for returning users
-
-interface InitializationProgress {
-  status: 'idle' | 'initializing' | 'ready' | 'error';
-  percentage: number;
-  currentStep: string;
-  errorMessage?: string;
-  startTime?: number;
-  estimatedDuration?: number;
-}
-
-/**
- * Calculate exponential progress based on elapsed time.
- * Uses an asymptotic curve that approaches but never reaches 95%.
- */
-function calculateExponentialProgress(
-  startTime: number,
-  estimatedDuration: number
-): number {
-  const elapsed = Date.now() - startTime;
-  const maxProgress = 95; // Never exceed 95% until actually complete
-  const k = 2.3; // Tuned so we reach ~90% at estimated time
-
-  const progress =
-    maxProgress * (1 - Math.exp((-k * elapsed) / estimatedDuration));
-  return Math.min(progress, maxProgress);
-}
+import type { InitializationProgress, User } from './types';
+import {
+  FIRST_TIME_USER_ESTIMATED_MS,
+  RETURNING_USER_ESTIMATED_MS,
+  calculateExponentialProgress,
+} from './utils/progress';
+import { useProgressAnimation } from './hooks/useProgressAnimation';
+import { AuthSection } from './components/AuthSection';
+import { InitializationStatus } from './components/InitializationStatus';
+import { UserHeader } from './components/UserHeader';
 
 function Popup() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [authCode, setAuthCode] = useState('');
   const [rosterUrl, setRosterUrl] = useState<string | null>(null);
   const [initProgress, setInitProgress] = useState<InitializationProgress>({
@@ -50,54 +30,8 @@ function Popup() {
     currentStep: '',
   });
 
-  // Use refs to track animation timing without causing re-renders
-  const animationIntervalRef = useRef<number | null>(null);
-  const animationStartTimeRef = useRef<number | null>(null);
-  const animationDurationRef = useRef<number | null>(null);
-
-  // Start the animation loop using setInterval (more reliable in extension popups)
-  const startAnimation = (startTime: number, estimatedDuration: number) => {
-    // Stop any existing animation
-    stopAnimation();
-
-    animationStartTimeRef.current = startTime;
-    animationDurationRef.current = estimatedDuration;
-
-    // Update every 100ms for smooth progress
-    animationIntervalRef.current = window.setInterval(() => {
-      if (
-        animationStartTimeRef.current === null ||
-        animationDurationRef.current === null
-      ) {
-        return;
-      }
-
-      const newPercentage = calculateExponentialProgress(
-        animationStartTimeRef.current,
-        animationDurationRef.current
-      );
-
-      setInitProgress((prev) => ({
-        ...prev,
-        percentage: newPercentage,
-      }));
-    }, 100);
-  };
-
-  // Stop the animation loop
-  const stopAnimation = () => {
-    if (animationIntervalRef.current !== null) {
-      window.clearInterval(animationIntervalRef.current);
-      animationIntervalRef.current = null;
-    }
-  };
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      stopAnimation();
-    };
-  }, []);
+  const { startAnimation, stopAnimation } =
+    useProgressAnimation(setInitProgress);
 
   useEffect(() => {
     checkAuthStatus();
@@ -120,10 +54,9 @@ function Popup() {
       } else if (event === 'TOKEN_REFRESHED') {
         console.log('Session token refreshed');
       } else if (event === 'SIGNED_IN' && session?.user) {
-        // Update user state when signed in
         setUser({
           id: session.user.id,
-          email: session.user.email,
+          email: session.user.email || '',
           name: session.user.user_metadata?.name,
         });
         setIsAuthenticated(true);
@@ -138,13 +71,10 @@ function Popup() {
       if (areaName === 'local' && changes.initialization_progress) {
         const newProgress = changes.initialization_progress.newValue;
         if (newProgress) {
-          // Only update status changes (ready, error) from background
-          // Don't override the time-based progress calculation
           if (
             newProgress.status === 'ready' ||
             newProgress.status === 'error'
           ) {
-            // Stop the animation
             stopAnimation();
 
             setInitProgress((prev) => ({
@@ -156,7 +86,6 @@ function Popup() {
               errorMessage: newProgress.errorMessage,
             }));
 
-            // If ready, fetch user_teams for the roster URL
             if (newProgress.status === 'ready') {
               const result = await chrome.storage.local.get(['user_teams']);
               if (result.user_teams && result.user_teams.length > 0) {
@@ -167,7 +96,6 @@ function Popup() {
         }
       }
 
-      // Also listen for user_teams changes
       if (areaName === 'local' && changes.user_teams) {
         const newUserTeams = changes.user_teams.newValue;
         if (newUserTeams && newUserTeams.length > 0) {
@@ -182,29 +110,25 @@ function Popup() {
       subscription.unsubscribe();
       chrome.storage.onChanged.removeListener(storageListener);
     };
-  }, []);
+  }, [stopAnimation]);
 
   async function checkAuthStatus() {
-    // Check if user has an active Supabase session
     try {
       const session = await getSupabaseSession();
 
       if (session?.user) {
-        // User has an active session
         setUser({
           id: session.user.id,
-          email: session.user.email,
+          email: session.user.email || '',
           name: session.user.user_metadata?.name,
         });
         setIsAuthenticated(true);
 
-        // Check if there's ongoing initialization and user teams from storage
         const result = await chrome.storage.local.get([
           'initialization_progress',
           'user_teams',
         ]);
 
-        // Set roster URL from user_teams if available
         if (result.user_teams && result.user_teams.length > 0) {
           setRosterUrl(result.user_teams[0].roster_url);
         }
@@ -212,13 +136,11 @@ function Popup() {
         if (result.initialization_progress) {
           const storedProgress = result.initialization_progress;
 
-          // If it's still initializing, restore progress state and start animation
           if (
             storedProgress.status === 'initializing' &&
             storedProgress.startTime &&
             storedProgress.estimatedDuration
           ) {
-            // Calculate current progress based on elapsed time
             const currentPercentage = calculateExponentialProgress(
               storedProgress.startTime,
               storedProgress.estimatedDuration
@@ -229,18 +151,15 @@ function Popup() {
               percentage: currentPercentage,
             });
 
-            // Start the animation
             startAnimation(
               storedProgress.startTime,
               storedProgress.estimatedDuration
             );
 
-            // Make sure background is polling
             chrome.runtime.sendMessage({
               type: 'START_INITIALIZATION_POLLING',
             });
           } else {
-            // Not initializing, just set the stored progress
             setInitProgress(storedProgress);
           }
         }
@@ -258,15 +177,12 @@ function Popup() {
       const response = await apiClient.initiateOAuth();
 
       if (response.success && response.data) {
-        // Store nonce in Chrome storage for later validation
         await chrome.storage.local.set({
           oauth_nonce: response.data.nonce,
           oauth_timestamp: Date.now(),
         });
 
-        // Open OAuth flow in a new tab
         chrome.tabs.create({ url: response.data.auth_url });
-        // Clear any previous error
         setError(null);
       } else {
         setError(response.error?.error || 'Failed to get OAuth URL or nonce');
@@ -289,7 +205,6 @@ function Popup() {
       setLoading(true);
       setError(null);
 
-      // Get stored nonce from Chrome storage
       const result = await chrome.storage.local.get([
         'oauth_nonce',
         'oauth_timestamp',
@@ -300,12 +215,10 @@ function Popup() {
         return;
       }
 
-      // Check if nonce is not too old (10 minutes)
       const now = Date.now();
       const maxAge = 10 * 60 * 1000; // 10 minutes
       if (now - result.oauth_timestamp > maxAge) {
         setError('OAuth session expired. Please initiate OAuth again.');
-        // Clean up expired session
         chrome.storage.local.remove(['oauth_nonce', 'oauth_timestamp']);
         return;
       }
@@ -316,24 +229,18 @@ function Popup() {
       );
 
       if (response.success && response.data?.user) {
-        // Session is automatically set by apiClient.exchangeOAuthCode via setSupabaseSession
-        // The onAuthStateChange listener will update the user state
         setUser(response.data.user);
         setIsAuthenticated(true);
         setError(null);
         setAuthCode('');
-        // Clean up OAuth session data
         chrome.storage.local.remove(['oauth_nonce', 'oauth_timestamp']);
 
-        // Trigger league data sync in the background
-        // Pass isFirstTimeUser to determine estimated time for progress bar
         triggerLeagueDataSync(
           response.data.user,
           response.data.isFirstTimeUser ?? true
         );
       } else {
         setError(response.error?.error || 'Token exchange failed');
-        // Clean up OAuth session data on error too
         chrome.storage.local.remove(['oauth_nonce', 'oauth_timestamp']);
       }
     } catch (error) {
@@ -345,28 +252,19 @@ function Popup() {
   }
 
   async function signOut() {
-    // Stop any running animation
     stopAnimation();
-
-    // Sign out from Supabase (clears session from chrome.storage via adapter)
     await signOutSupabase();
 
-    // Clear other cached data from Chrome storage
     chrome.storage.local.remove([
-      // Tips cache (background.ts)
       'tips_data',
       'player_recommendations',
       'tips_timestamp',
-      // Sync timestamps (client.ts)
       'lastPeriodicSync',
-      // OAuth session data (in case sign out during OAuth flow)
       'oauth_nonce',
       'oauth_timestamp',
-      // Initialization progress
       'initialization_progress',
     ]);
 
-    // State updates will be handled by onAuthStateChange listener
     setUser(null);
     setIsAuthenticated(false);
     setInitProgress({
@@ -376,8 +274,7 @@ function Popup() {
     });
   }
 
-  // Function to trigger league data sync after successful authentication
-  async function triggerLeagueDataSync(user: any, isFirstTimeUser: boolean) {
+  async function triggerLeagueDataSync(user: User, isFirstTimeUser: boolean) {
     try {
       console.log('Starting league data sync for user:', user.id, {
         isFirstTimeUser,
@@ -388,7 +285,6 @@ function Popup() {
         ? FIRST_TIME_USER_ESTIMATED_MS
         : RETURNING_USER_ESTIMATED_MS;
 
-      // Set status to initializing with time-based progress
       const initialProgress: InitializationProgress = {
         status: 'initializing',
         percentage: 0,
@@ -400,27 +296,21 @@ function Popup() {
       };
       setInitProgress(initialProgress);
 
-      // Start the progress bar animation
       startAnimation(startTime, estimatedDuration);
 
-      // Store in chrome.storage so background can detect it and we can resume on popup reopen
       await chrome.storage.local.set({
         initialization_progress: initialProgress,
       });
 
-      // Tell background script to start polling for status updates
       chrome.runtime.sendMessage({ type: 'START_INITIALIZATION_POLLING' });
 
-      // Call the league data sync API via client
       const result = await apiClient.syncLeagueData();
 
       if (result.success) {
         console.log('League data sync started:', result.data);
-        // Progress will continue to update via animation until background signals completion
       } else {
         console.error('League data sync failed:', result.error?.error);
 
-        // Stop animation and polling on error
         stopAnimation();
         chrome.runtime.sendMessage({ type: 'STOP_INITIALIZATION_POLLING' });
 
@@ -438,7 +328,6 @@ function Popup() {
     } catch (error) {
       console.error('Error during league data sync:', error);
 
-      // Stop animation and polling on error
       stopAnimation();
       chrome.runtime.sendMessage({ type: 'STOP_INITIALIZATION_POLLING' });
 
@@ -468,222 +357,17 @@ function Popup() {
       <h3>FantasyEdge</h3>
 
       {!isAuthenticated ? (
-        <div>
-          <p>Sign in with Yahoo to access your fantasy data</p>
-          <button
-            onClick={initiateYahooOAuth}
-            disabled={loading}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: '#7c3aed',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              marginBottom: '16px',
-              width: '100%',
-            }}
-          >
-            {loading ? 'Loading...' : 'Sign in with Yahoo'}
-          </button>
-
-          <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '16px' }}>
-            <p style={{ fontSize: '14px', marginBottom: '8px' }}>
-              Enter the authorization code from Yahoo:
-            </p>
-            <input
-              type="text"
-              value={authCode}
-              onChange={(e) => setAuthCode(e.target.value)}
-              placeholder="Enter authorization code"
-              style={{
-                width: '100%',
-                padding: '8px',
-                marginBottom: '8px',
-                border: '1px solid #ccc',
-                borderRadius: '4px',
-                fontSize: '14px',
-              }}
-            />
-            <button
-              onClick={submitAuthCode}
-              disabled={loading || !authCode.trim()}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: '#7c3aed',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: loading || !authCode.trim() ? 'not-allowed' : 'pointer',
-                width: '100%',
-              }}
-            >
-              {loading ? 'Authorizing...' : 'Submit Code'}
-            </button>
-          </div>
-        </div>
+        <AuthSection
+          loading={loading}
+          authCode={authCode}
+          onAuthCodeChange={setAuthCode}
+          onInitiateOAuth={initiateYahooOAuth}
+          onSubmitCode={submitAuthCode}
+        />
       ) : (
         <div>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '16px',
-            }}
-          >
-            <p style={{ margin: 0 }}>Welcome, {user?.name || user?.email}!</p>
-            <button
-              onClick={signOut}
-              style={{
-                padding: '4px 8px',
-                backgroundColor: '#ef4444',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '12px',
-              }}
-            >
-              Sign Out
-            </button>
-          </div>
-
-          {/* Initialization Progress */}
-          {initProgress.status === 'initializing' && (
-            <div
-              style={{
-                backgroundColor: '#f3f4f6',
-                borderRadius: '8px',
-                padding: '16px',
-                marginBottom: '16px',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  marginBottom: '8px',
-                }}
-              >
-                <div
-                  style={{
-                    width: '16px',
-                    height: '16px',
-                    borderRadius: '50%',
-                    border: '2px solid #7c3aed',
-                    borderTopColor: 'transparent',
-                    animation: 'spin 1s linear infinite',
-                    marginRight: '8px',
-                  }}
-                />
-                <span style={{ fontWeight: 600, color: '#374151' }}>
-                  Setting up your league...
-                </span>
-              </div>
-              <div
-                style={{
-                  width: '100%',
-                  height: '8px',
-                  backgroundColor: '#e5e7eb',
-                  borderRadius: '4px',
-                  overflow: 'hidden',
-                  marginBottom: '8px',
-                  position: 'relative',
-                }}
-              >
-                <div
-                  style={{
-                    width: `${initProgress.percentage}%`,
-                    height: '8px',
-                    backgroundColor: '#7c3aed',
-                    borderRadius: '4px',
-                    transition: 'width 0.1s linear',
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                  }}
-                />
-              </div>
-              <p
-                style={{
-                  fontSize: '12px',
-                  color: '#6b7280',
-                  margin: 0,
-                }}
-              >
-                {initProgress.currentStep}
-              </p>
-              <p
-                style={{
-                  fontSize: '11px',
-                  color: '#9ca3af',
-                  margin: '4px 0 0 0',
-                }}
-              >
-                {Math.round(initProgress.percentage)}% complete
-              </p>
-            </div>
-          )}
-
-          {initProgress.status === 'ready' && (
-            <div
-              style={{
-                backgroundColor: '#d1fae5',
-                borderRadius: '8px',
-                padding: '12px',
-                marginBottom: '16px',
-                display: 'flex',
-                alignItems: 'center',
-              }}
-            >
-              <span style={{ marginRight: '8px' }}>✓</span>
-              <span style={{ color: '#065f46' }}>
-                Your league data is ready! Visit your{' '}
-                {rosterUrl ? (
-                  <a
-                    href={rosterUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      color: '#065f46',
-                      fontWeight: 600,
-                      textDecoration: 'underline',
-                    }}
-                  >
-                    roster page
-                  </a>
-                ) : (
-                  'Yahoo Fantasy'
-                )}{' '}
-                to see tips.
-              </span>
-            </div>
-          )}
-
-          {initProgress.status === 'error' && (
-            <div
-              style={{
-                backgroundColor: '#fee2e2',
-                borderRadius: '8px',
-                padding: '12px',
-                marginBottom: '16px',
-              }}
-            >
-              <p style={{ color: '#991b1b', margin: 0, fontWeight: 600 }}>
-                Initialization Error
-              </p>
-              <p
-                style={{
-                  color: '#991b1b',
-                  margin: '4px 0 0 0',
-                  fontSize: '12px',
-                }}
-              >
-                {initProgress.errorMessage || 'An error occurred during setup'}
-              </p>
-            </div>
-          )}
+          <UserHeader user={user} onSignOut={signOut} />
+          <InitializationStatus progress={initProgress} rosterUrl={rosterUrl} />
         </div>
       )}
 
