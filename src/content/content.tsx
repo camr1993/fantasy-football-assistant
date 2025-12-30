@@ -24,23 +24,52 @@ interface InitializationBannerProps {
   onDismiss: () => void;
 }
 
+interface StoredUserTeam {
+  team_id: string;
+  league_id: string;
+  yahoo_league_id: string;
+  roster_url: string;
+}
+
+// Cache for user teams data
+let cachedUserTeams: StoredUserTeam[] | null = null;
+
+/**
+ * Get the user's teams from stored user_teams data
+ */
+async function getUserTeams(): Promise<StoredUserTeam[]> {
+  if (cachedUserTeams !== null) {
+    return cachedUserTeams;
+  }
+  try {
+    const result = await chrome.storage.local.get(['user_teams']);
+    cachedUserTeams = (result.user_teams as StoredUserTeam[] | undefined) || [];
+    return cachedUserTeams;
+  } catch (error) {
+    console.error('[Fantasy Assistant] Error getting user teams:', error);
+    return [];
+  }
+}
+
 /**
  * Get the user's roster URL from stored user_teams data
  * Returns the first team's roster URL, or null if no teams are stored
  */
 async function getUserRosterUrl(): Promise<string | null> {
-  try {
-    const result = await chrome.storage.local.get(['user_teams']);
-    const userTeams = result.user_teams as
-      | Array<{ roster_url: string }>
-      | undefined;
-    if (userTeams && userTeams.length > 0) {
-      return userTeams[0].roster_url;
-    }
-  } catch (error) {
-    console.error('[Fantasy Assistant] Error getting user teams:', error);
+  const userTeams = await getUserTeams();
+  if (userTeams.length > 0) {
+    return userTeams[0].roster_url;
   }
   return null;
+}
+
+/**
+ * Look up the Yahoo league ID from stored user_teams by database league_id
+ */
+function getYahooLeagueIdFromCache(leagueId: string): string | null {
+  if (!cachedUserTeams) return null;
+  const team = cachedUserTeams.find((t) => t.league_id === leagueId);
+  return team?.yahoo_league_id || null;
 }
 
 function InitializationBanner({
@@ -272,18 +301,34 @@ function InjuryNote({ status, playerName }: InjuryNoteProps) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Player Search URL Helper
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Generate a Yahoo Fantasy player search URL
+ * @param yahooLeagueId - The numeric Yahoo league ID (e.g., "869919")
+ * @param playerName - The player's name to search for
+ */
+function getPlayerSearchUrl(yahooLeagueId: string, playerName: string): string {
+  const encodedName = encodeURIComponent(playerName);
+  return `https://football.fantasysports.yahoo.com/f1/${yahooLeagueId}/playersearch?&search=${encodedName}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Modal Component
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface RecommendationModalProps {
   recommendations: PlayerRecommendations;
   playerName: string;
+  yahooLeagueId: string | null;
   onClose: () => void;
 }
 
 function RecommendationModal({
   recommendations,
   playerName,
+  yahooLeagueId,
   onClose,
 }: RecommendationModalProps) {
   const { startBench, waiverUpgrades } = recommendations;
@@ -292,7 +337,21 @@ function RecommendationModal({
     <div style={styles.overlay} onClick={onClose}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div style={styles.header}>
-          <h3 style={styles.title}>💡 Recommendations for {playerName}</h3>
+          <h3 style={styles.title}>
+            💡 Recommendations for{' '}
+            {yahooLeagueId ? (
+              <a
+                href={getPlayerSearchUrl(yahooLeagueId, playerName)}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={styles.titlePlayerLink}
+              >
+                {playerName}
+              </a>
+            ) : (
+              playerName
+            )}
+          </h3>
           <button style={styles.closeButton} onClick={onClose}>
             ×
           </button>
@@ -335,8 +394,22 @@ function RecommendationModal({
                   <div style={styles.upgradeHeader}>
                     <span style={styles.addBadge}>ADD</span>
                     <span style={styles.playerName}>
-                      {upgrade.waiver_player_name} ({upgrade.waiver_player_team}
-                      )
+                      {yahooLeagueId ? (
+                        <a
+                          href={getPlayerSearchUrl(
+                            yahooLeagueId,
+                            upgrade.waiver_player_name
+                          )}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={styles.playerLink}
+                        >
+                          {upgrade.waiver_player_name}
+                        </a>
+                      ) : (
+                        upgrade.waiver_player_name
+                      )}{' '}
+                      ({upgrade.waiver_player_team})
                     </span>
                   </div>
                   <div style={styles.scoreComparison}>
@@ -389,10 +462,27 @@ function RecommendationIcon({
   playerName,
 }: RecommendationIconProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [yahooLeagueId, setYahooLeagueId] = useState<string | null>(null);
 
   const hasStartBench = !!recommendations.startBench;
   const hasWaiverUpgrade =
     recommendations.waiverUpgrades && recommendations.waiverUpgrades.length > 0;
+
+  // Look up the Yahoo league ID from cached user teams
+  const leagueId =
+    recommendations.startBench?.league_id ||
+    recommendations.waiverUpgrades?.[0]?.league_id;
+
+  // Load yahoo_league_id when opening modal
+  const handleOpenModal = async () => {
+    // Ensure user teams are loaded
+    await getUserTeams();
+    if (leagueId) {
+      const yLeagueId = getYahooLeagueIdFromCache(leagueId);
+      setYahooLeagueId(yLeagueId);
+    }
+    setIsModalOpen(true);
+  };
 
   // Determine icon and color based on recommendation type
   let icon = '💡';
@@ -421,7 +511,7 @@ function RecommendationIcon({
         onClick={(e) => {
           e.stopPropagation();
           e.preventDefault();
-          setIsModalOpen(true);
+          handleOpenModal();
         }}
         title="View FantasyEdge recommendations"
       >
@@ -432,6 +522,7 @@ function RecommendationIcon({
         <RecommendationModal
           recommendations={recommendations}
           playerName={playerName}
+          yahooLeagueId={yahooLeagueId}
           onClose={() => setIsModalOpen(false)}
         />
       )}
@@ -608,6 +699,15 @@ const styles: Record<string, React.CSSProperties> = {
   injuryIcon: {
     flexShrink: 0,
     fontSize: '14px',
+  },
+  titlePlayerLink: {
+    color: '#7c3aed',
+    textDecoration: 'none',
+  },
+  playerLink: {
+    color: '#7c3aed',
+    fontWeight: 600,
+    textDecoration: 'none',
   },
 };
 

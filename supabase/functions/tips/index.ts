@@ -224,6 +224,7 @@ Deno.serve(async (req) => {
       team_id: string;
       team_name: string;
       league_id: string;
+      yahoo_league_id: string;
       league_name: string;
       roster_url: string;
     }
@@ -242,6 +243,7 @@ Deno.serve(async (req) => {
           team_id: team.id,
           team_name: team.name,
           league_id: team.league_id,
+          yahoo_league_id: yahooLeagueId,
           league_name: leagueData?.name || 'Unknown League',
           roster_url: `https://football.fantasysports.yahoo.com/f1/${yahooLeagueId}/${yahooTeamId}`,
         });

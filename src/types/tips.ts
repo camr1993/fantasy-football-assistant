@@ -54,6 +54,7 @@ export interface UserTeamInfo {
   team_id: string;
   team_name: string;
   league_id: string;
+  yahoo_league_id: string;
   league_name: string;
   roster_url: string;
 }
