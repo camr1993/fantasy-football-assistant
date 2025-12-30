@@ -14,3 +14,7 @@ export interface StoredUserTeam {
   roster_url: string;
 }
 
+export interface OnboardingState {
+  hasSeenIconTooltip: boolean;
+  completedAt?: number;
+}

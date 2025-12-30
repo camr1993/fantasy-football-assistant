@@ -16,6 +16,7 @@ import { useProgressAnimation } from './hooks/useProgressAnimation';
 import { AuthSection } from './components/AuthSection';
 import { InitializationStatus } from './components/InitializationStatus';
 import { UserHeader } from './components/UserHeader';
+import { initializeOnboardingForNewUser } from '../content/utils/onboarding';
 
 function Popup() {
   const [loading, setLoading] = useState(false);
@@ -234,6 +235,11 @@ function Popup() {
         setError(null);
         setAuthCode('');
         chrome.storage.local.remove(['oauth_nonce', 'oauth_timestamp']);
+
+        // Initialize onboarding for first-time users
+        if (response.data.isFirstTimeUser) {
+          await initializeOnboardingForNewUser();
+        }
 
         triggerLeagueDataSync(
           response.data.user,

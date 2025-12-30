@@ -1,13 +1,18 @@
-import React from 'react';
 import ReactDOM from 'react-dom/client';
 import type { PlayerRecommendationsMap } from '../types/tips';
 import type { InitializationProgress } from './types';
 import { getUserRosterUrl } from './utils/userTeams';
+import { getOnboardingState, updateOnboardingState } from './utils/onboarding';
 import { InitializationBanner } from './components/InitializationBanner';
 import { RecommendationIcon } from './components/RecommendationIcon';
+import { OnboardingTooltip } from './components/OnboardingTooltip';
 
 // Store mounted React roots so we can clean them up
 const mountedRoots: Map<string, ReactDOM.Root> = new Map();
+
+// Onboarding tooltip management
+let onboardingTooltipRoot: ReactDOM.Root | null = null;
+const ONBOARDING_CONTAINER_ID = 'fantasy-assistant-onboarding-tooltip';
 
 /**
  * Clean up all injected recommendation icons
@@ -25,12 +30,53 @@ export function cleanupInjectedIcons(): void {
 }
 
 /**
+ * Show the onboarding tooltip pointing to a target icon element
+ */
+function showOnboardingTooltip(targetElement: HTMLElement): void {
+  // Don't show if already showing
+  if (document.getElementById(ONBOARDING_CONTAINER_ID)) return;
+
+  const container = document.createElement('div');
+  container.id = ONBOARDING_CONTAINER_ID;
+  document.body.appendChild(container);
+
+  onboardingTooltipRoot = ReactDOM.createRoot(container);
+  onboardingTooltipRoot.render(
+    <OnboardingTooltip
+      targetElement={targetElement}
+      onDismiss={dismissOnboardingTooltip}
+    />
+  );
+
+  console.log('[Fantasy Assistant] Showing onboarding tooltip');
+}
+
+/**
+ * Dismiss the onboarding tooltip and update state
+ */
+async function dismissOnboardingTooltip(): Promise<void> {
+  if (onboardingTooltipRoot) {
+    onboardingTooltipRoot.unmount();
+    onboardingTooltipRoot = null;
+  }
+
+  const container = document.getElementById(ONBOARDING_CONTAINER_ID);
+  if (container) {
+    container.remove();
+  }
+
+  // Mark as seen in storage
+  await updateOnboardingState({ hasSeenIconTooltip: true });
+  console.log('[Fantasy Assistant] Onboarding tooltip dismissed');
+}
+
+/**
  * Inject recommendation icons next to players on the page
  */
-export function injectRecommendations(
+export async function injectRecommendations(
   playerRecommendations: PlayerRecommendationsMap,
   forceRefresh = false
-): void {
+): Promise<void> {
   // If force refresh, clean up existing icons first
   if (forceRefresh && mountedRoots.size > 0) {
     cleanupInjectedIcons();
@@ -45,6 +91,7 @@ export function injectRecommendations(
   );
 
   let injectedCount = 0;
+  let firstInjectedContainer: HTMLElement | null = null;
 
   playerNoteElements.forEach((element) => {
     // Extract player ID from the element
@@ -87,12 +134,32 @@ export function injectRecommendations(
     );
 
     mountedRoots.set(containerId, root);
+
+    // Track the first injected container for onboarding tooltip
+    if (injectedCount === 0) {
+      firstInjectedContainer = container;
+    }
+
     injectedCount++;
   });
 
   console.log(
     `[Fantasy Assistant] Injected ${injectedCount} recommendation icons`
   );
+
+  // Show onboarding tooltip if this is the first time and we injected icons
+  if (injectedCount > 0 && firstInjectedContainer) {
+    const onboardingState = await getOnboardingState();
+    if (!onboardingState.hasSeenIconTooltip) {
+      // Small delay to ensure the icon is fully rendered
+      setTimeout(() => {
+        const iconButton = firstInjectedContainer?.querySelector('button');
+        if (iconButton) {
+          showOnboardingTooltip(iconButton as HTMLElement);
+        }
+      }, 300);
+    }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -161,4 +228,3 @@ export async function checkAndShowInitializationBanner(): Promise<void> {
     );
   }
 }
-
