@@ -350,8 +350,8 @@ export function generateDetailedComparisonReason(
   if (keyAdvantages.length === 0) {
     // Fallback to generic reason if no clear advantages
     return isStartRecommendation
-      ? `${betterPlayerName} has a slightly higher weighted score (${betterPlayer.weightedScore.toFixed(2)} vs ${worsePlayer.weightedScore.toFixed(2)}).`
-      : `${worsePlayerName} has a lower weighted score than ${betterPlayerName} (${worsePlayer.weightedScore.toFixed(2)} vs ${betterPlayer.weightedScore.toFixed(2)}).`;
+      ? `${betterPlayerName} is a better option than ${worsePlayerName}.`
+      : `${worsePlayerName} is a weaker option than ${betterPlayerName}.`;
   }
 
   // Get top 2-3 advantages for the reason
@@ -361,10 +361,10 @@ export function generateDetailedComparisonReason(
 
   if (isStartRecommendation) {
     // "Start Player A" reason
-    reason = `${betterPlayerName} outscores ${worsePlayerName} (${betterPlayer.weightedScore.toFixed(2)} vs ${worsePlayer.weightedScore.toFixed(2)}) `;
+    reason = `${betterPlayerName} is a better option than ${worsePlayerName} `;
 
     if (topAdvantages.length === 1) {
-      reason += `primarily due to ${formatAdvantage(topAdvantages[0], true)}.`;
+      reason += `due to ${formatAdvantage(topAdvantages[0], true)}.`;
     } else if (topAdvantages.length === 2) {
       reason += `due to ${formatAdvantage(topAdvantages[0], true)} and ${formatAdvantage(topAdvantages[1], true)}.`;
     } else {
@@ -372,14 +372,14 @@ export function generateDetailedComparisonReason(
     }
   } else {
     // "Bench Player B" reason
-    reason = `${worsePlayerName} trails ${betterPlayerName} (${worsePlayer.weightedScore.toFixed(2)} vs ${betterPlayer.weightedScore.toFixed(2)}) `;
+    reason = `${worsePlayerName} is a weaker option than ${betterPlayerName} `;
 
     if (topAdvantages.length === 1) {
-      reason += `mainly because of weaker ${topAdvantages[0].label.toLowerCase()}.`;
+      reason += `due to weaker ${topAdvantages[0].label.toLowerCase()}.`;
     } else if (topAdvantages.length === 2) {
       reason += `due to lower ${topAdvantages[0].label.toLowerCase()} and ${topAdvantages[1].label.toLowerCase()}.`;
     } else {
-      reason += `with gaps in ${topAdvantages[0].label.toLowerCase()}, ${topAdvantages[1].label.toLowerCase()}, and ${topAdvantages[2].label.toLowerCase()}.`;
+      reason += `due to gaps in ${topAdvantages[0].label.toLowerCase()}, ${topAdvantages[1].label.toLowerCase()}, and ${topAdvantages[2].label.toLowerCase()}.`;
     }
   }
 
@@ -439,20 +439,19 @@ export function generateScoreDriversSummary(
   const topFactors = getTopFactors(breakdown, 3);
 
   if (topFactors.length === 0) {
-    return `${playerName}'s weighted score is ${breakdown.weightedScore.toFixed(2)}.`;
+    return `${playerName} has limited recent performance data.`;
   }
 
-  const totalPercent = topFactors.reduce((sum, f) => sum + f.percentOfTotal, 0);
   const factorLabels = topFactors.map((f) => f.label.toLowerCase());
 
-  let summary = `${playerName}'s score (${breakdown.weightedScore.toFixed(2)}) is driven by `;
+  let summary = `${playerName}'s performance is driven by `;
 
   if (factorLabels.length === 1) {
-    summary += `${factorLabels[0]} (${topFactors[0].percentOfTotal}% of score).`;
+    summary += `${factorLabels[0]}.`;
   } else if (factorLabels.length === 2) {
-    summary += `${factorLabels[0]} and ${factorLabels[1]} (${totalPercent}% combined).`;
+    summary += `${factorLabels[0]} and ${factorLabels[1]}.`;
   } else {
-    summary += `${factorLabels[0]}, ${factorLabels[1]}, and ${factorLabels[2]} (${totalPercent}% combined).`;
+    summary += `${factorLabels[0]}, ${factorLabels[1]}, and ${factorLabels[2]}.`;
   }
 
   return summary;

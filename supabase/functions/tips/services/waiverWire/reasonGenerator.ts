@@ -100,11 +100,11 @@ export function generateWaiverWireReason(
       .slice(0, 2)
       .map((c) => c.label.toLowerCase());
 
-    let reason = `${waiverPlayer.name} (${waiverPlayer.team}) scores ${waiverPlayer.weighted_score.toFixed(2)}, `;
-    reason += `while ${rosteredPlayer.name} (${rosteredPlayer.team}) has no scoring data. `;
+    let reason = `${waiverPlayer.name} (${waiverPlayer.team}) is available, `;
+    reason += `while ${rosteredPlayer.name} (${rosteredPlayer.team}) has no recent performance data. `;
 
     if (topFactors.length > 0) {
-      reason += `${waiverPlayer.name}'s score is driven by ${topFactors.join(' and ')}.`;
+      reason += `${waiverPlayer.name} has strong ${topFactors.join(' and ')}.`;
     }
 
     return reason.trim();
@@ -143,14 +143,5 @@ export function generateWaiverWireReason(
   }
 
   // Fallback to simpler reason if no component data
-  const scoreDiff = waiverPlayer.weighted_score - rosteredPlayer.weighted_score;
-  const percentImprovement =
-    (scoreDiff / Math.abs(rosteredPlayer.weighted_score)) * 100;
-
-  let reason = `${waiverPlayer.name} (${waiverPlayer.team}) outscores ${rosteredPlayer.name} (${rosteredPlayer.team}): `;
-  reason += `${waiverPlayer.weighted_score.toFixed(2)} vs ${rosteredPlayer.weighted_score.toFixed(2)} `;
-  reason += `(+${scoreDiff.toFixed(2)}, ${percentImprovement.toFixed(0)}% better).`;
-
-  return reason.trim();
+  return `${waiverPlayer.name} (${waiverPlayer.team}) is a better option than ${rosteredPlayer.name} (${rosteredPlayer.team}).`;
 }
-

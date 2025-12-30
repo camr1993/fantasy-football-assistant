@@ -125,7 +125,7 @@ export function generateStartReason(
   const breakdown = buildPlayerBreakdown(player);
   const topFactors = getTopFactors(breakdown, 2);
 
-  let reason = `Ranked #${rank + 1} ${position} with score ${weighted_score.toFixed(2)}. `;
+  let reason = `Ranked #${rank + 1} ${position} on your roster. `;
 
   if (topFactors.length > 0) {
     const factorLabels = topFactors.map((f) => f.label.toLowerCase());
@@ -152,7 +152,7 @@ export function generateBenchReason(
   const betterPlayers = sortedPlayers.slice(0, startingSlots);
 
   if (betterPlayers.length === 0) {
-    return `Ranked #${rank + 1} of ${sortedPlayers.length} ${position}s with weighted score ${weighted_score.toFixed(2)}.`;
+    return `Ranked #${rank + 1} of ${sortedPlayers.length} ${position}s on your roster.`;
   }
 
   // Compare against the last starter (the threshold player)
@@ -179,7 +179,7 @@ export function generateBenchReason(
   }
 
   // Fallback to generic reason
-  return `${name} trails ${thresholdPlayer.name} (${weighted_score.toFixed(2)} vs ${thresholdPlayer.weighted_score.toFixed(2)}). Not among top ${startingSlots} ${position}s.`;
+  return `${name} is a weaker option than ${thresholdPlayer.name}. Not among top ${startingSlots} ${position}s.`;
 }
 
 /**
@@ -244,7 +244,7 @@ export function generateFlexStartReason(
   const breakdown = buildPlayerBreakdown(player);
   const topFactors = getTopFactors(breakdown, 2);
 
-  let reason = `Best available for W/R/T flex. Ranked #${rank + 1} flex-eligible (${position}) with score ${weighted_score.toFixed(2)}. `;
+  let reason = `Best available for W/R/T flex. Ranked #${rank + 1} flex-eligible (${position}). `;
 
   if (topFactors.length > 0) {
     const factorLabels = topFactors.map((f) => f.label.toLowerCase());
@@ -267,7 +267,7 @@ export function generateFlexBenchReason(
   const betterPlayers = sortedPlayers.slice(0, flexSlots);
 
   if (betterPlayers.length === 0) {
-    return `Ranked #${rank + 1} of ${sortedPlayers.length} flex-eligible players (${position}) with weighted score ${weighted_score.toFixed(2)}.`;
+    return `Ranked #${rank + 1} of ${sortedPlayers.length} flex-eligible players (${position}).`;
   }
 
   // Compare against the last flex starter
@@ -295,5 +295,5 @@ export function generateFlexBenchReason(
   }
 
   // Fallback
-  return `${name} (${position}) trails ${thresholdPlayer.name} (${thresholdPlayer.position}) for flex: ${weighted_score.toFixed(2)} vs ${thresholdPlayer.weighted_score.toFixed(2)}.`;
+  return `${name} (${position}) is a weaker flex option than ${thresholdPlayer.name} (${thresholdPlayer.position}).`;
 }
