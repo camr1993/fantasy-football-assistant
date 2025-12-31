@@ -74,23 +74,15 @@ async function updateRecentStatsForLeague(
   // Recent stats are league-specific because they use league-specific fantasy_points
   await calculateNormalizedRecentStats(leagueId, seasonYear, week);
 
-  // Calculate weighted scores for WR players after normalization is complete
-  await calculateWeightedScoresForLeagueWR(leagueId, seasonYear, week);
-
-  // Calculate weighted scores for RB players after normalization is complete
-  await calculateWeightedScoresForLeagueRB(leagueId, seasonYear, week);
-
-  // Calculate weighted scores for TE players after normalization is complete
-  await calculateWeightedScoresForLeagueTE(leagueId, seasonYear, week);
-
-  // Calculate weighted scores for QB players after normalization is complete
-  await calculateWeightedScoresForLeagueQB(leagueId, seasonYear, week);
-
-  // Calculate weighted scores for K players after normalization is complete
-  await calculateWeightedScoresForLeagueK(leagueId, seasonYear, week);
-
-  // Calculate weighted scores for DEF players after normalization is complete
-  await calculateWeightedScoresForLeagueDEF(leagueId, seasonYear, week);
+  // Calculate weighted scores for all positions in parallel (they are independent)
+  await Promise.all([
+    calculateWeightedScoresForLeagueWR(leagueId, seasonYear, week),
+    calculateWeightedScoresForLeagueRB(leagueId, seasonYear, week),
+    calculateWeightedScoresForLeagueTE(leagueId, seasonYear, week),
+    calculateWeightedScoresForLeagueQB(leagueId, seasonYear, week),
+    calculateWeightedScoresForLeagueK(leagueId, seasonYear, week),
+    calculateWeightedScoresForLeagueDEF(leagueId, seasonYear, week),
+  ]);
 
   logger.info('Completed recent statistics update for league', {
     leagueId,
@@ -282,7 +274,7 @@ export async function calculateRecentStatsAllWeeks(
       logger.info(`Processing league calcs for week ${week}/${targetWeek}`);
 
       if (leagueIds.length > 0) {
-        // Process specific leagues
+        // Process specific leagues sequentially to avoid DB contention
         for (const lid of leagueIds) {
           await calculateRecentStatsOnly(lid, currentYear, week);
         }

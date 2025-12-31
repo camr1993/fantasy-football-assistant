@@ -1,5 +1,5 @@
 // Estimated times in milliseconds
-export const FIRST_TIME_USER_ESTIMATED_MS = 120000; // 2 minutes for first-time users
+export const FIRST_TIME_USER_ESTIMATED_MS = 90000; // 1.5 minutes for first-time users
 export const RETURNING_USER_ESTIMATED_MS = 30000; // 30 seconds for returning users
 
 /**
@@ -18,4 +18,3 @@ export function calculateExponentialProgress(
     maxProgress * (1 - Math.exp((-k * elapsed) / estimatedDuration));
   return Math.min(progress, maxProgress);
 }
-

@@ -89,37 +89,70 @@ export async function syncDefensePointsAgainst(
     logger.info(`Found ${defensePlayers.length} defense players`);
 
     let totalProcessed = 0;
+    const PLAYER_CONCURRENCY = 10; // Process 10 defense players in parallel
+    const LEAGUE_CONCURRENCY = 3; // Process 3 leagues in parallel
 
-    // Process each league
-    for (const league of leagues) {
-      logger.info('Processing league', {
-        leagueId: league.id,
-        leagueName: league.name,
-      });
+    // Process leagues in parallel batches
+    for (let i = 0; i < leagues.length; i += LEAGUE_CONCURRENCY) {
+      const leagueBatch = leagues.slice(i, i + LEAGUE_CONCURRENCY);
 
-      // Process each defense player for this league
-      for (const defensePlayer of defensePlayers) {
-        try {
-          const pointsAgainst = await calculateDefensePointsAgainst(
-            league.id,
-            defensePlayer.id,
-            currentYear,
-            currentWeek
-          );
-
-          if (pointsAgainst) {
-            await upsertDefensePointsAgainst(pointsAgainst);
-            totalProcessed++;
-          }
-        } catch (error) {
-          logger.error('Failed to process defense player for league', {
+      const leagueResults = await Promise.all(
+        leagueBatch.map(async (league: any) => {
+          logger.info('Processing league', {
             leagueId: league.id,
-            playerId: defensePlayer.id,
-            error: error instanceof Error ? error.message : String(error),
+            leagueName: league.name,
           });
-          // Continue with other players even if one fails
-        }
-      }
+
+          let leagueProcessed = 0;
+          const pointsAgainstBatch: DefensePointsAgainst[] = [];
+
+          // Process defense players in parallel batches
+          for (let j = 0; j < defensePlayers.length; j += PLAYER_CONCURRENCY) {
+            const playerBatch = defensePlayers.slice(j, j + PLAYER_CONCURRENCY);
+
+            const results = await Promise.all(
+              playerBatch.map(async (defensePlayer: any) => {
+                try {
+                  return await calculateDefensePointsAgainst(
+                    league.id,
+                    defensePlayer.id,
+                    currentYear,
+                    currentWeek
+                  );
+                } catch (error) {
+                  logger.error('Failed to process defense player for league', {
+                    leagueId: league.id,
+                    playerId: defensePlayer.id,
+                    error:
+                      error instanceof Error ? error.message : String(error),
+                  });
+                  return null;
+                }
+              })
+            );
+
+            // Collect valid results for batch upsert
+            for (const pointsAgainst of results) {
+              if (pointsAgainst) {
+                pointsAgainstBatch.push(pointsAgainst);
+              }
+            }
+          }
+
+          // Batch upsert all defense points for this league
+          if (pointsAgainstBatch.length > 0) {
+            await upsertDefensePointsAgainstBatch(pointsAgainstBatch);
+            leagueProcessed = pointsAgainstBatch.length;
+          }
+
+          return leagueProcessed;
+        })
+      );
+
+      totalProcessed += leagueResults.reduce(
+        (sum: number, count: number) => sum + count,
+        0
+      );
     }
 
     logger.info('Completed defense points against sync', {
@@ -551,53 +584,61 @@ async function calculateDefensePointsAgainst(
 }
 
 /**
- * Upsert defense points against into the database
+ * Batch upsert defense points against into the database
  */
-async function upsertDefensePointsAgainst(
-  pointsAgainst: DefensePointsAgainst
+async function upsertDefensePointsAgainstBatch(
+  pointsAgainstList: DefensePointsAgainst[]
 ): Promise<void> {
+  if (pointsAgainstList.length === 0) return;
+
   try {
-    const { error } = await supabase.from('defense_points_against').upsert(
-      {
-        league_id: pointsAgainst.league_id,
-        player_id: pointsAgainst.player_id,
-        season_year: pointsAgainst.season_year,
-        week: pointsAgainst.week,
-        qb_pts_against: pointsAgainst.qb_pts_against,
-        rb_pts_against: pointsAgainst.rb_pts_against,
-        wr_pts_against: pointsAgainst.wr_pts_against,
-        te_pts_against: pointsAgainst.te_pts_against,
-        k_pts_against: pointsAgainst.k_pts_against,
-        qb_rolling_3_week_avg: pointsAgainst.qb_rolling_3_week_avg,
-        rb_rolling_3_week_avg: pointsAgainst.rb_rolling_3_week_avg,
-        wr_rolling_3_week_avg: pointsAgainst.wr_rolling_3_week_avg,
-        te_rolling_3_week_avg: pointsAgainst.te_rolling_3_week_avg,
-        k_rolling_3_week_avg: pointsAgainst.k_rolling_3_week_avg,
-        qb_rolling_3_wk_avg_norm: pointsAgainst.qb_rolling_3_wk_avg_norm,
-        rb_rolling_3_wk_avg_norm: pointsAgainst.rb_rolling_3_wk_avg_norm,
-        wr_rolling_3_wk_avg_norm: pointsAgainst.wr_rolling_3_wk_avg_norm,
-        te_rolling_3_wk_avg_norm: pointsAgainst.te_rolling_3_wk_avg_norm,
-        k_rolling_3_wk_avg_norm: pointsAgainst.k_rolling_3_wk_avg_norm,
-        updated_at: new Date().toISOString(),
-      },
-      {
+    const updatedAt = new Date().toISOString();
+    const records = pointsAgainstList.map((pointsAgainst) => ({
+      league_id: pointsAgainst.league_id,
+      player_id: pointsAgainst.player_id,
+      season_year: pointsAgainst.season_year,
+      week: pointsAgainst.week,
+      qb_pts_against: pointsAgainst.qb_pts_against,
+      rb_pts_against: pointsAgainst.rb_pts_against,
+      wr_pts_against: pointsAgainst.wr_pts_against,
+      te_pts_against: pointsAgainst.te_pts_against,
+      k_pts_against: pointsAgainst.k_pts_against,
+      qb_rolling_3_week_avg: pointsAgainst.qb_rolling_3_week_avg,
+      rb_rolling_3_week_avg: pointsAgainst.rb_rolling_3_week_avg,
+      wr_rolling_3_week_avg: pointsAgainst.wr_rolling_3_week_avg,
+      te_rolling_3_week_avg: pointsAgainst.te_rolling_3_week_avg,
+      k_rolling_3_week_avg: pointsAgainst.k_rolling_3_week_avg,
+      qb_rolling_3_wk_avg_norm: pointsAgainst.qb_rolling_3_wk_avg_norm,
+      rb_rolling_3_wk_avg_norm: pointsAgainst.rb_rolling_3_wk_avg_norm,
+      wr_rolling_3_wk_avg_norm: pointsAgainst.wr_rolling_3_wk_avg_norm,
+      te_rolling_3_wk_avg_norm: pointsAgainst.te_rolling_3_wk_avg_norm,
+      k_rolling_3_wk_avg_norm: pointsAgainst.k_rolling_3_wk_avg_norm,
+      updated_at: updatedAt,
+    }));
+
+    const { error } = await supabase
+      .from('defense_points_against')
+      .upsert(records, {
         onConflict: 'league_id,player_id,season_year,week',
-      }
-    );
+      });
 
     if (error) {
-      logger.error('Failed to upsert defense points against', {
+      logger.error('Failed to batch upsert defense points against', {
         error,
-        pointsAgainst,
+        recordCount: records.length,
       });
       throw new Error(
-        `Failed to upsert defense points against: ${error.message}`
+        `Failed to batch upsert defense points against: ${error.message}`
       );
     }
+
+    logger.debug('Batch upserted defense points against', {
+      recordCount: records.length,
+    });
   } catch (error) {
-    logger.error('Error upserting defense points against', {
+    logger.error('Error batch upserting defense points against', {
       error: error instanceof Error ? error.message : String(error),
-      pointsAgainst,
+      recordCount: pointsAgainstList.length,
     });
     throw error;
   }
