@@ -1,6 +1,9 @@
 import { logger } from '../../../supabase/functions/utils/logger.ts';
 import { supabase } from '../../../supabase/functions/utils/supabase.ts';
-import { makeYahooApiCallWithRetry } from '../../../supabase/functions/utils/syncHelpers.ts';
+import {
+  getCurrentNFLSeasonYear,
+  makeYahooApiCallWithRetry,
+} from '../../../supabase/functions/utils/syncHelpers.ts';
 
 interface PlayerData {
   player?: Array<
@@ -26,7 +29,9 @@ export async function syncAllPlayers(yahooToken: string): Promise<number> {
   // First, get the admin user's ID
   const superAdminUserId = Deno.env.get('SUPER_ADMIN_USER_ID');
 
-  // // Get a league that the admin user is part of
+  const seasonYear = getCurrentNFLSeasonYear();
+
+  // Get a league that the admin user is part of
   const { data: leagueData, error: leagueError } = await supabase
     .from('leagues')
     .select(
@@ -38,7 +43,7 @@ export async function syncAllPlayers(yahooToken: string): Promise<number> {
     `
     )
     .eq('teams.user_id', superAdminUserId)
-    .eq('season_year', new Date().getFullYear())
+    .eq('season_year', seasonYear)
     .limit(1)
     .single();
 

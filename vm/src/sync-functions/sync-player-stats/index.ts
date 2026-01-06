@@ -1,6 +1,9 @@
 import { logger } from '../../../../supabase/functions/utils/logger.ts';
 import { supabase } from '../../../../supabase/functions/utils/supabase.ts';
-import { getMostRecentNFLWeek } from '../../../../supabase/functions/utils/syncHelpers.ts';
+import {
+  getCurrentNFLSeasonYear,
+  getMostRecentNFLWeek,
+} from '../../../../supabase/functions/utils/syncHelpers.ts';
 import { fetchAllPlayers } from './fetchPlayers.ts';
 import { fetchYahooPlayerStats } from './fetchYahooStats.ts';
 import { processPlayerStatsBatch } from './processStats.ts';
@@ -28,7 +31,7 @@ export async function syncAllPlayerStats(
     week: currentWeek,
     isCustomWeek: week !== undefined,
   });
-  const currentYear = new Date().getFullYear();
+  const currentYear = getCurrentNFLSeasonYear();
 
   // Get the admin user's league directly from the database
   // First, get the admin user's ID
