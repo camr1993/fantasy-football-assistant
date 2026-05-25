@@ -1,3 +1,4 @@
+import { createClient } from 'npm:@supabase/supabase-js@^2.76.1';
 import { logger, performance } from '../../utils/logger.ts';
 import { parseJwt } from '../utils/jwt.ts';
 import { supabase } from '../../utils/supabase.ts';
@@ -357,9 +358,17 @@ export async function handleOAuthCallback(req: Request) {
       );
     }
 
-    // Verify the OTP to create a session
+    // Verify the OTP to create a session.
+    // Use a throwaway client so verifyOtp doesn't mutate the shared service-role
+    // client's auth state — otherwise subsequent table writes downgrade from
+    // service_role to authenticated and get blocked by RLS.
+    const sessionClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    );
     const { data: sessionData, error: sessionError } =
-      await supabase.auth.verifyOtp({
+      await sessionClient.auth.verifyOtp({
         token_hash: linkData.properties.hashed_token,
         type: 'magiclink',
       });
