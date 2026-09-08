@@ -1,9 +1,10 @@
-import type { InitializationProgress } from './types';
+import type { InitializationProgress, StoredUserTeam } from './types';
 import {
   injectRecommendations,
   updateInitializationBanner,
   checkAndShowInitializationBanner,
 } from './domInjection';
+import { resolveCurrentLeagueId } from './utils/userTeams';
 
 /**
  * Initialize the content script
@@ -17,15 +18,31 @@ async function init(forceRefresh = false) {
   // Request tips data from background script
   const response = await chrome.runtime.sendMessage({ type: 'GET_TIPS' });
 
-  if (response?.playerRecommendations) {
-    console.log(
-      '[Fantasy Assistant] Received player recommendations:',
-      Object.keys(response.playerRecommendations).length
-    );
-    injectRecommendations(response.playerRecommendations, forceRefresh);
-  } else {
+  if (!response?.playerRecommendations) {
     console.log('[Fantasy Assistant] No recommendations available yet');
+    return;
   }
+
+  // Recommendations are keyed by league, so figure out which league's page
+  // this is before injecting anything
+  const leagueId = resolveCurrentLeagueId(
+    (response.userTeams as StoredUserTeam[]) || []
+  );
+
+  if (!leagueId) {
+    console.log(
+      '[Fantasy Assistant] Current league is not synced yet, nothing to inject'
+    );
+    return;
+  }
+
+  console.log(
+    '[Fantasy Assistant] Received player recommendations for league',
+    leagueId,
+    Object.keys(response.playerRecommendations[leagueId] || {}).length
+  );
+
+  injectRecommendations(response.playerRecommendations, leagueId, forceRefresh);
 }
 
 // Listen for messages from background script
@@ -92,9 +109,14 @@ const observer = new MutationObserver((mutations) => {
     // Debounce the re-injection
     setTimeout(async () => {
       const response = await chrome.runtime.sendMessage({ type: 'GET_TIPS' });
-      if (response?.playerRecommendations) {
-        injectRecommendations(response.playerRecommendations);
-      }
+      if (!response?.playerRecommendations) return;
+
+      const leagueId = resolveCurrentLeagueId(
+        (response.userTeams as StoredUserTeam[]) || []
+      );
+      if (!leagueId) return;
+
+      injectRecommendations(response.playerRecommendations, leagueId);
     }, 500);
   }
 });

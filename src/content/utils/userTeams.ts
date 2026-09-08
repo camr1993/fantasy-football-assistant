@@ -12,8 +12,7 @@ export async function getUserTeams(): Promise<StoredUserTeam[]> {
   }
   try {
     const result = await chrome.storage.local.get(['user_teams']);
-    cachedUserTeams =
-      (result.user_teams as StoredUserTeam[] | undefined) || [];
+    cachedUserTeams = (result.user_teams as StoredUserTeam[] | undefined) || [];
     return cachedUserTeams;
   } catch (error) {
     console.error('[Fantasy Assistant] Error getting user teams:', error);
@@ -42,3 +41,29 @@ export function getYahooLeagueIdFromCache(leagueId: string): string | null {
   return team?.yahoo_league_id || null;
 }
 
+/**
+ * Extract the Yahoo league ID from a Yahoo Fantasy URL (/f1/{leagueId}/...)
+ */
+export function getYahooLeagueIdFromUrl(
+  url: string = window.location.href
+): string | null {
+  const match = url.match(/\/f1\/(\d+)/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Resolve our league ID for the league page currently being viewed.
+ *
+ * Yahoo's page URLs carry only the numeric league ID, so map it through the
+ * stored user teams. Returns null when the league has not been synced yet, in
+ * which case we have nothing to show for it.
+ */
+export function resolveCurrentLeagueId(
+  userTeams: StoredUserTeam[]
+): string | null {
+  const yahooLeagueId = getYahooLeagueIdFromUrl();
+  if (!yahooLeagueId) return null;
+
+  const team = userTeams.find((t) => t.yahoo_league_id === yahooLeagueId);
+  return team?.league_id || null;
+}

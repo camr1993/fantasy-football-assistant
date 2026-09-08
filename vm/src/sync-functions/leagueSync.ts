@@ -1,6 +1,7 @@
 import { logger } from '../../../supabase/functions/utils/logger.ts';
 import { makeYahooApiCall } from '../../../supabase/functions/utils/yahooApi.ts';
 import { supabase } from '../../../supabase/functions/utils/supabase.ts';
+import { getCurrentNFLSeasonYear } from '../../../supabase/functions/utils/syncHelpers.ts';
 
 export interface YahooLeague {
   league_key: string;
@@ -469,11 +470,13 @@ export async function fetchLeagueTeams(
  */
 export async function syncTeamRoster(
   teamId: string,
+  leagueId: string,
   roster: YahooRoster
 ): Promise<void> {
   try {
     logger.info('Syncing team roster', {
       teamId,
+      leagueId,
       teamKey: roster.team_key,
       playerCount: roster.players.length,
     });
@@ -547,11 +550,12 @@ export async function syncTeamRoster(
       const { error: rosterError } = await supabase.from('roster_entry').upsert(
         {
           team_id: teamId,
+          league_id: leagueId,
           player_id: playerId,
           slot: player.selected_position.position,
         },
         {
-          onConflict: 'player_id',
+          onConflict: 'league_id,player_id',
         }
       );
 
@@ -698,19 +702,27 @@ export async function syncTeamRosterOnly(
       userId,
     });
 
-    // Get all leagues that the user is a member of (through teams)
+    // Get the user's leagues for the current season (through teams). Retired
+    // leagues carry last season's Yahoo team keys, so syncing them would
+    // refresh rosters that no longer apply.
+    const seasonYear = getCurrentNFLSeasonYear();
     const { data: userTeams, error: teamsError } = await supabase
       .from('teams')
-      .select('league_id, leagues!inner(id, yahoo_league_id)')
-      .eq('user_id', userId);
+      .select('league_id, leagues!inner(id, yahoo_league_id, season_year)')
+      .eq('user_id', userId)
+      .eq('leagues.season_year', seasonYear);
 
     if (teamsError) {
-      logger.error('Error fetching user teams', { userId, error: teamsError });
+      logger.error('Error fetching user teams', {
+        userId,
+        seasonYear,
+        error: teamsError,
+      });
       throw new Error(`Failed to fetch user teams: ${teamsError.message}`);
     }
 
     if (!userTeams || userTeams.length === 0) {
-      logger.warn('No teams found for user', { userId });
+      logger.warn('No teams found for user in season', { userId, seasonYear });
       return {
         leagues: [],
         teams: [],
@@ -794,7 +806,7 @@ export async function syncTeamRosterOnly(
               team.yahoo_team_id
             );
             if (roster) {
-              await syncTeamRoster(team.id, roster);
+              await syncTeamRoster(team.id, league.id, roster);
               logger.info('Successfully synced roster for team', {
                 teamId: team.id,
                 yahooTeamId: team.yahoo_team_id,
@@ -1087,7 +1099,7 @@ export async function syncUserLeagues(
               yahooTeam.team_key
             );
             if (roster) {
-              await syncTeamRoster(teamId, roster);
+              await syncTeamRoster(teamId, leagueId, roster);
             }
           } catch (rosterError) {
             logger.error('Error syncing roster for team', {

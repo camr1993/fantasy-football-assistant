@@ -3,7 +3,7 @@ import { corsHeaders } from '../utils/constants.ts';
 import { getYahooUserTokens } from '../utils/userTokenManager.ts';
 import { getUserFromRequest, createAuthErrorResponse } from '../utils/auth.ts';
 import { supabase } from '../utils/supabase.ts';
-import { startVM } from '../utils/vmManager.ts';
+import { getCurrentNFLSeasonYear } from '../utils/syncHelpers.ts';
 import { getUserLeagues } from './utils/getUserLeagues.ts';
 import {
   getWaiverWirePlayers,
@@ -60,11 +60,7 @@ Deno.serve(async (req) => {
     const userId = user.id;
     logger.info('Request authenticated via JWT', { userId });
 
-    // Get request body for other parameters (mode, etc.)
-    const body = await req.json();
-    const { mode = 'immediate' } = body;
-
-    logger.info('Tips request for user', { userId, mode });
+    logger.info('Tips request for user', { userId });
 
     // Get user's Yahoo tokens (with automatic refresh if needed)
     const userTokens = await getYahooUserTokens(userId);
@@ -86,79 +82,23 @@ Deno.serve(async (req) => {
 
     logger.info('User Yahoo tokens validated', { userId });
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // JOB MODE: Create a job for the VM to process tips asynchronously
-    // Used for periodic refreshes
-    // ─────────────────────────────────────────────────────────────────────────
-    if (mode === 'job') {
-      const { data: job, error: jobError } = await supabase
-        .from('jobs')
-        .insert({
-          name: 'refresh-tips',
-          status: 'pending',
-          user_id: userId,
-          priority: 50, // Lower priority than user-triggered syncs
-        })
-        .select()
-        .single();
+    // Determine the season from the calendar, then find the newest week we have
+    // calcs for WITHIN that season. Taking the global max from league_calcs
+    // instead would silently serve last season's final week all through the
+    // offseason and preseason, when the current season has no rows yet.
+    const seasonYear = getCurrentNFLSeasonYear();
 
-      if (jobError) {
-        logger.error('Failed to create tips refresh job', {
-          userId,
-          error: jobError,
-        });
-        timer.end();
-        return new Response(
-          JSON.stringify({
-            success: false,
-            message: 'Failed to create tips refresh job',
-            error: jobError.message,
-          }),
-          {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          }
-        );
-      }
-
-      logger.info('Tips refresh job created successfully', {
-        jobId: job.id,
-        userId,
-      });
-
-      // Start the VM
-      await startVM();
-
-      timer.end();
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: 'Tips refresh job created successfully',
-          jobId: job.id,
-          status: 'pending',
-        }),
-        {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // IMMEDIATE MODE: Compute and return tips directly
-    // Used for non-periodic (post-triggered) refreshes
-    // ─────────────────────────────────────────────────────────────────────────
-
-    // Get current NFL week and season year from the most recent league_calcs data
     const { data: latestCalcs, error: calcsError } = await supabase
       .from('league_calcs')
-      .select('season_year, week')
-      .order('season_year', { ascending: false })
+      .select('week')
+      .eq('season_year', seasonYear)
       .order('week', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
-    if (calcsError || !latestCalcs) {
-      logger.error('Failed to get current week/season from league_calcs', {
+    if (calcsError) {
+      logger.error('Failed to get current week from league_calcs', {
+        seasonYear,
         error: calcsError,
       });
       timer.end();
@@ -174,18 +114,39 @@ Deno.serve(async (req) => {
       );
     }
 
+    if (!latestCalcs) {
+      // No calcs for this season yet (preseason, or syncs have not caught up).
+      // Return empty rather than falling back to a previous season's numbers.
+      logger.warn('No league_calcs for current season yet', { seasonYear });
+      timer.end();
+      return new Response(
+        JSON.stringify({
+          waiver_wire: {},
+          waiver_wire_recommendations: [],
+          start_bench_recommendations: [],
+          user_teams: [],
+          current_week: null,
+          next_week: null,
+          season_year: seasonYear,
+          message: `No data available yet for the ${seasonYear} season`,
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
     const currentWeek = latestCalcs.week;
     const nextWeek = currentWeek + 1;
-    const seasonYear = latestCalcs.season_year;
 
-    logger.info('Current NFL week and season from league_calcs', {
+    logger.info('Current NFL week and season', {
       currentWeek,
       nextWeek,
       seasonYear,
     });
 
     // Get user's leagues
-    const uniqueLeagues = await getUserLeagues(userId);
+    const uniqueLeagues = await getUserLeagues(userId, seasonYear);
 
     if (uniqueLeagues.size === 0) {
       logger.warn('No leagues found for user', { userId });
@@ -208,15 +169,20 @@ Deno.serve(async (req) => {
     // Get user teams for start/bench recommendations
     const { data: userTeams } = await supabase
       .from('teams')
-      .select('id, league_id, yahoo_team_id, name, leagues!inner(name)')
-      .eq('user_id', userId);
+      .select(
+        'id, league_id, yahoo_team_id, name, leagues!inner(name, season_year)'
+      )
+      .eq('user_id', userId)
+      .eq('leagues.season_year', seasonYear);
 
     interface UserTeam {
       id: string;
       league_id: string;
       yahoo_team_id: string;
       name: string;
-      leagues: { name: string } | { name: string }[];
+      leagues:
+        | { name: string; season_year: number }
+        | { name: string; season_year: number }[];
     }
 
     // Extract Yahoo roster URLs for user teams

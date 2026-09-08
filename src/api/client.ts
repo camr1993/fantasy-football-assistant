@@ -436,55 +436,6 @@ class ApiClient {
   }
 
   /**
-   * Trigger periodic tips refresh via VM job
-   * Creates a job in the database for the VM to process asynchronously
-   * Authentication is handled via Supabase JWT in Authorization header
-   */
-  async triggerPeriodicTipsRefresh(): Promise<ApiResponse<any>> {
-    try {
-      const session = await getSupabaseSession();
-      if (!session) {
-        console.log('No authenticated session, skipping tips refresh job');
-        return {
-          success: false,
-          error: { error: 'No authenticated session' },
-        };
-      }
-
-      console.log('Creating tips refresh job for VM...');
-
-      const { data, error } = await supabase.functions.invoke('tips', {
-        body: {
-          mode: 'job',
-        },
-      });
-
-      if (error) {
-        console.error('Failed to create tips refresh job:', error.message);
-        return {
-          success: false,
-          error: { error: error.message || 'Failed to create tips job' },
-        };
-      }
-
-      console.log('Tips refresh job created successfully', data);
-
-      return {
-        success: true,
-        data: data,
-      };
-    } catch (error) {
-      console.error('Error creating tips refresh job:', error);
-      return {
-        success: false,
-        error: {
-          error: error instanceof Error ? error.message : 'Unknown error',
-        },
-      };
-    }
-  }
-
-  /**
    * Get user ID from the current Supabase session
    * Used internally when user ID is needed for local operations
    */

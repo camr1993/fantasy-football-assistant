@@ -1,24 +1,18 @@
 import { supabase } from '../../../supabase/functions/utils/supabase.ts';
 import { logger } from '../../../supabase/functions/utils/logger.ts';
+import { getUpcomingNFLSeasonYear } from '../../../supabase/functions/utils/syncHelpers.ts';
 
-// ESPN API endpoint - dynamically generate dates for current NFL season
-const getCurrentNflSeason = () => {
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1; // getMonth() returns 0-11
-
-  // NFL season typically starts in September, so if we're before September, use previous year
-  const nflSeasonYear = currentMonth < 9 ? currentYear - 1 : currentYear;
-  const nextYear = nflSeasonYear + 1;
-
-  return {
-    seasonStart: `${nflSeasonYear}0901`, // September 1st
-    seasonEnd: `${nextYear}0131`, // January 31st of next year
-  };
-};
-
-const { seasonStart, seasonEnd } = getCurrentNflSeason();
-const ESPN_SCOREBOARD_URL = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?limit=1000&dates=${seasonStart}-${seasonEnd}`;
+/**
+ * Build the ESPN scoreboard URL covering a full NFL regular season.
+ *
+ * Season Y runs from September Y into January Y+1. Built per call rather than
+ * once at import time so a long-lived process cannot pin a stale season.
+ */
+function getScoreboardUrl(seasonYear: number): string {
+  const seasonStart = `${seasonYear}0901`; // September 1st
+  const seasonEnd = `${seasonYear + 1}0131`; // January 31st of the next year
+  return `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?limit=1000&dates=${seasonStart}-${seasonEnd}`;
+}
 
 // Interface for NFL matchup data
 interface NflMatchup {
@@ -64,15 +58,13 @@ interface EspnResponse {
 /**
  * Fetches NFL matchups from ESPN API
  */
-async function fetchNflMatchups(): Promise<NflMatchup[]> {
+async function fetchNflMatchups(seasonYear: number): Promise<NflMatchup[]> {
   try {
-    logger.info('Fetching NFL matchups from ESPN API', {
-      url: ESPN_SCOREBOARD_URL,
-      seasonStart,
-      seasonEnd,
-    });
+    const url = getScoreboardUrl(seasonYear);
 
-    const response = await fetch(ESPN_SCOREBOARD_URL);
+    logger.info('Fetching NFL matchups from ESPN API', { url, seasonYear });
+
+    const response = await fetch(url);
 
     if (!response.ok) {
       throw new Error(
@@ -186,22 +178,36 @@ async function storeNflMatchups(matchups: NflMatchup[]): Promise<number> {
 /**
  * Main function to sync NFL matchups
  */
-export async function syncNflMatchups(): Promise<number> {
+export async function syncNflMatchups(
+  seasonYear: number = getUpcomingNFLSeasonYear()
+): Promise<number> {
   try {
-    logger.info('Starting NFL matchups sync');
+    logger.info('Starting NFL matchups sync', { seasonYear });
 
     // Fetch matchups from ESPN API
-    const matchups = await fetchNflMatchups();
+    const matchups = await fetchNflMatchups(seasonYear);
 
     if (matchups.length === 0) {
-      logger.warn('No matchups found to sync');
+      logger.warn('No matchups found to sync', { seasonYear });
       return 0;
+    }
+
+    // ESPN stamps each event with its own season, so surface any mismatch
+    // rather than quietly writing rows for a season we did not ask for.
+    const unexpected = matchups.filter((m) => m.season !== seasonYear);
+    if (unexpected.length > 0) {
+      logger.warn('ESPN returned matchups outside the requested season', {
+        seasonYear,
+        unexpectedCount: unexpected.length,
+        seasonsSeen: [...new Set(matchups.map((m) => m.season))],
+      });
     }
 
     // Store matchups in database
     const storedCount = await storeNflMatchups(matchups);
 
     logger.info('NFL matchups sync completed successfully', {
+      seasonYear,
       totalMatchups: matchups.length,
       storedCount,
     });

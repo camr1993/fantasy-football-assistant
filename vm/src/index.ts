@@ -63,6 +63,8 @@ const SYNC_FUNCTIONS: Record<string, SyncFunction> = {
   },
   'sync-nfl-matchups': {
     name: 'sync-nfl-matchups',
+    // Defaults to the upcoming season - the annual cron runs in August, before
+    // the new season starts but after its schedule has been published.
     fn: () => syncNflMatchups(),
   },
   'sync-opponents': {

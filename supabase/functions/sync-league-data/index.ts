@@ -3,6 +3,7 @@ import { corsHeaders } from '../utils/constants.ts';
 import { supabase } from '../utils/supabase.ts';
 import { getYahooUserTokens } from '../utils/userTokenManager.ts';
 import { getUserFromRequest, createAuthErrorResponse } from '../utils/auth.ts';
+import { getCurrentNFLSeasonYear } from '../utils/syncHelpers.ts';
 import { startVM } from '../utils/vmManager.ts';
 import {
   fetchTeamRoster,
@@ -158,36 +159,66 @@ async function handleImmediateRosterSync(
   yahooLeagueId: string,
   yahooTeamId: string
 ): Promise<Response> {
+  const seasonYear = getCurrentNFLSeasonYear();
+
   logger.info('Starting immediate single-team roster sync', {
     userId,
     yahooLeagueId,
     yahooTeamId,
+    seasonYear,
   });
 
-  // Find team in database first using pattern match on league/team IDs
-  // This avoids hardcoding the game key (e.g., 449) which can change by season
+  // Yahoo's web URLs carry no game key (/f1/869919/5), so we can only pattern
+  // match on the league/team IDs. Constrain that match to the current season -
+  // otherwise it happily resolves to last season's row and then re-fetches
+  // last season's roster using that row's stored key.
   const teamKeyPattern = `.l.${yahooLeagueId}.t.${yahooTeamId}`;
-  const { data: team, error: teamError } = await supabase
+  const { data: teams, error: teamError } = await supabase
     .from('teams')
-    .select('id, league_id, yahoo_team_id')
+    .select('id, league_id, yahoo_team_id, leagues!inner(season_year)')
     .like('yahoo_team_id', `%${teamKeyPattern}`)
-    .single();
+    .eq('leagues.season_year', seasonYear)
+    .limit(1);
+
+  const team = teams?.[0];
 
   if (teamError || !team) {
-    logger.error('Team not found in database', {
+    // No current-season row for this league yet. Queue discovery rather than
+    // falling back to a previous season, which would never converge.
+    logger.warn('No current-season team found, queueing league discovery', {
+      userId,
       yahooLeagueId,
       yahooTeamId,
+      seasonYear,
       pattern: teamKeyPattern,
       error: teamError,
     });
+
+    const { error: jobError } = await supabase.from('jobs').insert({
+      name: 'sync-league-data',
+      status: 'pending',
+      user_id: userId,
+      priority: 1,
+    });
+
+    if (jobError) {
+      logger.error('Failed to queue league discovery job', {
+        userId,
+        error: jobError,
+      });
+    } else {
+      await startVM();
+    }
+
     timer.end();
     return new Response(
       JSON.stringify({
         success: false,
-        message: 'Team not found in database',
+        status: 'discovering',
+        message: `No ${seasonYear} data for this league yet. Syncing it now - this may take a minute.`,
       }),
       {
-        status: 404,
+        status: 202,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
@@ -211,7 +242,7 @@ async function handleImmediateRosterSync(
   }
 
   // Sync the roster
-  await syncTeamRoster(team.id, roster);
+  await syncTeamRoster(team.id, team.league_id, roster);
 
   const duration = timer.end();
   logger.info('Immediate roster sync completed', {
@@ -432,21 +463,35 @@ async function handleFirstTimeInitialization(
  * Check if a user needs first-time initialization
  */
 async function needsInitialization(userId: string): Promise<boolean> {
-  // Check if user has any teams (leagues) set up
+  const seasonYear = getCurrentNFLSeasonYear();
+
+  // Check if the user has a team in a league for the CURRENT season.
+  // Checking for teams in any season would leave returning users stuck on
+  // last year's leagues, since sync-league-data is the only thing that
+  // discovers new Yahoo leagues and it would never be queued for them.
   const { data: userTeams, error } = await supabase
     .from('teams')
-    .select('id')
+    .select('id, leagues!inner(season_year)')
     .eq('user_id', userId)
+    .eq('leagues.season_year', seasonYear)
     .limit(1);
 
   if (error) {
     logger.error('Error checking if user needs initialization', {
       userId,
+      seasonYear,
       error,
     });
     return false; // Assume no initialization needed on error
   }
 
-  // If user has no teams, they need initialization
-  return !userTeams || userTeams.length === 0;
+  const needsInit = !userTeams || userTeams.length === 0;
+
+  logger.info('Checked current-season initialization state', {
+    userId,
+    seasonYear,
+    needsInit,
+  });
+
+  return needsInit;
 }

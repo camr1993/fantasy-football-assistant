@@ -8,24 +8,34 @@ export interface LeagueInfo {
 }
 
 /**
- * Get unique leagues for a user
+ * Get unique leagues for a user in the given season
+ *
+ * Yahoo issues a new league key every season, so a returning user accumulates
+ * one leagues row per year. Without the season filter this returns every
+ * league they have ever played in and tips get computed off retired rosters.
  */
 export async function getUserLeagues(
-  userId: string
+  userId: string,
+  seasonYear: number
 ): Promise<Map<string, LeagueInfo>> {
   // Get user's leagues (through teams)
   const { data: userTeams, error: teamsError } = await supabase
     .from('teams')
     .select('id, league_id, leagues!inner(id, name, season_year)')
-    .eq('user_id', userId);
+    .eq('user_id', userId)
+    .eq('leagues.season_year', seasonYear);
 
   if (teamsError) {
-    logger.error('Error fetching user teams', { userId, error: teamsError });
+    logger.error('Error fetching user teams', {
+      userId,
+      seasonYear,
+      error: teamsError,
+    });
     throw new Error(`Failed to fetch user teams: ${teamsError.message}`);
   }
 
   if (!userTeams || userTeams.length === 0) {
-    logger.warn('No teams found for user', { userId });
+    logger.warn('No teams found for user in season', { userId, seasonYear });
     return new Map();
   }
 
@@ -43,9 +53,9 @@ export async function getUserLeagues(
 
   logger.info('Found user leagues', {
     userId,
+    seasonYear,
     leagueCount: uniqueLeagues.size,
   });
 
   return uniqueLeagues;
 }
-
