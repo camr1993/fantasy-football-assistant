@@ -1,6 +1,7 @@
 import { logger, performance } from '../utils/logger.ts';
 import { corsHeaders } from '../utils/constants.ts';
 import { supabase } from '../utils/supabase.ts';
+import { getCurrentNFLSeasonYear } from '../utils/syncHelpers.ts';
 import { getYahooUserTokens } from '../utils/userTokenManager.ts';
 import { getUserFromRequest, createAuthErrorResponse } from '../utils/auth.ts';
 
@@ -95,9 +96,17 @@ Deno.serve(async (req) => {
 
     logger.info('User Yahoo tokens validated', { userId });
 
-    logger.info('Checking initialization status for user', { userId });
+    const seasonYear = getCurrentNFLSeasonYear();
 
-    // Get all initialization records for this user
+    logger.info('Checking initialization status for user', {
+      userId,
+      seasonYear,
+    });
+
+    // Get initialization records for this user's CURRENT season leagues.
+    // Records from previous seasons stay 'ready' forever, so without the
+    // season filter a returning user always looks fully set up even while
+    // this season's leagues have not been synced.
     const { data: initRecords, error: initError } = await supabase
       .from('league_initialization')
       .select(
@@ -108,10 +117,11 @@ Deno.serve(async (req) => {
         completed_jobs,
         current_step,
         error_message,
-        leagues!inner(name)
+        leagues!inner(name, season_year)
       `
       )
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .eq('leagues.season_year', seasonYear);
 
     if (initError) {
       logger.error('Failed to fetch initialization status', {
@@ -134,16 +144,18 @@ Deno.serve(async (req) => {
 
     // If no records found, user has no leagues being initialized
     if (!initRecords || initRecords.length === 0) {
-      // Check if user has any leagues at all
+      // Check whether the user has any leagues for this season at all
       const { data: userTeams, error: teamsError } = await supabase
         .from('teams')
-        .select('league_id')
+        .select('league_id, leagues!inner(season_year)')
         .eq('user_id', userId)
+        .eq('leagues.season_year', seasonYear)
         .limit(1);
 
       if (teamsError) {
         logger.error('Failed to check user teams', {
           userId,
+          seasonYear,
           error: teamsError,
         });
       }
@@ -159,7 +171,7 @@ Deno.serve(async (req) => {
           leagues: [],
           message: isSetUp
             ? 'User is fully set up'
-            : 'No leagues found for user',
+            : `No ${seasonYear} leagues found for user`,
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -56,6 +56,12 @@ export async function pollInitializationStatus(): Promise<void> {
 
         await chrome.storage.local.set({ initialization_progress: progress });
 
+        // Fetch tips BEFORE notifying. The content script re-injects as soon
+        // as it receives the message, and it reads tips from local storage -
+        // notifying first meant it read storage that had not been written yet
+        // and rendered nothing.
+        await fetchAndStoreTips();
+
         // Notify content scripts that initialization is complete
         const tabs = await chrome.tabs.query({
           url: 'https://football.fantasysports.yahoo.com/*',
@@ -69,9 +75,6 @@ export async function pollInitializationStatus(): Promise<void> {
               });
           }
         }
-
-        // Fetch tips now that data is ready
-        await fetchAndStoreTips();
 
         console.log('Initialization complete, tips fetched');
       } else if (hasError) {
@@ -114,4 +117,3 @@ export async function pollInitializationStatus(): Promise<void> {
     console.error('Error polling initialization status:', error);
   }
 }
-
