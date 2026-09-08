@@ -12,6 +12,41 @@ import {
   triggerPeriodicSync,
 } from './services/rosterSyncService';
 
+const ROSTER_SYNC_ALARM = 'roster-sync';
+const ROSTER_SYNC_PERIOD_MINUTES = 120;
+
+/**
+ * Ensure the periodic sync alarm exists.
+ *
+ * This alarm is what discovers a user's new leagues each season, so it has to
+ * survive more than a fresh sign-in. Creating it only on SIGNED_IN meant that a
+ * user who stayed signed in through the offseason never had it re-created after
+ * a browser restart, and their new Yahoo league was never picked up.
+ */
+async function ensureRosterSyncAlarm(): Promise<void> {
+  const existing = await chrome.alarms.get(ROSTER_SYNC_ALARM);
+  if (existing) return;
+
+  const { data } = await supabase.auth.getSession();
+  if (!data.session) {
+    console.log('No session, not creating roster sync alarm');
+    return;
+  }
+
+  console.log('Creating periodic roster sync alarm');
+  chrome.alarms.create(ROSTER_SYNC_ALARM, {
+    periodInMinutes: ROSTER_SYNC_PERIOD_MINUTES,
+  });
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+  void ensureRosterSyncAlarm();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  void ensureRosterSyncAlarm();
+});
+
 // Listen for auth state changes in the background
 supabase.auth.onAuthStateChange((event, _session) => {
   console.log('Background: Auth state changed:', event);
@@ -19,14 +54,16 @@ supabase.auth.onAuthStateChange((event, _session) => {
   if (event === 'SIGNED_OUT') {
     console.log('User signed out, stopping background tasks');
     // Clear any pending alarms
-    chrome.alarms.clear('roster-sync');
+    chrome.alarms.clear(ROSTER_SYNC_ALARM);
     chrome.alarms.clear('init-status-poll');
   } else if (event === 'TOKEN_REFRESHED') {
     console.log('Background: Session token refreshed');
   } else if (event === 'SIGNED_IN') {
     console.log('Background: User signed in, starting periodic sync alarm');
     // Re-create the periodic sync alarm
-    chrome.alarms.create('roster-sync', { periodInMinutes: 120 });
+    chrome.alarms.create(ROSTER_SYNC_ALARM, {
+      periodInMinutes: ROSTER_SYNC_PERIOD_MINUTES,
+    });
   }
 });
 
@@ -93,7 +130,7 @@ chrome.webRequest.onBeforeRequest.addListener(
 
 // Handle periodic sync alarms
 chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name === 'roster-sync') {
+  if (alarm.name === ROSTER_SYNC_ALARM) {
     await triggerPeriodicSync();
   }
 

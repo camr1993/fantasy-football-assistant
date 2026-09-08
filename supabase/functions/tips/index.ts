@@ -3,7 +3,6 @@ import { corsHeaders } from '../utils/constants.ts';
 import { getYahooUserTokens } from '../utils/userTokenManager.ts';
 import { getUserFromRequest, createAuthErrorResponse } from '../utils/auth.ts';
 import { supabase } from '../utils/supabase.ts';
-import { startVM } from '../utils/vmManager.ts';
 import { getCurrentNFLSeasonYear } from '../utils/syncHelpers.ts';
 import { getUserLeagues } from './utils/getUserLeagues.ts';
 import {
@@ -61,11 +60,7 @@ Deno.serve(async (req) => {
     const userId = user.id;
     logger.info('Request authenticated via JWT', { userId });
 
-    // Get request body for other parameters (mode, etc.)
-    const body = await req.json();
-    const { mode = 'immediate' } = body;
-
-    logger.info('Tips request for user', { userId, mode });
+    logger.info('Tips request for user', { userId });
 
     // Get user's Yahoo tokens (with automatic refresh if needed)
     const userTokens = await getYahooUserTokens(userId);
@@ -86,68 +81,6 @@ Deno.serve(async (req) => {
     }
 
     logger.info('User Yahoo tokens validated', { userId });
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // JOB MODE: Create a job for the VM to process tips asynchronously
-    // Used for periodic refreshes
-    // ─────────────────────────────────────────────────────────────────────────
-    if (mode === 'job') {
-      const { data: job, error: jobError } = await supabase
-        .from('jobs')
-        .insert({
-          name: 'refresh-tips',
-          status: 'pending',
-          user_id: userId,
-          priority: 50, // Lower priority than user-triggered syncs
-        })
-        .select()
-        .single();
-
-      if (jobError) {
-        logger.error('Failed to create tips refresh job', {
-          userId,
-          error: jobError,
-        });
-        timer.end();
-        return new Response(
-          JSON.stringify({
-            success: false,
-            message: 'Failed to create tips refresh job',
-            error: jobError.message,
-          }),
-          {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          }
-        );
-      }
-
-      logger.info('Tips refresh job created successfully', {
-        jobId: job.id,
-        userId,
-      });
-
-      // Start the VM
-      await startVM();
-
-      timer.end();
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: 'Tips refresh job created successfully',
-          jobId: job.id,
-          status: 'pending',
-        }),
-        {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // IMMEDIATE MODE: Compute and return tips directly
-    // Used for non-periodic (post-triggered) refreshes
-    // ─────────────────────────────────────────────────────────────────────────
 
     // Determine the season from the calendar, then find the newest week we have
     // calcs for WITHIN that season. Taking the global max from league_calcs

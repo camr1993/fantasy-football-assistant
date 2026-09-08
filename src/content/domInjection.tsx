@@ -75,11 +75,22 @@ async function dismissOnboardingTooltip(): Promise<void> {
  */
 export async function injectRecommendations(
   playerRecommendations: PlayerRecommendationsMap,
+  leagueId: string,
   forceRefresh = false
 ): Promise<void> {
   // If force refresh, clean up existing icons first
   if (forceRefresh && mountedRoots.size > 0) {
     cleanupInjectedIcons();
+  }
+
+  // Only show recommendations belonging to the league page being viewed
+  const leagueRecommendations = playerRecommendations[leagueId];
+
+  if (!leagueRecommendations) {
+    console.log(
+      `[Fantasy Assistant] No recommendations for league ${leagueId}`
+    );
+    return;
   }
   // Find all player note elements on the page by aria-label pattern
   const playerNoteElements = document.querySelectorAll(
@@ -102,7 +113,7 @@ export async function injectRecommendations(
     if (!playerId) return;
 
     // Check if we have recommendations for this player
-    const recommendations = playerRecommendations[playerId];
+    const recommendations = leagueRecommendations[playerId];
     if (!recommendations) return;
 
     // Check if we've already injected for this player
@@ -110,9 +121,8 @@ export async function injectRecommendations(
     if (document.getElementById(containerId)) return;
 
     const playerName =
-      playerRecommendations[playerId]?.startBench?.name ||
-      playerRecommendations[playerId]?.waiverUpgrades?.[0]
-        ?.rostered_player_name ||
+      recommendations.startBench?.name ||
+      recommendations.waiverUpgrades?.[0]?.rostered_player_name ||
       `Player ${playerId}`;
 
     // Create container for our React component

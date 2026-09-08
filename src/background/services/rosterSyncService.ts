@@ -27,6 +27,17 @@ export async function handlePageLoad(
       yahooTeamId
     );
 
+    if (syncResult.data?.status === 'discovering') {
+      // No current-season data for this league yet; the edge function has
+      // queued a sync. Tips would come back empty, so skip them - the next
+      // page load or periodic sync will pick up the data once it lands.
+      console.log(
+        'League not synced for the current season yet, discovery queued:',
+        syncResult.data.message
+      );
+      return;
+    }
+
     if (syncResult.success) {
       console.log('Roster sync completed, now fetching tips...');
     } else {
@@ -50,10 +61,7 @@ export async function handlePageLoad(
 /**
  * Handle roster edit detection and trigger immediate sync
  */
-export function handleRosterEdit(
-  url: string,
-  tabId: number
-): void {
+export function handleRosterEdit(url: string, tabId: number): void {
   // Extract league and team info from URL
   // URL format: /f1/{leagueId}/{teamId}/editroster
   const urlMatch = url.match(/\/f1\/(\d+)\/(\d+)\/editroster/);
@@ -97,4 +105,3 @@ export async function triggerPeriodicSync(): Promise<void> {
   console.log('Periodic roster sync triggered');
   await apiClient.triggerPeriodicRosterSync();
 }
-

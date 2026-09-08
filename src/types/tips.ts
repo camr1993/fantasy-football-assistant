@@ -84,4 +84,15 @@ export interface PlayerRecommendations {
   waiverUpgrades?: WaiverWireRecommendation[];
 }
 
-export type PlayerRecommendationsMap = Record<string, PlayerRecommendations>;
+/**
+ * Recommendations keyed by league ID, then by numeric Yahoo player ID.
+ *
+ * Yahoo player IDs are stable across leagues, so a flat player-keyed map lets
+ * one league's recommendation overwrite another's for any player rostered in
+ * both. The league dimension keeps them separate and lets the content script
+ * show only what applies to the league page being viewed.
+ */
+export type PlayerRecommendationsMap = Record<
+  string,
+  Record<string, PlayerRecommendations>
+>;
