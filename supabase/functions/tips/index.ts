@@ -4,6 +4,7 @@ import { getYahooUserTokens } from '../utils/userTokenManager.ts';
 import { getUserFromRequest, createAuthErrorResponse } from '../utils/auth.ts';
 import { supabase } from '../utils/supabase.ts';
 import { startVM } from '../utils/vmManager.ts';
+import { getCurrentNFLSeasonYear } from '../utils/syncHelpers.ts';
 import { getUserLeagues } from './utils/getUserLeagues.ts';
 import {
   getWaiverWirePlayers,
@@ -148,17 +149,23 @@ Deno.serve(async (req) => {
     // Used for non-periodic (post-triggered) refreshes
     // ─────────────────────────────────────────────────────────────────────────
 
-    // Get current NFL week and season year from the most recent league_calcs data
+    // Determine the season from the calendar, then find the newest week we have
+    // calcs for WITHIN that season. Taking the global max from league_calcs
+    // instead would silently serve last season's final week all through the
+    // offseason and preseason, when the current season has no rows yet.
+    const seasonYear = getCurrentNFLSeasonYear();
+
     const { data: latestCalcs, error: calcsError } = await supabase
       .from('league_calcs')
-      .select('season_year, week')
-      .order('season_year', { ascending: false })
+      .select('week')
+      .eq('season_year', seasonYear)
       .order('week', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
-    if (calcsError || !latestCalcs) {
-      logger.error('Failed to get current week/season from league_calcs', {
+    if (calcsError) {
+      logger.error('Failed to get current week from league_calcs', {
+        seasonYear,
         error: calcsError,
       });
       timer.end();
@@ -174,18 +181,39 @@ Deno.serve(async (req) => {
       );
     }
 
+    if (!latestCalcs) {
+      // No calcs for this season yet (preseason, or syncs have not caught up).
+      // Return empty rather than falling back to a previous season's numbers.
+      logger.warn('No league_calcs for current season yet', { seasonYear });
+      timer.end();
+      return new Response(
+        JSON.stringify({
+          waiver_wire: {},
+          waiver_wire_recommendations: [],
+          start_bench_recommendations: [],
+          user_teams: [],
+          current_week: null,
+          next_week: null,
+          season_year: seasonYear,
+          message: `No data available yet for the ${seasonYear} season`,
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
     const currentWeek = latestCalcs.week;
     const nextWeek = currentWeek + 1;
-    const seasonYear = latestCalcs.season_year;
 
-    logger.info('Current NFL week and season from league_calcs', {
+    logger.info('Current NFL week and season', {
       currentWeek,
       nextWeek,
       seasonYear,
     });
 
     // Get user's leagues
-    const uniqueLeagues = await getUserLeagues(userId);
+    const uniqueLeagues = await getUserLeagues(userId, seasonYear);
 
     if (uniqueLeagues.size === 0) {
       logger.warn('No leagues found for user', { userId });
@@ -208,15 +236,20 @@ Deno.serve(async (req) => {
     // Get user teams for start/bench recommendations
     const { data: userTeams } = await supabase
       .from('teams')
-      .select('id, league_id, yahoo_team_id, name, leagues!inner(name)')
-      .eq('user_id', userId);
+      .select(
+        'id, league_id, yahoo_team_id, name, leagues!inner(name, season_year)'
+      )
+      .eq('user_id', userId)
+      .eq('leagues.season_year', seasonYear);
 
     interface UserTeam {
       id: string;
       league_id: string;
       yahoo_team_id: string;
       name: string;
-      leagues: { name: string } | { name: string }[];
+      leagues:
+        | { name: string; season_year: number }
+        | { name: string; season_year: number }[];
     }
 
     // Extract Yahoo roster URLs for user teams

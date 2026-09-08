@@ -112,15 +112,56 @@ export async function logSyncError(syncLogId: string, errorMessage: string) {
 }
 
 /**
- * Get current NFL week
+ * Kickoff of week 1 for a given NFL season.
+ *
+ * The regular season opens on the Thursday after Labor Day (the first Monday
+ * in September). Anchored at 04:00 UTC, which is midnight Eastern - close
+ * enough given we only ever need day-level precision, and it keeps the result
+ * independent of the server's local timezone.
  */
-export function getMostRecentNFLWeek(): number {
-  const now = new Date();
-  const seasonStart = new Date(now.getFullYear(), 8, 1); // September 1st
-  const weeksSinceStart = Math.floor(
-    (now.getTime() - seasonStart.getTime()) / (7 * 24 * 60 * 60 * 1000)
+function getSeasonOpener(seasonYear: number): Date {
+  const sept1 = new Date(Date.UTC(seasonYear, 8, 1));
+  // Days from Sept 1 to the first Monday (0 if Sept 1 is itself a Monday)
+  const daysToLaborDay = (1 - sept1.getUTCDay() + 7) % 7;
+  return new Date(
+    Date.UTC(seasonYear, 8, 1 + daysToLaborDay + 3, 4, 0, 0) // Labor Day + 3 = Thursday
   );
-  return Math.max(1, Math.min(18, weeksSinceStart));
+}
+
+/**
+ * Get the NFL week currently in progress, or 0 if the season has not started.
+ *
+ * Weeks run Thursday through Wednesday, so a game week rolls over the day
+ * after Monday Night Football. Returns 0 during the offseason and preseason so
+ * callers can tell "week 1 has not happened yet" apart from "it is week 1" -
+ * without that distinction, preseason silently reads as week 1 and falls back
+ * to whatever stale data happens to be around.
+ */
+export function getCurrentNFLWeek(
+  seasonYear: number = getCurrentNFLSeasonYear(),
+  now: Date = new Date()
+): number {
+  const opener = getSeasonOpener(seasonYear);
+  const elapsedMs = now.getTime() - opener.getTime();
+
+  if (elapsedMs < 0) return 0;
+
+  const week = Math.floor(elapsedMs / (7 * 24 * 60 * 60 * 1000)) + 1;
+  return Math.min(18, week);
+}
+
+/**
+ * Get the most recent NFL week, clamped to the 1-18 range.
+ *
+ * Prefer getCurrentNFLWeek for new code - this variant reports week 1 during
+ * the preseason rather than 0, and exists so sync jobs that index data by week
+ * always receive a valid week number.
+ */
+export function getMostRecentNFLWeek(
+  seasonYear: number = getCurrentNFLSeasonYear(),
+  now: Date = new Date()
+): number {
+  return Math.max(1, getCurrentNFLWeek(seasonYear, now));
 }
 
 /**
@@ -132,6 +173,25 @@ export function getCurrentNFLSeasonYear(): number {
   const currentMonth = now.getMonth() + 1; // getMonth() returns 0-11
   // NFL season typically starts in September, so if we're before September, use previous year
   return currentMonth < 9 ? currentYear - 1 : currentYear;
+}
+
+/**
+ * Get the NFL season we should be loading schedule data for.
+ *
+ * Differs from getCurrentNFLSeasonYear between March and August: that function
+ * reports the season that most recently played (used for stats), while this one
+ * reports the season that is next to play. Schedules are published in the
+ * spring, so anything that fetches a schedule wants this - notably the annual
+ * sync, which runs on August 1st and would otherwise re-fetch the season that
+ * just finished.
+ */
+export function getUpcomingNFLSeasonYear(): number {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1; // getMonth() returns 0-11
+  // Jan/Feb belong to the previous calendar year's season, which is still
+  // being played. From March onward the upcoming season is this year.
+  return currentMonth <= 2 ? currentYear - 1 : currentYear;
 }
 
 /**

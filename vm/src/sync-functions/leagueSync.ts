@@ -469,11 +469,13 @@ export async function fetchLeagueTeams(
  */
 export async function syncTeamRoster(
   teamId: string,
+  leagueId: string,
   roster: YahooRoster
 ): Promise<void> {
   try {
     logger.info('Syncing team roster', {
       teamId,
+      leagueId,
       teamKey: roster.team_key,
       playerCount: roster.players.length,
     });
@@ -547,11 +549,12 @@ export async function syncTeamRoster(
       const { error: rosterError } = await supabase.from('roster_entry').upsert(
         {
           team_id: teamId,
+          league_id: leagueId,
           player_id: playerId,
           slot: player.selected_position.position,
         },
         {
-          onConflict: 'player_id',
+          onConflict: 'league_id,player_id',
         }
       );
 
@@ -794,7 +797,7 @@ export async function syncTeamRosterOnly(
               team.yahoo_team_id
             );
             if (roster) {
-              await syncTeamRoster(team.id, roster);
+              await syncTeamRoster(team.id, league.id, roster);
               logger.info('Successfully synced roster for team', {
                 teamId: team.id,
                 yahooTeamId: team.yahoo_team_id,
@@ -1087,7 +1090,7 @@ export async function syncUserLeagues(
               yahooTeam.team_key
             );
             if (roster) {
-              await syncTeamRoster(teamId, roster);
+              await syncTeamRoster(teamId, leagueId, roster);
             }
           } catch (rosterError) {
             logger.error('Error syncing roster for team', {
