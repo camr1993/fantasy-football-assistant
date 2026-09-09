@@ -4,6 +4,7 @@ import type { InitializationProgress } from './types';
 import { getUserRosterUrl } from './utils/userTeams';
 import { getOnboardingState, updateOnboardingState } from './utils/onboarding';
 import { InitializationBanner } from './components/InitializationBanner';
+import { ServiceNoticeBanner } from './components/ServiceNoticeBanner';
 import { RecommendationIcon } from './components/RecommendationIcon';
 import { OnboardingTooltip } from './components/OnboardingTooltip';
 
@@ -177,6 +178,7 @@ export async function injectRecommendations(
 // ─────────────────────────────────────────────────────────────────────────────
 
 let bannerRoot: ReactDOM.Root | null = null;
+let lastProgress: InitializationProgress | null = null;
 const BANNER_CONTAINER_ID = 'fantasy-assistant-init-banner';
 
 export async function updateInitializationBanner(
@@ -204,11 +206,13 @@ export async function updateInitializationBanner(
 
   // Render the banner
   if (bannerRoot) {
+    lastProgress = progress;
     const rosterUrl = await getUserRosterUrl();
     bannerRoot.render(
       <InitializationBanner
         progress={progress}
         rosterUrl={rosterUrl}
+        topOffset={getServiceNoticeHeight()}
         onDismiss={() => {
           updateInitializationBanner({ ...progress, status: 'idle' });
           // Clear from storage
@@ -236,5 +240,69 @@ export async function checkAndShowInitializationBanner(): Promise<void> {
       '[Fantasy Assistant] Error checking initialization status:',
       error
     );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Service Notice Banner Management
+// ─────────────────────────────────────────────────────────────────────────────
+
+let noticeRoot: ReactDOM.Root | null = null;
+const NOTICE_CONTAINER_ID = 'fantasy-assistant-service-notice';
+
+// Bump the suffix to show a new notice to users who dismissed a previous one
+const NOTICE_DISMISSED_KEY = 'service_notice_dismissed_yahoo_api_2026';
+
+/**
+ * Height of the service notice, so the initialization banner can sit below it
+ * rather than on top of it. Both are position: fixed at the top of the page.
+ */
+function getServiceNoticeHeight(): number {
+  return document.getElementById(NOTICE_CONTAINER_ID)?.offsetHeight ?? 0;
+}
+
+function removeServiceNotice(): void {
+  const container = document.getElementById(NOTICE_CONTAINER_ID);
+  if (container && noticeRoot) {
+    noticeRoot.unmount();
+    container.remove();
+    noticeRoot = null;
+  }
+
+  // The initialization banner no longer needs to clear the notice
+  if (bannerRoot && lastProgress) {
+    updateInitializationBanner(lastProgress);
+  }
+}
+
+/**
+ * Show the service notice, but only to signed-in users who have not already
+ * dismissed it. Dismissal is stored per browser profile and is permanent.
+ */
+export async function checkAndShowServiceNotice(): Promise<void> {
+  try {
+    if (document.getElementById(NOTICE_CONTAINER_ID)) return;
+
+    const stored = await chrome.storage.local.get([NOTICE_DISMISSED_KEY]);
+    if (stored[NOTICE_DISMISSED_KEY]) return;
+
+    const auth = await chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' });
+    if (!auth?.isLoggedIn) return;
+
+    const container = document.createElement('div');
+    container.id = NOTICE_CONTAINER_ID;
+    document.body.prepend(container);
+
+    noticeRoot = ReactDOM.createRoot(container);
+    noticeRoot.render(
+      <ServiceNoticeBanner
+        onDismiss={() => {
+          chrome.storage.local.set({ [NOTICE_DISMISSED_KEY]: true });
+          removeServiceNotice();
+        }}
+      />
+    );
+  } catch (error) {
+    console.error('[Fantasy Assistant] Error showing service notice:', error);
   }
 }

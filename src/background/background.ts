@@ -94,6 +94,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true; // Keep the message channel open for async response
   }
 
+  if (message.type === 'GET_AUTH_STATE') {
+    // Content scripts cannot read the Supabase session directly, so the
+    // service worker answers on their behalf
+    supabase.auth
+      .getSession()
+      .then(({ data }) => sendResponse({ isLoggedIn: !!data.session }))
+      .catch(() => sendResponse({ isLoggedIn: false }));
+    return true; // Keep the message channel open for async response
+  }
+
   if (message.type === 'REFRESH_TIPS') {
     fetchAndStoreTips().then(() => {
       sendResponse({ success: true });
