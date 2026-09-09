@@ -3,6 +3,7 @@ import {
   injectRecommendations,
   updateInitializationBanner,
   checkAndShowInitializationBanner,
+  checkAndShowServiceNotice,
 } from './domInjection';
 import { resolveCurrentLeagueId } from './utils/userTeams';
 
@@ -84,10 +85,12 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
     init();
     checkAndShowInitializationBanner();
+    checkAndShowServiceNotice();
   });
 } else {
   init();
   checkAndShowInitializationBanner();
+  checkAndShowServiceNotice();
 }
 
 // Re-inject when page content changes (for SPA navigation)

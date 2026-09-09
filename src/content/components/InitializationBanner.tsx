@@ -6,19 +6,22 @@ interface InitializationBannerProps {
   progress: InitializationProgress;
   rosterUrl: string | null;
   onDismiss: () => void;
+  /** Pixels to shift down by, so a service notice can sit above this banner */
+  topOffset?: number;
 }
 
 export function InitializationBanner({
   progress,
   rosterUrl,
   onDismiss,
+  topOffset = 0,
 }: InitializationBannerProps) {
   const percentage = Math.round(progress.percentage || 0);
 
   if (progress.status === 'idle') return null;
 
   return (
-    <div style={bannerStyles.container}>
+    <div style={{ ...bannerStyles.container, top: topOffset }}>
       <style>
         {`
           @keyframes fantasy-edge-spin {
@@ -88,4 +91,3 @@ export function InitializationBanner({
     </div>
   );
 }
-

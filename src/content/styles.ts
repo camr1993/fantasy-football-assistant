@@ -287,3 +287,51 @@ export const bannerStyles: Record<string, React.CSSProperties> = {
   },
 };
 
+export const serviceNoticeStyles: Record<string, React.CSSProperties> = {
+  container: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#b45309',
+    color: 'white',
+    zIndex: 999999,
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+  },
+  content: {
+    display: 'flex',
+    alignItems: 'center',
+    padding: '10px 20px',
+    maxWidth: '1200px',
+    margin: '0 auto',
+    gap: '12px',
+  },
+  icon: {
+    fontSize: '18px',
+    flexShrink: 0,
+  },
+  textContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+  },
+  title: {
+    fontWeight: 600,
+    fontSize: '14px',
+  },
+  body: {
+    fontSize: '12px',
+    opacity: 0.95,
+  },
+  dismissButton: {
+    background: 'none',
+    border: 'none',
+    color: 'white',
+    fontSize: '20px',
+    cursor: 'pointer',
+    padding: '0 4px',
+    opacity: 0.8,
+    marginLeft: 'auto',
+    flexShrink: 0,
+  },
+};
