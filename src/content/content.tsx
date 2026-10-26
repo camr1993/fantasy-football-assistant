@@ -4,6 +4,7 @@ import {
   updateInitializationBanner,
   checkAndShowInitializationBanner,
   checkAndShowServiceNotice,
+  watchServiceNoticeState,
 } from './domInjection';
 import { resolveCurrentLeagueId } from './utils/userTeams';
 
@@ -92,6 +93,9 @@ if (document.readyState === 'loading') {
   checkAndShowInitializationBanner();
   checkAndShowServiceNotice();
 }
+
+// React to the re-auth flag changing while the page is open
+watchServiceNoticeState();
 
 // Re-inject when page content changes (for SPA navigation)
 const observer = new MutationObserver((mutations) => {

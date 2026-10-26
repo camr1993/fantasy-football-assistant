@@ -27,6 +27,41 @@ interface OAuthInitResponse {
   nonce: string;
 }
 
+/**
+ * Key under which we record that the user's Yahoo connection is no longer
+ * usable and they need to reconnect.
+ */
+export const YAHOO_REAUTH_KEY = 'yahoo_reauth_required';
+
+/**
+ * Detect an authentication failure from our edge functions.
+ *
+ * Supabase surfaces a non-2xx response as FunctionsHttpError with the raw
+ * Response on `context`. Both failure modes behind a 401 here - an invalid
+ * Supabase JWT and a Yahoo token that can no longer be refreshed - are fixed
+ * by signing in with Yahoo again, so they are treated the same.
+ */
+function isAuthError(error: unknown): boolean {
+  const context = (error as { context?: { status?: number } })?.context;
+  return context?.status === 401;
+}
+
+/**
+ * Record (or clear) the need to reconnect Yahoo, so the popup and the content
+ * script can prompt for it.
+ */
+export async function setYahooReauthRequired(required: boolean): Promise<void> {
+  try {
+    if (required) {
+      await chrome.storage.local.set({ [YAHOO_REAUTH_KEY]: true });
+    } else {
+      await chrome.storage.local.remove(YAHOO_REAUTH_KEY);
+    }
+  } catch (error) {
+    console.error('Error updating Yahoo re-auth state:', error);
+  }
+}
+
 class ApiClient {
   /**
    * Initiate OAuth flow and get the auth URL
@@ -359,11 +394,17 @@ class ApiClient {
       });
 
       if (error) {
+        if (isAuthError(error)) {
+          await setYahooReauthRequired(true);
+        }
         return {
           success: false,
           error: { error: error.message || 'Failed to get tips' },
         };
       }
+
+      // A successful call proves the Yahoo connection is working again
+      await setYahooReauthRequired(false);
 
       return {
         success: true,
