@@ -2,16 +2,22 @@ import { supabase } from '../../../supabase/functions/utils/supabase.ts';
 import { logger } from '../../../supabase/functions/utils/logger.ts';
 import { getUpcomingNFLSeasonYear } from '../../../supabase/functions/utils/syncHelpers.ts';
 
+// NFL regular season weeks, and ESPN's season type for the regular season
+const REGULAR_SEASON_WEEKS = 18;
+const REGULAR_SEASON_TYPE = 2;
+
 /**
- * Build the ESPN scoreboard URL covering a full NFL regular season.
+ * Build the ESPN scoreboard URL for a single week of a season.
  *
- * Season Y runs from September Y into January Y+1. Built per call rather than
- * once at import time so a long-lived process cannot pin a stale season.
+ * ESPN's site v2 scoreboard returns HTTP 400 for date-range queries
+ * (`dates=YYYYMMDD-YYYYMMDD`), so a season has to be fetched a week at a time
+ * rather than in one call.
  */
-function getScoreboardUrl(seasonYear: number): string {
-  const seasonStart = `${seasonYear}0901`; // September 1st
-  const seasonEnd = `${seasonYear + 1}0131`; // January 31st of the next year
-  return `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?limit=1000&dates=${seasonStart}-${seasonEnd}`;
+function getScoreboardUrl(seasonYear: number, week: number): string {
+  return (
+    'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard' +
+    `?season=${seasonYear}&seasontype=${REGULAR_SEASON_TYPE}&week=${week}`
+  );
 }
 
 // Interface for NFL matchup data
@@ -56,78 +62,96 @@ interface EspnResponse {
 }
 
 /**
- * Fetches NFL matchups from ESPN API
+ * Fetch one week of NFL matchups from the ESPN API
+ */
+async function fetchWeek(
+  seasonYear: number,
+  week: number
+): Promise<NflMatchup[]> {
+  const url = getScoreboardUrl(seasonYear, week);
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(
+      `ESPN API request failed for week ${week}: ${response.status} ${response.statusText}`
+    );
+  }
+
+  const data: EspnResponse = await response.json();
+
+  if (!data.events || !Array.isArray(data.events)) {
+    logger.warn('No events found in ESPN API response', { seasonYear, week });
+    return [];
+  }
+
+  const matchups: NflMatchup[] = [];
+
+  for (const event of data.events) {
+    // Only process regular season games
+    if (event.season.type !== REGULAR_SEASON_TYPE) {
+      continue;
+    }
+
+    const competitors = event.competitions[0]?.competitors;
+    const homeTeam = competitors?.find((c) => c.homeAway === 'home')?.team
+      ?.displayName;
+    const awayTeam = competitors?.find((c) => c.homeAway === 'away')?.team
+      ?.displayName;
+
+    if (!homeTeam || !awayTeam) {
+      logger.warn('Missing team data for event', {
+        eventId: event.id,
+        eventName: event.name,
+        week,
+      });
+      continue;
+    }
+
+    matchups.push({
+      home_team: homeTeam,
+      away_team: awayTeam,
+      season: event.season.year,
+      week: event.week.number,
+      updated_at: new Date().toISOString(),
+    });
+  }
+
+  return matchups;
+}
+
+/**
+ * Fetches a full regular season of NFL matchups from the ESPN API.
+ *
+ * Walks the season one week at a time because ESPN rejects date-range
+ * queries. A failure on any week aborts rather than storing a partial
+ * schedule, since downstream opponent and scoring calcs read this table and
+ * silently treat missing weeks as "no opponent".
  */
 async function fetchNflMatchups(seasonYear: number): Promise<NflMatchup[]> {
   try {
-    const url = getScoreboardUrl(seasonYear);
-
-    logger.info('Fetching NFL matchups from ESPN API', { url, seasonYear });
-
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      throw new Error(
-        `ESPN API request failed: ${response.status} ${response.statusText}`
-      );
-    }
-
-    const data: EspnResponse = await response.json();
-
-    if (!data.events || !Array.isArray(data.events)) {
-      logger.warn('No events found in ESPN API response');
-      return [];
-    }
-
-    const currentSeason =
-      data.leagues?.[0]?.season?.year || new Date().getFullYear();
-    logger.info('Processing NFL matchups', {
-      eventCount: data.events.length,
-      season: currentSeason,
+    logger.info('Fetching NFL matchups from ESPN API', {
+      seasonYear,
+      weeks: REGULAR_SEASON_WEEKS,
     });
 
     const matchups: NflMatchup[] = [];
 
-    for (const event of data.events) {
-      // Only process regular season games (type: 2)
-      if (event.season.type !== 2) {
-        continue;
-      }
-
-      // Extract home and away teams
-      const homeTeam = event.competitions[0]?.competitors?.find(
-        (c) => c.homeAway === 'home'
-      )?.team?.displayName;
-      const awayTeam = event.competitions[0]?.competitors?.find(
-        (c) => c.homeAway === 'away'
-      )?.team?.displayName;
-
-      if (!homeTeam || !awayTeam) {
-        logger.warn('Missing team data for event', {
-          eventId: event.id,
-          eventName: event.name,
-        });
-        continue;
-      }
-
-      matchups.push({
-        home_team: homeTeam,
-        away_team: awayTeam,
-        season: event.season.year,
-        week: event.week.number,
-        updated_at: new Date().toISOString(),
-      });
+    for (let week = 1; week <= REGULAR_SEASON_WEEKS; week++) {
+      const weekMatchups = await fetchWeek(seasonYear, week);
+      matchups.push(...weekMatchups);
     }
 
     logger.info('Successfully parsed NFL matchups', {
+      seasonYear,
       matchupsCount: matchups.length,
-      season: currentSeason,
+      weeksWithGames: new Set(matchups.map((m) => m.week)).size,
     });
 
     return matchups;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error('Failed to fetch NFL matchups from ESPN API', {
+      seasonYear,
       error: errorMessage,
     });
     throw error;
