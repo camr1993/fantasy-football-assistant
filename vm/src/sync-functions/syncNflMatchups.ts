@@ -2,6 +2,15 @@ import { supabase } from '../../../supabase/functions/utils/supabase.ts';
 import { logger } from '../../../supabase/functions/utils/logger.ts';
 import { getUpcomingNFLSeasonYear } from '../../../supabase/functions/utils/syncHelpers.ts';
 
+/**
+ * ESPN rejects requests from known programmatic runtimes with 403 Forbidden -
+ * Deno's fetch sends "Deno/x.y.z" by default, which is blocked. An explicit
+ * descriptive User-Agent is accepted, so identify the app rather than
+ * impersonating a browser.
+ */
+const USER_AGENT =
+  'FantasyEdge/1.0 (+https://github.com/camr1993/fantasy-football-assistant)';
+
 // NFL regular season weeks, and ESPN's season type for the regular season
 const REGULAR_SEASON_WEEKS = 18;
 const REGULAR_SEASON_TYPE = 2;
@@ -69,7 +78,9 @@ async function fetchWeek(
   week: number
 ): Promise<NflMatchup[]> {
   const url = getScoreboardUrl(seasonYear, week);
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    headers: { 'User-Agent': USER_AGENT },
+  });
 
   if (!response.ok) {
     throw new Error(
