@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
-import { apiClient } from '../api/client';
+import { apiClient, setYahooReauthRequired } from '../api/client';
 import {
   supabase,
   getSupabaseSession,
@@ -236,6 +236,9 @@ function Popup() {
         setAuthCode('');
         chrome.storage.local.remove(['oauth_nonce', 'oauth_timestamp']);
 
+        // A fresh Yahoo connection clears any outstanding reconnect prompt
+        await setYahooReauthRequired(false);
+
         // Initialize onboarding for first-time users
         if (response.data.isFirstTimeUser) {
           await initializeOnboardingForNewUser();
@@ -269,6 +272,7 @@ function Popup() {
       'oauth_nonce',
       'oauth_timestamp',
       'initialization_progress',
+      'yahoo_reauth_required',
     ]);
 
     setUser(null);

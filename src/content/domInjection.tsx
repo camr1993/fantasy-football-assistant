@@ -250,8 +250,9 @@ export async function checkAndShowInitializationBanner(): Promise<void> {
 let noticeRoot: ReactDOM.Root | null = null;
 const NOTICE_CONTAINER_ID = 'fantasy-assistant-service-notice';
 
-// Bump the suffix to show a new notice to users who dismissed a previous one
-const NOTICE_DISMISSED_KEY = 'service_notice_dismissed_yahoo_api_2026';
+// Versioned so a new notice reappears for users who dismissed the previous one
+const NOTICE_DISMISSED_KEY = 'service_notice_dismissed_reauth_2026';
+const YAHOO_REAUTH_KEY = 'yahoo_reauth_required';
 
 /**
  * Height of the service notice, so the initialization banner can sit below it
@@ -276,18 +277,33 @@ function removeServiceNotice(): void {
 }
 
 /**
- * Show the service notice, but only to signed-in users who have not already
- * dismissed it. Dismissal is stored per browser profile and is permanent.
+ * Show the service notice if the extension needs the user to reconnect Yahoo.
+ *
+ * Only shown to signed-in users who have not dismissed it. The re-auth flag is
+ * set when an edge function rejects our credentials and cleared as soon as a
+ * call succeeds, so the notice disappears on its own once Yahoo is reconnected.
  */
 export async function checkAndShowServiceNotice(): Promise<void> {
   try {
     if (document.getElementById(NOTICE_CONTAINER_ID)) return;
 
-    const stored = await chrome.storage.local.get([NOTICE_DISMISSED_KEY]);
-    if (stored[NOTICE_DISMISSED_KEY]) return;
+    const stored = await chrome.storage.local.get([
+      NOTICE_DISMISSED_KEY,
+      YAHOO_REAUTH_KEY,
+    ]);
+
+    if (stored[NOTICE_DISMISSED_KEY]) {
+      console.log('[Fantasy Assistant] Service notice already dismissed');
+      return;
+    }
+
+    if (!stored[YAHOO_REAUTH_KEY]) return;
 
     const auth = await chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' });
-    if (!auth?.isLoggedIn) return;
+    if (!auth?.isLoggedIn) {
+      console.log('[Fantasy Assistant] Not signed in, skipping service notice');
+      return;
+    }
 
     const container = document.createElement('div');
     container.id = NOTICE_CONTAINER_ID;
@@ -296,6 +312,7 @@ export async function checkAndShowServiceNotice(): Promise<void> {
     noticeRoot = ReactDOM.createRoot(container);
     noticeRoot.render(
       <ServiceNoticeBanner
+        kind="reauth"
         onDismiss={() => {
           chrome.storage.local.set({ [NOTICE_DISMISSED_KEY]: true });
           removeServiceNotice();
@@ -305,4 +322,21 @@ export async function checkAndShowServiceNotice(): Promise<void> {
   } catch (error) {
     console.error('[Fantasy Assistant] Error showing service notice:', error);
   }
+}
+
+/**
+ * Hide the notice as soon as the re-auth flag clears, without needing a reload
+ */
+export function watchServiceNoticeState(): void {
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'local') return;
+
+    if (changes[YAHOO_REAUTH_KEY]) {
+      if (changes[YAHOO_REAUTH_KEY].newValue) {
+        checkAndShowServiceNotice();
+      } else {
+        removeServiceNotice();
+      }
+    }
+  });
 }
