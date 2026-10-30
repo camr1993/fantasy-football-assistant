@@ -40,6 +40,35 @@ export async function syncOpponents(week?: number): Promise<number> {
 }
 
 /**
+ * Resolve the Yahoo game key for a season (e.g. "470" for 2026).
+ *
+ * Yahoo issues a new game key each year and embeds it in every player key, so
+ * `players` accumulates one row per team defense per season - all with the
+ * same name and team. Without the game key there is no way to tell this
+ * season's defense from last season's.
+ */
+async function getSeasonGameKey(seasonYear: number): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('leagues')
+    .select('yahoo_league_id')
+    .eq('season_year', seasonYear)
+    .not('yahoo_league_id', 'is', null)
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data?.yahoo_league_id) {
+    logger.error('Could not resolve Yahoo game key for season', {
+      seasonYear,
+      error: error?.message,
+    });
+    return null;
+  }
+
+  // "470.l.855357" -> "470"
+  return data.yahoo_league_id.split('.')[0] || null;
+}
+
+/**
  * Populates opponent_defense_player_id for all player stats in the given week
  */
 async function populateOpponentDefensePlayerIds(
@@ -106,6 +135,20 @@ async function populateOpponentDefensePlayerIds(
 
     logger.info(`Found ${allPlayerStats.length} player stats to update`);
 
+    // Resolve once per run rather than per player
+    const gameKey = await getSeasonGameKey(seasonYear);
+    if (!gameKey) {
+      throw new Error(
+        `Cannot resolve Yahoo game key for ${seasonYear}; refusing to guess ` +
+          "which season's defenses to link opponents to"
+      );
+    }
+
+    // Cache defense lookups - a week only ever involves 32 teams
+    const defenseIdByTeam = new Map<string, string | null>();
+    let skippedNoMatchup = 0;
+    let skippedNoDefense = 0;
+
     // Process in batches to avoid overwhelming the database
     const batchSize = 100;
     let updatedCount = 0;
@@ -126,49 +169,75 @@ async function populateOpponentDefensePlayerIds(
           continue;
         }
 
-        try {
-          // Find the matchup for this team in the current week
-          const { data: matchup } = await supabase
-            .from('nfl_matchups')
-            .select('home_team, away_team')
-            .eq('season', seasonYear)
-            .eq('week', week)
-            .or(`home_team.eq.${playerTeam},away_team.eq.${playerTeam}`)
-            .single();
+        // Find the matchup for this team in the current week. A team on bye
+        // has no matchup, which is expected rather than an error.
+        const { data: matchup } = await supabase
+          .from('nfl_matchups')
+          .select('home_team, away_team')
+          .eq('season', seasonYear)
+          .eq('week', week)
+          .or(`home_team.eq.${playerTeam},away_team.eq.${playerTeam}`)
+          .maybeSingle();
 
-          if (matchup) {
-            // Determine the opposing team (case-insensitive comparison)
-            const playerTeamLower = playerTeam.toLowerCase();
-            const homeTeamLower = matchup.home_team.toLowerCase();
-
-            const opposingTeam =
-              homeTeamLower === playerTeamLower
-                ? matchup.away_team
-                : matchup.home_team;
-
-            // Find the defense player for the opposing team
-            const { data: defensePlayer } = await supabase
-              .from('players')
-              .select('id')
-              .ilike('team', opposingTeam)
-              .eq('position', 'DEF')
-              .single();
-
-            if (defensePlayer) {
-              updates.push({
-                id: stat.id,
-                opponent_defense_player_id: defensePlayer.id,
-              });
-            }
-          }
-        } catch (error) {
-          logger.debug('Could not find opponent defense player', {
-            playerTeam,
-            week,
-            season: seasonYear,
-            error: error instanceof Error ? error.message : String(error),
-          });
+        if (!matchup) {
+          skippedNoMatchup++;
+          continue;
         }
+
+        // Determine the opposing team (case-insensitive comparison)
+        const opposingTeam =
+          matchup.home_team.toLowerCase() === playerTeam.toLowerCase()
+            ? matchup.away_team
+            : matchup.home_team;
+
+        if (!defenseIdByTeam.has(opposingTeam)) {
+          // Scope to this season's game key. Matching on team alone returns
+          // one defense per season played, and the previous `.single()` threw
+          // on the extra rows - silently skipping every update once a second
+          // season existed.
+          const { data: defensePlayers, error: defenseError } = await supabase
+            .from('players')
+            .select('id, yahoo_player_id')
+            .ilike('team', opposingTeam)
+            .eq('position', 'DEF')
+            .like('yahoo_player_id', `${gameKey}.%`);
+
+          if (defenseError) {
+            logger.warn('Defense lookup failed', {
+              opposingTeam,
+              gameKey,
+              error: defenseError.message,
+            });
+          }
+
+          if (!defensePlayers || defensePlayers.length === 0) {
+            logger.warn('No defense found for team in this season', {
+              opposingTeam,
+              gameKey,
+              seasonYear,
+            });
+          } else if (defensePlayers.length > 1) {
+            logger.warn('Multiple defenses matched; using the first', {
+              opposingTeam,
+              gameKey,
+              matched: defensePlayers.map((d) => d.yahoo_player_id),
+            });
+          }
+
+          defenseIdByTeam.set(opposingTeam, defensePlayers?.[0]?.id ?? null);
+        }
+
+        const defenseId = defenseIdByTeam.get(opposingTeam);
+
+        if (!defenseId) {
+          skippedNoDefense++;
+          continue;
+        }
+
+        updates.push({
+          id: stat.id,
+          opponent_defense_player_id: defenseId,
+        });
       }
 
       // Update the batch
@@ -205,7 +274,20 @@ async function populateOpponentDefensePlayerIds(
     logger.info('Completed populating opponent defense player IDs', {
       totalStats: allPlayerStats.length,
       updatedCount,
+      skippedNoMatchup,
+      skippedNoDefense,
     });
+
+    // Updating nothing when there was work to do means the lookups are broken,
+    // not that everything was already populated - the query only selects rows
+    // where opponent_defense_player_id is null.
+    if (updatedCount === 0 && allPlayerStats.length > 0) {
+      throw new Error(
+        `Found ${allPlayerStats.length} player stats needing an opponent for ` +
+          `${seasonYear} week ${week} but updated none ` +
+          `(${skippedNoMatchup} without a matchup, ${skippedNoDefense} without a defense)`
+      );
+    }
 
     return updatedCount;
   } catch (error) {
