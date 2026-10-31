@@ -1,17 +1,24 @@
 import React, { useState } from 'react';
 import type { PlayerRecommendations } from '../../types/tips';
-import { styles } from '../styles';
+import { styles, iconStateStyles } from '../styles';
 import { getUserTeams, getYahooLeagueIdFromCache } from '../utils/userTeams';
 import { RecommendationModal } from './RecommendationModal';
+import { AllClearModal } from './AllClearModal';
 
 interface RecommendationIconProps {
   recommendations: PlayerRecommendations;
   playerName: string;
+  /** Tips are being refreshed - show a spinner instead of a verdict */
+  isLoading?: boolean;
+  /** The player's roster slot, used to word the all-clear message */
+  slot?: string;
 }
 
 export function RecommendationIcon({
   recommendations,
   playerName,
+  isLoading = false,
+  slot,
 }: RecommendationIconProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [yahooLeagueId, setYahooLeagueId] = useState<string | null>(null);
@@ -36,9 +43,12 @@ export function RecommendationIcon({
     setIsModalOpen(true);
   };
 
+  const hasAnyRecommendation = hasStartBench || hasWaiverUpgrade;
+
   // Determine icon and color based on recommendation type
   let icon = '💡';
   let bgColor = '#7c3aed'; // Default purple
+  let title = 'View FantasyEdge recommendations';
 
   if (hasStartBench) {
     if (recommendations.startBench!.recommendation === 'START') {
@@ -51,6 +61,24 @@ export function RecommendationIcon({
   } else if (hasWaiverUpgrade) {
     icon = '🔄';
     bgColor = '#f59e0b'; // Orange/amber
+  } else {
+    // Nothing to change - say so rather than showing nothing at all
+    icon = '✓';
+    bgColor = '#9ca3af'; // Muted grey, so it reads as "fine" not "act"
+    title = 'No changes needed';
+  }
+
+  if (isLoading) {
+    return (
+      <span
+        style={{ ...styles.iconButton, backgroundColor: '#9ca3af' }}
+        title="Loading FantasyEdge recommendations…"
+        aria-label="Loading recommendations"
+        role="status"
+      >
+        <span style={iconStateStyles.spinner} />
+      </span>
+    );
   }
 
   return (
@@ -65,20 +93,26 @@ export function RecommendationIcon({
           e.preventDefault();
           handleOpenModal();
         }}
-        title="View FantasyEdge recommendations"
+        title={title}
       >
         {icon}
       </button>
 
-      {isModalOpen && (
-        <RecommendationModal
-          recommendations={recommendations}
-          playerName={playerName}
-          yahooLeagueId={yahooLeagueId}
-          onClose={() => setIsModalOpen(false)}
-        />
-      )}
+      {isModalOpen &&
+        (hasAnyRecommendation ? (
+          <RecommendationModal
+            recommendations={recommendations}
+            playerName={playerName}
+            yahooLeagueId={yahooLeagueId}
+            onClose={() => setIsModalOpen(false)}
+          />
+        ) : (
+          <AllClearModal
+            playerName={playerName}
+            slot={slot}
+            onClose={() => setIsModalOpen(false)}
+          />
+        ))}
     </>
   );
 }
-

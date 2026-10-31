@@ -72,11 +72,18 @@ export interface UserTeamInfo {
   roster_url: string;
 }
 
+/** A player on one of the user's rosters, keyed the way the Yahoo DOM is */
+export interface RosteredPlayerRef {
+  league_id: string;
+  yahoo_player_id: string;
+}
+
 export interface TipsResponse {
   waiver_wire: Record<string, WaiverWirePlayer[]>;
   waiver_wire_recommendations: WaiverWireRecommendation[];
   start_bench_recommendations: StartBenchRecommendation[];
   user_teams: UserTeamInfo[];
+  rostered_players: RosteredPlayerRef[];
   current_week: number;
   next_week: number;
   season_year: number;

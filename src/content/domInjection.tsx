@@ -71,26 +71,72 @@ async function dismissOnboardingTooltip(): Promise<void> {
   console.log('[Fantasy Assistant] Onboarding tooltip dismissed');
 }
 
+const KEYFRAMES_STYLE_ID = 'fantasy-assistant-keyframes';
+
+/**
+ * Inject shared keyframes once.
+ *
+ * The spin animation was previously declared inside the initialization
+ * banner, so it only existed while that banner was mounted - leaving the
+ * icon spinners frozen the rest of the time.
+ */
+function ensureKeyframes(): void {
+  if (document.getElementById(KEYFRAMES_STYLE_ID)) return;
+
+  const style = document.createElement('style');
+  style.id = KEYFRAMES_STYLE_ID;
+  style.textContent = `
+    @keyframes fantasy-edge-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+/**
+ * Read a player's name off the Yahoo row.
+ *
+ * Players with no recommendation have no name in our data, so fall back to the
+ * aria-label Yahoo already puts on the notes link ("Open player notes for X").
+ */
+function getPlayerNameFromDom(element: Element): string | null {
+  const label = element.getAttribute('aria-label') || '';
+  const match = label.match(/Open player notes for (.+?)\s*$/i);
+  return match ? match[1].trim() : null;
+}
+
 /**
  * Inject recommendation icons next to players on the page
  */
 export async function injectRecommendations(
   playerRecommendations: PlayerRecommendationsMap,
   leagueId: string,
-  forceRefresh = false
+  forceRefresh = false,
+  options: {
+    /** Yahoo player IDs on the user's roster in this league */
+    rosteredPlayerIds?: Set<string>;
+    /** Tips are refreshing - render spinners rather than verdicts */
+    isLoading?: boolean;
+  } = {}
 ): Promise<void> {
+  const { rosteredPlayerIds, isLoading = false } = options;
+
+  ensureKeyframes();
   // If force refresh, clean up existing icons first
   if (forceRefresh && mountedRoots.size > 0) {
     cleanupInjectedIcons();
   }
 
   // Only show recommendations belonging to the league page being viewed
-  const leagueRecommendations = playerRecommendations[leagueId];
+  const leagueRecommendations = playerRecommendations[leagueId] || {};
 
-  if (!leagueRecommendations) {
-    console.log(
-      `[Fantasy Assistant] No recommendations for league ${leagueId}`
-    );
+  // Without a roster we cannot tell the user's players from their opponent's,
+  // so fall back to annotating only players that have a recommendation
+  const hasRoster = !!rosteredPlayerIds && rosteredPlayerIds.size > 0;
+
+  if (!hasRoster && Object.keys(leagueRecommendations).length === 0) {
+    console.log(`[Fantasy Assistant] Nothing to inject for league ${leagueId}`);
     return;
   }
   // Find all player note elements on the page by aria-label pattern
@@ -113,18 +159,23 @@ export async function injectRecommendations(
 
     if (!playerId) return;
 
-    // Check if we have recommendations for this player
+    // Annotate every player on the user's roster, so "no suggestion" is shown
+    // as an explicit all-clear rather than as a missing icon
     const recommendations = leagueRecommendations[playerId];
-    if (!recommendations) return;
+    const isOnUserRoster = hasRoster && rosteredPlayerIds!.has(playerId);
+    if (!recommendations && !isOnUserRoster) return;
 
     // Check if we've already injected for this player
     const containerId = `fantasy-assistant-${playerId}`;
     if (document.getElementById(containerId)) return;
 
     const playerName =
-      recommendations.startBench?.name ||
-      recommendations.waiverUpgrades?.[0]?.rostered_player_name ||
+      recommendations?.startBench?.name ||
+      recommendations?.waiverUpgrades?.[0]?.rostered_player_name ||
+      getPlayerNameFromDom(element) ||
       `Player ${playerId}`;
+
+    const slot = recommendations?.startBench?.slot;
 
     // Create container for our React component
     const container = document.createElement('span');
@@ -139,8 +190,10 @@ export async function injectRecommendations(
     const root = ReactDOM.createRoot(container);
     root.render(
       <RecommendationIcon
-        recommendations={recommendations}
+        recommendations={recommendations || {}}
         playerName={playerName}
+        slot={slot}
+        isLoading={isLoading}
       />
     );
 

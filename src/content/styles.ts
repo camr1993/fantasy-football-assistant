@@ -336,6 +336,47 @@ export const serviceNoticeStyles: Record<string, React.CSSProperties> = {
   },
 };
 
+export const iconStateStyles: Record<string, React.CSSProperties> = {
+  spinner: {
+    display: 'inline-block',
+    width: '12px',
+    height: '12px',
+    borderRadius: '50%',
+    border: '2px solid rgba(255, 255, 255, 0.4)',
+    borderTopColor: 'white',
+    animation: 'fantasy-edge-spin 0.8s linear infinite',
+  },
+};
+
+export const allClearStyles: Record<string, React.CSSProperties> = {
+  card: {
+    backgroundColor: '#f0fdf4',
+    border: '1px solid #bbf7d0',
+    borderRadius: '8px',
+    padding: '16px',
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'flex-start',
+  },
+  icon: {
+    fontSize: '20px',
+    lineHeight: '1.2',
+    flexShrink: 0,
+  },
+  heading: {
+    margin: '0 0 4px 0',
+    fontSize: '15px',
+    fontWeight: 600,
+    color: '#166534',
+  },
+  body: {
+    margin: 0,
+    fontSize: '13px',
+    lineHeight: 1.5,
+    color: '#15803d',
+  },
+};
+
 export const comparisonStyles: Record<string, React.CSSProperties> = {
   headline: {
     margin: '0 0 4px 0',
