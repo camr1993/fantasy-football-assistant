@@ -82,22 +82,21 @@ Deno.serve(async (req) => {
 
     logger.info('User Yahoo tokens validated', { userId });
 
-    // Determine the season from the calendar, then find the newest week we have
-    // calcs for WITHIN that season. Taking the global max from league_calcs
-    // instead would silently serve last season's final week all through the
-    // offseason and preseason, when the current season has no rows yet.
+    // Determine the season from the calendar, then use the newest week whose
+    // scores are complete. Taking the global max from league_calcs would serve
+    // last season's final week through the offseason; taking this season's max
+    // would serve a week still in progress, which only holds scores for players
+    // whose game has already kicked off - so mid-week, when a user is actually
+    // setting their lineup, there would be almost nothing to recommend.
     const seasonYear = getCurrentNFLSeasonYear();
 
-    const { data: latestCalcs, error: calcsError } = await supabase
-      .from('league_calcs')
-      .select('week')
-      .eq('season_year', seasonYear)
-      .order('week', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const { data: lastCompleteWeek, error: calcsError } = await supabase.rpc(
+      'get_last_complete_week',
+      { p_season_year: seasonYear }
+    );
 
     if (calcsError) {
-      logger.error('Failed to get current week from league_calcs', {
+      logger.error('Failed to get last complete week from league_calcs', {
         seasonYear,
         error: calcsError,
       });
@@ -114,7 +113,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!latestCalcs) {
+    if (lastCompleteWeek === null || lastCompleteWeek === undefined) {
       // No calcs for this season yet (preseason, or syncs have not caught up).
       // Return empty rather than falling back to a previous season's numbers.
       logger.warn('No league_calcs for current season yet', { seasonYear });
@@ -136,10 +135,12 @@ Deno.serve(async (req) => {
       );
     }
 
-    const currentWeek = latestCalcs.week;
+    // currentWeek is the newest week with complete scores; nextWeek is the one
+    // being played or about to be, which is what lineup advice is actually for
+    const currentWeek = lastCompleteWeek as number;
     const nextWeek = currentWeek + 1;
 
-    logger.info('Current NFL week and season', {
+    logger.info('Using last complete NFL week', {
       currentWeek,
       nextWeek,
       seasonYear,
