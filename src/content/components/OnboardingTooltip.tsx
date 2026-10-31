@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { IconGlyph } from './IconGlyph';
 
 interface OnboardingTooltipProps {
   targetElement: HTMLElement;
@@ -106,8 +107,8 @@ export function OnboardingTooltip({
 
           <div style={styles.iconList}>
             <div style={styles.iconRow}>
-              <span style={{ ...styles.icon, backgroundColor: '#22c55e' }}>
-                ▲
+              <span style={{ ...styles.icon, backgroundColor: '#16a34a' }}>
+                <IconGlyph kind="start" />
               </span>
               <div>
                 <strong style={styles.iconLabel}>START</strong>
@@ -119,8 +120,8 @@ export function OnboardingTooltip({
             </div>
 
             <div style={styles.iconRow}>
-              <span style={{ ...styles.icon, backgroundColor: '#ef4444' }}>
-                ▼
+              <span style={{ ...styles.icon, backgroundColor: '#dc2626' }}>
+                <IconGlyph kind="bench" />
               </span>
               <div>
                 <strong style={styles.iconLabel}>BENCH</strong>
@@ -132,14 +133,27 @@ export function OnboardingTooltip({
             </div>
 
             <div style={styles.iconRow}>
-              <span style={{ ...styles.icon, backgroundColor: '#f59e0b' }}>
-                🔄
+              <span style={{ ...styles.icon, backgroundColor: '#d97706' }}>
+                <IconGlyph kind="waiver" />
               </span>
               <div>
                 <strong style={styles.iconLabel}>WAIVER</strong>
                 <span style={styles.iconDesc}>
                   {' '}
                   — A better player is available on waivers
+                </span>
+              </div>
+            </div>
+
+            <div style={styles.iconRow}>
+              <span style={{ ...styles.icon, backgroundColor: '#9ca3af' }}>
+                <IconGlyph kind="clear" />
+              </span>
+              <div>
+                <strong style={styles.iconLabel}>ALL CLEAR</strong>
+                <span style={styles.iconDesc}>
+                  {' '}
+                  — Nothing to change for this player
                 </span>
               </div>
             </div>

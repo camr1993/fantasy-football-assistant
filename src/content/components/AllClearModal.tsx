@@ -34,7 +34,7 @@ export function AllClearModal({
         <div style={styles.content}>
           <div style={allClearStyles.card}>
             <span style={allClearStyles.icon}>👍</span>
-            <div>
+            <div style={allClearStyles.cardText}>
               <p style={allClearStyles.heading}>
                 {isBenched
                   ? `${playerName} is fine on your bench`

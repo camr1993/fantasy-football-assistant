@@ -4,6 +4,7 @@ import { styles, iconStateStyles } from '../styles';
 import { getUserTeams, getYahooLeagueIdFromCache } from '../utils/userTeams';
 import { RecommendationModal } from './RecommendationModal';
 import { AllClearModal } from './AllClearModal';
+import { IconGlyph, type GlyphKind } from './IconGlyph';
 
 interface RecommendationIconProps {
   recommendations: PlayerRecommendations;
@@ -45,27 +46,22 @@ export function RecommendationIcon({
 
   const hasAnyRecommendation = hasStartBench || hasWaiverUpgrade;
 
-  // Determine icon and color based on recommendation type
-  let icon = '💡';
-  let bgColor = '#7c3aed'; // Default purple
-  let title = 'View FantasyEdge recommendations';
+  // Determine glyph and colour based on recommendation type
+  let glyph: GlyphKind = 'clear';
+  let bgColor = '#9ca3af'; // Muted grey, so it reads as "fine" not "act"
+  let title = 'No changes needed';
 
   if (hasStartBench) {
-    if (recommendations.startBench!.recommendation === 'START') {
-      icon = '▲';
-      bgColor = '#22c55e'; // Green
-    } else {
-      icon = '▼';
-      bgColor = '#ef4444'; // Red
-    }
+    const isStart = recommendations.startBench!.recommendation === 'START';
+    glyph = isStart ? 'start' : 'bench';
+    bgColor = isStart ? '#16a34a' : '#dc2626';
+    title = isStart
+      ? 'FantasyEdge suggests starting this player'
+      : 'FantasyEdge suggests benching this player';
   } else if (hasWaiverUpgrade) {
-    icon = '🔄';
-    bgColor = '#f59e0b'; // Orange/amber
-  } else {
-    // Nothing to change - say so rather than showing nothing at all
-    icon = '✓';
-    bgColor = '#9ca3af'; // Muted grey, so it reads as "fine" not "act"
-    title = 'No changes needed';
+    glyph = 'waiver';
+    bgColor = '#d97706';
+    title = 'Better options are available on the waiver wire';
   }
 
   if (isLoading) {
@@ -94,8 +90,9 @@ export function RecommendationIcon({
           handleOpenModal();
         }}
         title={title}
+        aria-label={title}
       >
-        {icon}
+        <IconGlyph kind={glyph} />
       </button>
 
       {isModalOpen &&

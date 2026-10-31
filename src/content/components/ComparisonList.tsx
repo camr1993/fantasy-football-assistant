@@ -1,6 +1,7 @@
 import React from 'react';
 import { comparisonStyles } from '../styles';
 import { getPlayerSearchUrl } from '../utils/playerSearch';
+import { abbreviateTeam } from '../utils/teamAbbrev';
 import type { ComparisonEntry, ComparisonView } from '../utils/buildComparison';
 
 interface ComparisonListProps {
@@ -75,7 +76,9 @@ export function ComparisonList({ view, yahooLeagueId }: ComparisonListProps) {
                 <span style={comparisonStyles.name}>{entry.name}</span>
               )}
               {entry.team && (
-                <span style={comparisonStyles.teamTag}>{entry.team}</span>
+                <span style={comparisonStyles.teamTag}>
+                  {abbreviateTeam(entry.team)}
+                </span>
               )}
             </div>
 

@@ -2,21 +2,26 @@ import type React from 'react';
 
 export const styles: Record<string, React.CSSProperties> = {
   iconButton: {
+    boxSizing: 'border-box',
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '20px',
-    height: '20px',
+    width: '18px',
+    height: '18px',
     borderRadius: '50%',
     border: 'none',
     color: 'white',
+    // Glyphs are drawn as SVG, so the font stack only affects the fallback
     fontSize: '10px',
-    fontWeight: 'bold',
+    fontWeight: 700,
     cursor: 'pointer',
-    marginLeft: '4px',
+    marginLeft: '5px',
     verticalAlign: 'middle',
     lineHeight: 1,
     padding: 0,
+    // A soft ring lifts the badge off Yahoo's striped table rows, which the
+    // flat emoji circles tended to disappear into
+    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.25)',
   },
   overlay: {
     position: 'fixed',
@@ -31,6 +36,7 @@ export const styles: Record<string, React.CSSProperties> = {
     zIndex: 999999,
   },
   modal: {
+    boxSizing: 'border-box',
     backgroundColor: 'white',
     borderRadius: '12px',
     maxWidth: '500px',
@@ -65,7 +71,12 @@ export const styles: Record<string, React.CSSProperties> = {
     padding: '0 4px',
   },
   content: {
+    boxSizing: 'border-box',
     padding: '20px',
+    // Yahoo's own styles do not constrain our injected content, so long
+    // reasons and player names have to be told to wrap rather than widen
+    // the modal past its max width
+    overflowWrap: 'anywhere',
   },
   section: {
     marginBottom: '20px',
@@ -350,6 +361,7 @@ export const iconStateStyles: Record<string, React.CSSProperties> = {
 
 export const allClearStyles: Record<string, React.CSSProperties> = {
   card: {
+    boxSizing: 'border-box',
     backgroundColor: '#f0fdf4',
     border: '1px solid #bbf7d0',
     borderRadius: '8px',
@@ -357,6 +369,12 @@ export const allClearStyles: Record<string, React.CSSProperties> = {
     display: 'flex',
     gap: '12px',
     alignItems: 'flex-start',
+  },
+  // A flex child defaults to min-width:auto, so long copy pushed the text
+  // straight through the card border instead of wrapping inside it
+  cardText: {
+    minWidth: 0,
+    overflowWrap: 'anywhere',
   },
   icon: {
     fontSize: '20px',
@@ -397,7 +415,7 @@ export const comparisonStyles: Record<string, React.CSSProperties> = {
   },
   row: {
     display: 'grid',
-    gridTemplateColumns: 'minmax(0, 1fr) 72px 84px 52px 48px',
+    gridTemplateColumns: 'minmax(0, 1fr) auto 64px 52px 48px',
     alignItems: 'center',
     gap: '8px',
     padding: '8px 10px',
@@ -433,6 +451,7 @@ export const comparisonStyles: Record<string, React.CSSProperties> = {
     fontSize: '11px',
     color: '#6b7280',
     flexShrink: 0,
+    fontVariantNumeric: 'tabular-nums',
   },
   sourceTag: {
     fontSize: '11px',
