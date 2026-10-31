@@ -200,10 +200,12 @@ export async function fetchPlayerInjuries(
 }
 
 /**
- * Fetch IDs of players on bye week (those who should not start)
+ * Fetch IDs of players on bye for the week being played (those who should not
+ * start). This is the upcoming week, not the week the scores come from - a
+ * player whose bye has already passed is available again.
  */
 export async function fetchByeWeekPlayerIds(
-  currentWeek: number,
+  upcomingWeek: number,
   playerIds: string[]
 ): Promise<Set<string>> {
   if (playerIds.length === 0) {
@@ -214,7 +216,7 @@ export async function fetchByeWeekPlayerIds(
     .from('players')
     .select('id, bye_week')
     .in('id', playerIds)
-    .eq('bye_week', currentWeek);
+    .eq('bye_week', upcomingWeek);
 
   return new Set((data || []).map((p: { id: string }) => p.id));
 }

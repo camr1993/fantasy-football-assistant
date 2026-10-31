@@ -244,6 +244,7 @@ Deno.serve(async (req) => {
           league.name,
           seasonYear,
           currentWeek,
+          nextWeek,
           userTeamIds
         );
         allStartBenchResults.push(...recommendations);

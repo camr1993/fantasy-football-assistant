@@ -17,13 +17,17 @@ import type { StartBenchRecommendation } from './types.ts';
 export type { StartBenchRecommendation } from './types.ts';
 
 /**
- * Get start/bench recommendations for user's teams in a league
+ * Get start/bench recommendations for a user's teams in a league.
+ *
+ * currentWeek is the week the scores come from (the last complete one);
+ * upcomingWeek is the week being played, which is what bye checks apply to.
  */
 export async function getStartBenchRecommendations(
   leagueId: string,
   leagueName: string,
   seasonYear: number,
   currentWeek: number,
+  upcomingWeek: number,
   userTeamIds: string[]
 ): Promise<StartBenchRecommendation[]> {
   if (userTeamIds.length === 0) return [];
@@ -46,7 +50,7 @@ export async function getStartBenchRecommendations(
     fetchPlayerStats(seasonYear, currentWeek, playerIds),
     fetchNormalizedStats(leagueId, seasonYear, currentWeek, playerIds),
     fetchPlayerInjuries(playerIds),
-    fetchByeWeekPlayerIds(currentWeek, playerIds),
+    fetchByeWeekPlayerIds(upcomingWeek, playerIds),
     getLeagueRosterSlots(leagueId),
   ]);
 
