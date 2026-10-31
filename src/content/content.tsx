@@ -1,4 +1,5 @@
 import type { InitializationProgress, StoredUserTeam } from './types';
+import type { RosteredPlayerRef } from '../types/tips';
 import {
   injectRecommendations,
   updateInitializationBanner,
@@ -20,8 +21,8 @@ async function init(forceRefresh = false) {
   // Request tips data from background script
   const response = await chrome.runtime.sendMessage({ type: 'GET_TIPS' });
 
-  if (!response?.playerRecommendations) {
-    console.log('[Fantasy Assistant] No recommendations available yet');
+  if (!response) {
+    console.log('[Fantasy Assistant] No response from background script');
     return;
   }
 
@@ -41,10 +42,33 @@ async function init(forceRefresh = false) {
   console.log(
     '[Fantasy Assistant] Received player recommendations for league',
     leagueId,
-    Object.keys(response.playerRecommendations[leagueId] || {}).length
+    Object.keys(response.playerRecommendations?.[leagueId] || {}).length
   );
 
-  injectRecommendations(response.playerRecommendations, leagueId, forceRefresh);
+  injectRecommendations(
+    response.playerRecommendations || {},
+    leagueId,
+    forceRefresh,
+    {
+      rosteredPlayerIds: rosteredIdsForLeague(
+        response.rosteredPlayers,
+        leagueId
+      ),
+      isLoading: !!response.isLoadingTips,
+    }
+  );
+}
+
+/** Yahoo player IDs on the user's roster in the league being viewed */
+function rosteredIdsForLeague(
+  rostered: RosteredPlayerRef[] | undefined,
+  leagueId: string
+): Set<string> {
+  return new Set(
+    (rostered || [])
+      .filter((r) => r.league_id === leagueId)
+      .map((r) => r.yahoo_player_id)
+  );
 }
 
 // Listen for messages from background script
@@ -123,7 +147,18 @@ const observer = new MutationObserver((mutations) => {
       );
       if (!leagueId) return;
 
-      injectRecommendations(response.playerRecommendations, leagueId);
+      injectRecommendations(
+        response.playerRecommendations || {},
+        leagueId,
+        false,
+        {
+          rosteredPlayerIds: rosteredIdsForLeague(
+            response.rosteredPlayers,
+            leagueId
+          ),
+          isLoading: !!response.isLoadingTips,
+        }
+      );
     }, 500);
   }
 });
@@ -132,4 +167,13 @@ const observer = new MutationObserver((mutations) => {
 observer.observe(document.body, {
   childList: true,
   subtree: true,
+});
+
+// Re-render icons when a tips refresh starts or finishes, so the spinner
+// appears and clears without the user reloading the page
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'local') return;
+  if (changes.tips_loading || changes.player_recommendations) {
+    init(true);
+  }
 });

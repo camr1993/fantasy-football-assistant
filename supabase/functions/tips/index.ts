@@ -5,6 +5,7 @@ import { getUserFromRequest, createAuthErrorResponse } from '../utils/auth.ts';
 import { supabase } from '../utils/supabase.ts';
 import { getCurrentNFLSeasonYear } from '../utils/syncHelpers.ts';
 import { getUserLeagues } from './utils/getUserLeagues.ts';
+import { extractYahooPlayerId } from './utils/yahooPlayerId.ts';
 import {
   getWaiverWirePlayers,
   getWaiverWireRecommendations,
@@ -124,6 +125,7 @@ Deno.serve(async (req) => {
           waiver_wire_recommendations: [],
           start_bench_recommendations: [],
           user_teams: [],
+          rostered_players: [],
           current_week: null,
           next_week: null,
           season_year: seasonYear,
@@ -217,6 +219,48 @@ Deno.serve(async (req) => {
       }
     }
 
+    // The extension needs to know which players on a Yahoo page belong to the
+    // user, so it can show a loading or all-clear state on them rather than on
+    // every player on the page (opponents included).
+    const userTeamIdList = ((userTeams || []) as UserTeam[]).map((t) => t.id);
+    const rosteredPlayers: Array<{
+      league_id: string;
+      yahoo_player_id: string;
+    }> = [];
+
+    if (userTeamIdList.length > 0) {
+      const { data: rosterRows, error: rosterError } = await supabase
+        .from('roster_entry')
+        .select('league_id, players!inner(yahoo_player_id)')
+        .in('team_id', userTeamIdList);
+
+      if (rosterError) {
+        logger.warn('Failed to fetch rostered players for user', {
+          userId,
+          error: rosterError,
+        });
+      }
+
+      for (const row of (rosterRows || []) as Array<{
+        league_id: string;
+        players:
+          | { yahoo_player_id: string }
+          | { yahoo_player_id: string }[]
+          | null;
+      }>) {
+        const player = Array.isArray(row.players)
+          ? row.players[0]
+          : row.players;
+        const yahooId = extractYahooPlayerId(player?.yahoo_player_id);
+        if (yahooId) {
+          rosteredPlayers.push({
+            league_id: row.league_id,
+            yahoo_player_id: yahooId,
+          });
+        }
+      }
+    }
+
     const allWaiverWireResults: WaiverWirePlayer[] = [];
     const allWaiverWireRecommendations: WaiverWireRecommendation[] = [];
     const allStartBenchResults: StartBenchRecommendation[] = [];
@@ -278,6 +322,7 @@ Deno.serve(async (req) => {
         waiver_wire_recommendations: allWaiverWireRecommendations,
         start_bench_recommendations: allStartBenchResults,
         user_teams: userTeamInfos,
+        rostered_players: rosteredPlayers,
         current_week: currentWeek,
         next_week: nextWeek,
         season_year: seasonYear,

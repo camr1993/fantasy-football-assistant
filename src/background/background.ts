@@ -83,12 +83,20 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'GET_TIPS') {
     chrome.storage.local
-      .get(['tips_data', 'player_recommendations', 'user_teams'])
+      .get([
+        'tips_data',
+        'player_recommendations',
+        'user_teams',
+        'rostered_players',
+        'tips_loading',
+      ])
       .then((result) => {
         sendResponse({
           tips: result.tips_data || null,
           playerRecommendations: result.player_recommendations || {},
           userTeams: result.user_teams || [],
+          rosteredPlayers: result.rostered_players || [],
+          isLoadingTips: !!result.tips_loading,
         });
       });
     return true; // Keep the message channel open for async response
