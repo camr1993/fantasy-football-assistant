@@ -6,6 +6,7 @@ import {
   checkAndShowInitializationBanner,
   checkAndShowServiceNotice,
   watchServiceNoticeState,
+  cleanupInjectedIcons,
 } from './domInjection';
 import {
   resolveCurrentLeagueId,
@@ -26,6 +27,26 @@ async function init(forceRefresh = false) {
 
   if (!response) {
     console.log('[Fantasy Assistant] No response from background script');
+    cleanupInjectedIcons();
+    return;
+  }
+
+  // No teams means no signed-in session (or none synced yet). Anything
+  // already on the page is stale - leaving it up after sign-out showed an
+  // all-clear check on every player.
+  const hasSession =
+    Array.isArray(response.userTeams) && response.userTeams.length > 0;
+
+  if (!hasSession) {
+    console.log('[Fantasy Assistant] No signed-in session, clearing icons');
+    cleanupInjectedIcons();
+    // The banner is driven by messages rather than storage, so a "ready"
+    // banner would otherwise sit there after sign-out
+    updateInitializationBanner({
+      status: 'idle',
+      percentage: 0,
+      currentStep: '',
+    });
     return;
   }
 
@@ -39,6 +60,7 @@ async function init(forceRefresh = false) {
     console.log(
       '[Fantasy Assistant] Current league is not synced yet, nothing to inject'
     );
+    cleanupInjectedIcons();
     return;
   }
 
