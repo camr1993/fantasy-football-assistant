@@ -26,17 +26,17 @@ export const RB_WEIGHTS = {
   volatility: { weight: -0.04, label: 'Consistency' }, // smaller penalty (z-score, clip ±2)
   weighted_opportunity: {
     weight: 0.36,
-    label: 'Workload (rushing attempts + targets)',
+    label: 'Workload',
   }, // workload (rushes + target value) — increased
   touchdown_production: {
     weight: 0.18,
-    label: 'TD Production (rushing touchdowns + receiving touchdowns)',
+    label: 'Touchdown Production',
   }, // TD upside important for RBs
   receiving_profile: {
     weight: 0.08,
-    label: 'Receiving Work (receptions + receiving yards)',
+    label: 'Receiving Work',
   }, // receiving work (receptions + receiving yards)
-  efficiency: { weight: 0.06, label: 'Efficiency' }, // YPC / YPT efficiency
+  efficiency: { weight: 0.06, label: 'Yards per Touch' }, // YPC / YPT efficiency
   opponent_difficulty: { weight: 0.06, label: 'Matchup' }, // matchup vs run defense
 } as const;
 
@@ -58,7 +58,7 @@ export const QB_WEIGHTS = {
   turnovers: { weight: -0.15, label: 'Turnover Avoidance' }, // big negative for INTs/fumbles
   rushing_upside: {
     weight: 0.15,
-    label: 'Rushing Upside (rushing yards + 6 × rushing touchdowns)',
+    label: 'Rushing Upside',
   }, // dual-threat value still useful
   opponent_difficulty: { weight: 0.1, label: 'Matchup' }, // matchup vs pass defense
 } as const;
@@ -69,10 +69,10 @@ export const K_WEIGHTS = {
   volatility: { weight: -0.1, label: 'Consistency' }, // keep stronger penalty (clip ±2)
   fg_profile: {
     weight: 0.4,
-    label: 'FG Profile (FGs weighted by distance)',
+    label: 'Long-Range Kicking',
   }, // attempts & distance profile
-  fg_pat_misses: { weight: -0.1, label: 'Accuracy' }, // misses are negative signal
-  fg_attempts: { weight: 0.15, label: 'Opportunities' }, // team opportunity
+  fg_pat_misses: { weight: -0.1, label: 'Kick Accuracy' }, // misses are negative signal
+  fg_attempts: { weight: 0.15, label: 'Kick Attempts' }, // team opportunity
   opponent_difficulty: { weight: 0.1, label: 'Matchup' }, // weather / defense / stadium
 } as const;
 
