@@ -3,6 +3,7 @@ import { supabase } from '../../../../supabase/functions/utils/supabase.ts';
 import {
   getCurrentNFLSeasonYear,
   getMostRecentNFLWeek,
+  getSeasonGameKey,
 } from '../../../../supabase/functions/utils/syncHelpers.ts';
 import { fetchAllPlayers } from './fetchPlayers.ts';
 import { fetchYahooPlayerStats } from './fetchYahooStats.ts';
@@ -70,13 +71,28 @@ export async function syncAllPlayerStats(
   let totalProcessed = 0;
 
   try {
-    // Fetch all players from database
-    const allPlayerRecords = await fetchAllPlayers();
+    // Fetch this season's players from the database. Scoping to the season's
+    // game key keeps last season's player keys out of the Yahoo request.
+    const gameKey = await getSeasonGameKey(currentYear);
+    if (!gameKey) {
+      throw new Error(
+        `Cannot resolve Yahoo game key for ${currentYear}; refusing to sync ` +
+          "stats against every season's player keys"
+      );
+    }
+
+    const allPlayerRecords = await fetchAllPlayers(gameKey);
 
     if (allPlayerRecords.length === 0) {
-      logger.error('No players found in database');
+      logger.error('No players found in database', { gameKey, currentYear });
       return 0;
     }
+
+    logger.info('Fetched players for season', {
+      gameKey,
+      currentYear,
+      playerCount: allPlayerRecords.length,
+    });
 
     // Fetch player stats from Yahoo API
     const allPlayers = await fetchYahooPlayerStats(
