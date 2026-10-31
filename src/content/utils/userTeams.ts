@@ -4,6 +4,17 @@ import type { StoredUserTeam } from '../types';
 let cachedUserTeams: StoredUserTeam[] | null = null;
 
 /**
+ * Drop the cached teams so the next read picks up fresh storage.
+ *
+ * A page open across sign-in caches an empty list before any team exists and
+ * would otherwise keep returning it for the life of the tab - leaving the
+ * roster link missing from the ready banner even after the sync finished.
+ */
+export function invalidateUserTeamsCache(): void {
+  cachedUserTeams = null;
+}
+
+/**
  * Get the user's teams from stored user_teams data
  */
 export async function getUserTeams(): Promise<StoredUserTeam[]> {

@@ -128,8 +128,9 @@ export function RecommendationModal({
 
           {!startBench && current && (
             <p style={comparisonStyles.marginalNote}>
-              {current.name} stays in your lineup either way - these are add
-              candidates, not a lineup change.
+              {current.name} is in the right spot for your roster as it stands.
+              The players above are free agents who grade out higher, so picking
+              one up would mean dropping someone.
             </p>
           )}
         </div>

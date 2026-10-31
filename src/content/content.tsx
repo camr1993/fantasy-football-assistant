@@ -7,7 +7,10 @@ import {
   checkAndShowServiceNotice,
   watchServiceNoticeState,
 } from './domInjection';
-import { resolveCurrentLeagueId } from './utils/userTeams';
+import {
+  resolveCurrentLeagueId,
+  invalidateUserTeamsCache,
+} from './utils/userTeams';
 
 /**
  * Initialize the content script
@@ -173,7 +176,20 @@ observer.observe(document.body, {
 // appears and clears without the user reloading the page
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'local') return;
-  if (changes.tips_loading || changes.player_recommendations) {
+
+  // user_teams arriving is what turns an unusable page into a usable one on
+  // first sign-in: until it exists we cannot tell which league is on screen,
+  // so init bails out early and nothing is drawn
+  if (changes.user_teams) {
+    invalidateUserTeamsCache();
+  }
+
+  if (
+    changes.user_teams ||
+    changes.tips_loading ||
+    changes.player_recommendations ||
+    changes.rostered_players
+  ) {
     init(true);
   }
 });

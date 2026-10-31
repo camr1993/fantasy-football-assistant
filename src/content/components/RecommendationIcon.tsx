@@ -5,6 +5,7 @@ import { getUserTeams, getYahooLeagueIdFromCache } from '../utils/userTeams';
 import { RecommendationModal } from './RecommendationModal';
 import { AllClearModal } from './AllClearModal';
 import { IconGlyph, type GlyphKind } from './IconGlyph';
+import { ModalPortal } from './ModalPortal';
 
 interface RecommendationIconProps {
   recommendations: PlayerRecommendations;
@@ -95,21 +96,24 @@ export function RecommendationIcon({
         <IconGlyph kind={glyph} />
       </button>
 
-      {isModalOpen &&
-        (hasAnyRecommendation ? (
-          <RecommendationModal
-            recommendations={recommendations}
-            playerName={playerName}
-            yahooLeagueId={yahooLeagueId}
-            onClose={() => setIsModalOpen(false)}
-          />
-        ) : (
-          <AllClearModal
-            playerName={playerName}
-            slot={slot}
-            onClose={() => setIsModalOpen(false)}
-          />
-        ))}
+      {isModalOpen && (
+        <ModalPortal>
+          {hasAnyRecommendation ? (
+            <RecommendationModal
+              recommendations={recommendations}
+              playerName={playerName}
+              yahooLeagueId={yahooLeagueId}
+              onClose={() => setIsModalOpen(false)}
+            />
+          ) : (
+            <AllClearModal
+              playerName={playerName}
+              slot={slot}
+              onClose={() => setIsModalOpen(false)}
+            />
+          )}
+        </ModalPortal>
+      )}
     </>
   );
 }
