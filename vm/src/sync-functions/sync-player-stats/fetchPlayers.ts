@@ -2,11 +2,18 @@ import { logger } from '../../../../supabase/functions/utils/logger.ts';
 import { supabase } from '../../../../supabase/functions/utils/supabase.ts';
 
 /**
- * Fetch all players from the database with pagination
+ * Fetch the players belonging to one Yahoo game key (i.e. one season).
+ *
+ * Yahoo embeds the game key in every player key, so `players` holds a separate
+ * row per person per season. Fetching all of them would ask Yahoo for this
+ * season's stats using last season's player keys, writing a duplicate set of
+ * stats rows that nothing else references - and that then surface as
+ * "available" free agents because rosters only ever point at current-season
+ * rows.
  */
-export async function fetchAllPlayers(): Promise<
-  Array<{ yahoo_player_id: string }>
-> {
+export async function fetchAllPlayers(
+  gameKey: string
+): Promise<Array<{ yahoo_player_id: string }>> {
   const allPlayerRecords = [];
   let from = 0;
   const pageSize = 1000;
@@ -17,11 +24,13 @@ export async function fetchAllPlayers(): Promise<
       .from('players')
       .select('yahoo_player_id')
       .not('yahoo_player_id', 'is', null)
+      .like('yahoo_player_id', `${gameKey}.%`)
       .range(from, from + pageSize - 1);
 
     if (playersError) {
       logger.error('Failed to fetch players from database', {
         error: playersError,
+        gameKey,
         from,
         pageSize,
       });
@@ -52,4 +61,3 @@ export async function fetchAllPlayers(): Promise<
 
   return allPlayerRecords;
 }
-

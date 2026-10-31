@@ -165,6 +165,36 @@ export function getMostRecentNFLWeek(
 }
 
 /**
+ * Resolve the Yahoo game key for a season (e.g. "470" for 2026).
+ *
+ * Yahoo issues a new game key each year and embeds it in every player and
+ * league key, so `players` accumulates a fresh row per person per season.
+ * Anything that needs "this season's row" has to filter by the game key.
+ */
+export async function getSeasonGameKey(
+  seasonYear: number
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('leagues')
+    .select('yahoo_league_id')
+    .eq('season_year', seasonYear)
+    .not('yahoo_league_id', 'is', null)
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data?.yahoo_league_id) {
+    logger.error('Could not resolve Yahoo game key for season', {
+      seasonYear,
+      error: error?.message,
+    });
+    return null;
+  }
+
+  // "470.l.855357" -> "470"
+  return data.yahoo_league_id.split('.')[0] || null;
+}
+
+/**
  * Get current NFL season year
  */
 export function getCurrentNFLSeasonYear(): number {
