@@ -12,7 +12,9 @@
 -- filter and ranked as a free agent.
 --
 -- Deletes only rows whose season disagrees with their player key's game key,
--- so historical seasons are untouched.
+-- so historical seasons are untouched. league_calcs has no surrogate key
+-- (its primary key is league_id, player_id, season_year, week), so both
+-- deletes join through USING rather than collecting ids.
 
 WITH season_game_keys AS (
   -- One game key per season, taken from any league in that season
@@ -22,18 +24,13 @@ WITH season_game_keys AS (
   FROM leagues l
   WHERE l.yahoo_league_id IS NOT NULL
   ORDER BY l.season_year, l.yahoo_league_id
-),
-mismatched AS (
-  SELECT ps.id
-  FROM player_stats ps
-  JOIN players p ON p.id = ps.player_id
-  JOIN season_game_keys sgk ON sgk.season_year = ps.season_year
-  WHERE p.yahoo_player_id IS NOT NULL
-    AND split_part(p.yahoo_player_id, '.', 1) <> sgk.game_key
 )
 DELETE FROM player_stats ps
-USING mismatched m
-WHERE ps.id = m.id;
+USING players p, season_game_keys sgk
+WHERE p.id = ps.player_id
+  AND sgk.season_year = ps.season_year
+  AND p.yahoo_player_id IS NOT NULL
+  AND split_part(p.yahoo_player_id, '.', 1) <> sgk.game_key;
 
 WITH season_game_keys AS (
   SELECT DISTINCT ON (l.season_year)
@@ -42,15 +39,10 @@ WITH season_game_keys AS (
   FROM leagues l
   WHERE l.yahoo_league_id IS NOT NULL
   ORDER BY l.season_year, l.yahoo_league_id
-),
-mismatched AS (
-  SELECT lc.id
-  FROM league_calcs lc
-  JOIN players p ON p.id = lc.player_id
-  JOIN season_game_keys sgk ON sgk.season_year = lc.season_year
-  WHERE p.yahoo_player_id IS NOT NULL
-    AND split_part(p.yahoo_player_id, '.', 1) <> sgk.game_key
 )
 DELETE FROM league_calcs lc
-USING mismatched m
-WHERE lc.id = m.id;
+USING players p, season_game_keys sgk
+WHERE p.id = lc.player_id
+  AND sgk.season_year = lc.season_year
+  AND p.yahoo_player_id IS NOT NULL
+  AND split_part(p.yahoo_player_id, '.', 1) <> sgk.game_key;
