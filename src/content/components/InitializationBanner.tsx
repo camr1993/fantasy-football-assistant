@@ -60,15 +60,16 @@ export function InitializationBanner({
           <>
             <span style={bannerStyles.successIcon}>✓</span>
             <span style={bannerStyles.successText}>
-              FantasyEdge is ready! Refresh your{' '}
+              FantasyEdge is ready — recommendations are on your players now.
               {rosterUrl ? (
-                <a href={rosterUrl} style={bannerStyles.rosterLink}>
-                  roster page
-                </a>
-              ) : (
-                'roster page'
-              )}{' '}
-              to see recommendations.
+                <>
+                  {' '}
+                  <a href={rosterUrl} style={bannerStyles.rosterLink}>
+                    Open your roster
+                  </a>
+                  .
+                </>
+              ) : null}
             </span>
             <button style={bannerStyles.dismissButton} onClick={onDismiss}>
               ×
