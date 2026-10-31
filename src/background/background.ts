@@ -1,5 +1,6 @@
 // Background script for Chrome extension
 import { supabase } from '../supabaseClient';
+import { clearSessionStorage } from '../storageKeys';
 import { fetchAndStoreTips } from './services/tipsService';
 import {
   startInitializationPolling,
@@ -56,6 +57,10 @@ supabase.auth.onAuthStateChange((event, _session) => {
     // Clear any pending alarms
     chrome.alarms.clear(ROSTER_SYNC_ALARM);
     chrome.alarms.clear('init-status-poll');
+
+    // Sign-out can also come from an expired session rather than the popup
+    // button, so clear here too rather than relying on the caller
+    void clearSessionStorage();
   } else if (event === 'TOKEN_REFRESHED') {
     console.log('Background: Session token refreshed');
   } else if (event === 'SIGNED_IN') {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { clearSessionStorage } from '../storageKeys';
 import ReactDOM from 'react-dom/client';
 import { apiClient, setYahooReauthRequired } from '../api/client';
 import {
@@ -264,16 +265,7 @@ function Popup() {
     stopAnimation();
     await signOutSupabase();
 
-    chrome.storage.local.remove([
-      'tips_data',
-      'player_recommendations',
-      'tips_timestamp',
-      'lastPeriodicSync',
-      'oauth_nonce',
-      'oauth_timestamp',
-      'initialization_progress',
-      'yahoo_reauth_required',
-    ]);
+    await clearSessionStorage();
 
     setUser(null);
     setIsAuthenticated(false);
