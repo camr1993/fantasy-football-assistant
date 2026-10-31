@@ -34,6 +34,7 @@ export interface WaiverWireRecommendation {
   team_name: string;
   recommendation: 'ADD';
   reason: string;
+  factors?: string[]; // Why the waiver player wins, best first
   confidence: RecommendationConfidence;
 }
 
@@ -147,4 +148,3 @@ export interface RosteredPlayerWithScore {
 export interface WaiverPlayerWithStats extends WaiverWirePlayer {
   normalizedStats?: NormalizedStats;
 }
-

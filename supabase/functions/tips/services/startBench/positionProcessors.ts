@@ -6,6 +6,7 @@ import {
   generateByeWeekReason,
   generateFlexStartReason,
   generateFlexBenchReason,
+  getComparisonFactors,
 } from './reasonGenerators.ts';
 import {
   createRecommendation,
@@ -15,6 +16,26 @@ import type { StartBenchRecommendation, PlayerGroup } from './types.ts';
 
 const BENCH_SLOTS = ['BENCH', 'IR', 'BN'];
 const FLEX_ELIGIBLE_POSITIONS = ['WR', 'RB', 'TE'];
+
+/**
+ * Describe the player on the other side of a recommendation, including why
+ * they come out ahead, so the UI can rank them against the current player.
+ */
+function toComparison(
+  better: PlayerGroup | undefined,
+  worse: PlayerGroup,
+  fallback: ComparisonInfo
+): ComparisonInfo {
+  if (!better) return fallback;
+
+  return {
+    score: better.weighted_score,
+    name: better.name,
+    team: better.team,
+    slot: better.slot,
+    factors: getComparisonFactors(better, worse),
+  };
+}
 
 interface RosterSlots {
   positions: Map<string, number>;
@@ -88,9 +109,10 @@ export function processStandardPositions(
             !injuredPlayerIds.has(p.player_id) &&
             !byeWeekPlayerIds.has(p.player_id)
         );
-        const comparison = replacement
-          ? { score: replacement.weighted_score, name: replacement.name }
-          : { score: 100, name: 'any healthy player' };
+        const comparison = toComparison(replacement, player, {
+          score: 100,
+          name: 'any healthy player',
+        });
 
         recommendations.push(
           createRecommendation(
@@ -112,9 +134,10 @@ export function processStandardPositions(
             !injuredPlayerIds.has(p.player_id) &&
             !byeWeekPlayerIds.has(p.player_id)
         );
-        const comparison = replacement
-          ? { score: replacement.weighted_score, name: replacement.name }
-          : { score: 100, name: 'any available player' };
+        const comparison = toComparison(replacement, player, {
+          score: 100,
+          name: 'any available player',
+        });
 
         recommendations.push(
           createRecommendation(
@@ -140,21 +163,16 @@ export function processStandardPositions(
 
         let comparison: ComparisonInfo;
         if (shouldStartAtPosition) {
-          const playerToReplace = sorted[startingSlots];
-          comparison = playerToReplace
-            ? {
-                score: playerToReplace.weighted_score,
-                name: playerToReplace.name,
-              }
-            : { score: 0, name: 'starter' };
+          // The player being displaced, so the UI can show who moves out
+          comparison = toComparison(sorted[startingSlots], player, {
+            score: 0,
+            name: 'starter',
+          });
         } else {
-          const playerTakingSpot = sorted[startingSlots - 1];
-          comparison = playerTakingSpot
-            ? {
-                score: playerTakingSpot.weighted_score,
-                name: playerTakingSpot.name,
-              }
-            : { score: 0, name: 'bench' };
+          comparison = toComparison(sorted[startingSlots - 1], player, {
+            score: 0,
+            name: 'bench',
+          });
         }
 
         recommendations.push(
@@ -228,10 +246,10 @@ export function processFlexPositions(
       // Handle injured players currently in a flex slot
       if (isInFlexSlot && !isBenchSlot && isInjured) {
         const teamFlexPlayers = flexEligibleByTeam.get(player.team_id) || [];
-        const replacement = teamFlexPlayers[0];
-        const comparison = replacement
-          ? { score: replacement.weighted_score, name: replacement.name }
-          : { score: 100, name: 'any healthy player' };
+        const comparison = toComparison(teamFlexPlayers[0], player, {
+          score: 100,
+          name: 'any healthy player',
+        });
 
         recommendations.push(
           createRecommendation(
@@ -248,10 +266,10 @@ export function processFlexPositions(
       // Handle players on bye week currently in a flex slot
       if (isInFlexSlot && !isBenchSlot && isOnBye) {
         const teamFlexPlayers = flexEligibleByTeam.get(player.team_id) || [];
-        const replacement = teamFlexPlayers[0];
-        const comparison = replacement
-          ? { score: replacement.weighted_score, name: replacement.name }
-          : { score: 100, name: 'any available player' };
+        const comparison = toComparison(teamFlexPlayers[0], player, {
+          score: 100,
+          name: 'any available player',
+        });
 
         recommendations.push(
           createRecommendation(
@@ -294,21 +312,15 @@ export function processFlexPositions(
 
         let comparison: ComparisonInfo;
         if (shouldStartAsFlex) {
-          const playerToReplace = sortedFlex[flexSlots];
-          comparison = playerToReplace
-            ? {
-                score: playerToReplace.weighted_score,
-                name: playerToReplace.name,
-              }
-            : { score: 0, name: 'flex starter' };
+          comparison = toComparison(sortedFlex[flexSlots], player, {
+            score: 0,
+            name: 'flex starter',
+          });
         } else {
-          const playerTakingSpot = sortedFlex[flexSlots - 1];
-          comparison = playerTakingSpot
-            ? {
-                score: playerTakingSpot.weighted_score,
-                name: playerTakingSpot.name,
-              }
-            : { score: 0, name: 'flex bench' };
+          comparison = toComparison(sortedFlex[flexSlots - 1], player, {
+            score: 0,
+            name: 'flex bench',
+          });
         }
 
         recommendations.push(

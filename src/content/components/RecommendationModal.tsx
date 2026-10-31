@@ -1,9 +1,10 @@
 import React from 'react';
 import type { PlayerRecommendations } from '../../types/tips';
-import { styles } from '../styles';
+import { styles, comparisonStyles } from '../styles';
 import { shouldShowInjuryWarning } from '../utils/injuryStatus';
 import { getPlayerSearchUrl } from '../utils/playerSearch';
-import { ConfidenceIndicator } from './ConfidenceIndicator';
+import { buildComparisonView } from '../utils/buildComparison';
+import { ComparisonList } from './ComparisonList';
 import { InjuryNote } from './InjuryNote';
 
 interface RecommendationModalProps {
@@ -20,13 +21,42 @@ export function RecommendationModal({
   onClose,
 }: RecommendationModalProps) {
   const { startBench, waiverUpgrades } = recommendations;
+  const hasAny =
+    !!startBench || !!(waiverUpgrades && waiverUpgrades.length > 0);
+
+  if (!hasAny) {
+    return (
+      <div style={styles.overlay} onClick={onClose}>
+        <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+          <div style={styles.header}>
+            <h3 style={styles.title}>{playerName}</h3>
+            <button style={styles.closeButton} onClick={onClose}>
+              ×
+            </button>
+          </div>
+          <div style={styles.content}>
+            <p style={styles.noRecs}>
+              No recommendations available for this player.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const view = buildComparisonView(recommendations, playerName);
+  const current = view.entries[view.currentIndex];
+
+  // Prefer whichever injury note belongs to the move being recommended
+  const injuredEntry = view.entries.find(
+    (e) => e.injuryStatus && shouldShowInjuryWarning(e.injuryStatus)
+  );
 
   return (
     <div style={styles.overlay} onClick={onClose}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div style={styles.header}>
           <h3 style={styles.title}>
-            💡 Recommendations for{' '}
             {yahooLeagueId ? (
               <a
                 href={getPlayerSearchUrl(yahooLeagueId, playerName)}
@@ -39,6 +69,7 @@ export function RecommendationModal({
             ) : (
               playerName
             )}
+            {view.position ? ` · ${view.position}` : ''}
           </h3>
           <button style={styles.closeButton} onClick={onClose}>
             ×
@@ -46,108 +77,59 @@ export function RecommendationModal({
         </div>
 
         <div style={styles.content}>
-          {/* Start/Bench Recommendation */}
-          {startBench && (
-            <div style={styles.section}>
-              <div style={styles.rosterHeader}>
-                <h4 style={styles.sectionTitle}>
-                  {startBench.recommendation === 'START' ? '▲' : '▼'} Roster
-                  Suggestions
-                </h4>
-                <div
-                  style={{
-                    ...styles.badge,
-                    backgroundColor:
-                      startBench.recommendation === 'START'
-                        ? '#22c55e'
-                        : '#ef4444',
-                  }}
-                >
-                  {startBench.recommendation}
-                </div>
-              </div>
-              <div style={styles.rosterCard}>
-                <ConfidenceIndicator
-                  level={startBench.confidence.level}
-                  label={startBench.confidence.label}
-                  type={
-                    startBench.recommendation === 'START' ? 'start' : 'bench'
-                  }
-                />
-                <p
-                  style={{
-                    ...styles.reason,
-                    marginTop: '0px',
-                  }}
-                >
-                  {startBench.reason}
-                </p>
-                {shouldShowInjuryWarning(startBench.injury_status) && (
-                  <InjuryNote
-                    status={startBench.injury_status!}
-                    playerName={startBench.name}
-                  />
-                )}
-                <p style={styles.meta}>
-                  League: {startBench.league_name} • Team:{' '}
-                  {startBench.team_name}
-                </p>
-              </div>
-            </div>
+          {view.headline && (
+            <p
+              style={
+                view.isMarginal
+                  ? comparisonStyles.headlineMarginal
+                  : comparisonStyles.headline
+              }
+            >
+              {view.headline}
+            </p>
           )}
 
-          {/* Waiver Wire Upgrades */}
-          {waiverUpgrades && waiverUpgrades.length > 0 && (
-            <div style={styles.section}>
-              <div style={styles.rosterHeader}>
-                <h4 style={styles.sectionTitle}>🔄 Waiver Wire Upgrades</h4>
-                <span style={styles.addBadge}>ADD</span>
-              </div>
-              {waiverUpgrades.map((upgrade, index) => (
-                <div key={index} style={styles.upgradeCard}>
-                  <div style={styles.upgradeHeader}>
-                    <span style={styles.playerName}>
-                      {yahooLeagueId ? (
-                        <a
-                          href={getPlayerSearchUrl(
-                            yahooLeagueId,
-                            upgrade.waiver_player_name
-                          )}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={styles.playerLink}
-                        >
-                          {upgrade.waiver_player_name}
-                        </a>
-                      ) : (
-                        upgrade.waiver_player_name
-                      )}{' '}
-                      ({upgrade.waiver_player_team})
-                    </span>
-                  </div>
-                  <ConfidenceIndicator
-                    level={upgrade.confidence.level}
-                    label={upgrade.confidence.label}
-                    type="add"
-                  />
-                  <p style={styles.reason}>{upgrade.reason}</p>
-                  {shouldShowInjuryWarning(upgrade.waiver_injury_status) && (
-                    <InjuryNote
-                      status={upgrade.waiver_injury_status!}
-                      playerName={upgrade.waiver_player_name}
-                    />
-                  )}
-                  <p style={styles.meta}>
-                    League: {upgrade.league_name} • Team: {upgrade.team_name}
-                  </p>
-                </div>
+          <p style={comparisonStyles.subhead}>
+            {view.leagueName}
+            {view.teamName ? ` · ${view.teamName}` : ''}
+          </p>
+
+          <ComparisonList view={view} yahooLeagueId={yahooLeagueId} />
+
+          {view.factors.length > 0 && !view.isMarginal && (
+            <div style={comparisonStyles.factorsRow}>
+              <span style={comparisonStyles.factorsLabel}>Why:</span>
+              {view.factors.map((factor) => (
+                <span key={factor} style={comparisonStyles.chip}>
+                  {factor} ↑
+                </span>
               ))}
             </div>
           )}
 
-          {!startBench && (!waiverUpgrades || waiverUpgrades.length === 0) && (
-            <p style={styles.noRecs}>
-              No recommendations available for this player.
+          {view.isMarginal && (
+            <p style={comparisonStyles.marginalNote}>
+              The difference here is small enough that either option is
+              reasonable. Worth a look if you were already considering a change,
+              but not worth using a waiver claim on its own.
+            </p>
+          )}
+
+          {injuredEntry && (
+            <InjuryNote
+              status={injuredEntry.injuryStatus!}
+              playerName={injuredEntry.name}
+            />
+          )}
+
+          {startBench?.reason && !view.isMarginal && (
+            <p style={comparisonStyles.marginalNote}>{startBench.reason}</p>
+          )}
+
+          {!startBench && current && (
+            <p style={comparisonStyles.marginalNote}>
+              {current.name} stays in your lineup either way - these are add
+              candidates, not a lineup change.
             </p>
           )}
         </div>
@@ -155,4 +137,3 @@ export function RecommendationModal({
     </div>
   );
 }
-

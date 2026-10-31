@@ -5,7 +5,10 @@ import {
   fetchPlayerInjuryStatuses,
 } from './dataFetchers.ts';
 import { calculateWaiverConfidence } from './confidence.ts';
-import { generateWaiverWireReason } from './reasonGenerator.ts';
+import {
+  generateWaiverWireReason,
+  getWaiverComparisonFactors,
+} from './reasonGenerator.ts';
 import type {
   WaiverWirePlayer,
   WaiverWireRecommendation,
@@ -102,6 +105,7 @@ export async function getWaiverWireRecommendations(
 
       if (shouldRecommend) {
         const reason = generateWaiverWireReason(waiverPlayer, rostered);
+        const factors = getWaiverComparisonFactors(waiverPlayer, rostered);
         const confidence = calculateWaiverConfidence(
           waiverPlayer.weighted_score,
           rostered.weighted_score ?? 0
@@ -128,6 +132,7 @@ export async function getWaiverWireRecommendations(
           team_name: rostered.team_name,
           recommendation: 'ADD',
           reason,
+          factors,
           confidence,
         });
       }
@@ -151,4 +156,3 @@ export async function getWaiverWireRecommendations(
 
   return recommendations;
 }
-
