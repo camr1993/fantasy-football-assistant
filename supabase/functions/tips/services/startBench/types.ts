@@ -13,6 +13,9 @@ export interface StartBenchRecommendation {
   weighted_score: number;
   comparison_score: number; // Score of the player they should swap with
   comparison_name: string; // Name of the player they should swap with
+  comparison_team?: string; // NFL team of that player
+  comparison_slot?: string; // Roster slot of that player
+  factors?: string[]; // Why the better player wins, best first
   league_id: string;
   league_name: string;
   team_id: string;

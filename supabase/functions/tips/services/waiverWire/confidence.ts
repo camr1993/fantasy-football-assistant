@@ -23,4 +23,3 @@ export function calculateWaiverConfidence(
     return { level: 1, label: 'Slight Upgrade' };
   }
 }
-

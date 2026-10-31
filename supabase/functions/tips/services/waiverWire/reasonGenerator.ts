@@ -81,6 +81,48 @@ function buildScoreBreakdown(
  * Generate a detailed reason for adding a waiver wire player over a rostered player
  * Uses the same detailed score breakdown comparison as start/bench recommendations
  */
+/**
+ * The factors behind the waiver player out-scoring the rostered one, best
+ * first, so the UI can show them as chips instead of re-parsing the prose.
+ */
+export function getWaiverComparisonFactors(
+  waiverPlayer: WaiverPlayerWithStats,
+  rosteredPlayer: RosteredPlayerWithScore,
+  limit = 3
+): string[] {
+  const waiverBreakdown = buildScoreBreakdown(
+    waiverPlayer.player_id,
+    waiverPlayer.position,
+    waiverPlayer.weighted_score,
+    waiverPlayer.normalizedStats
+  );
+
+  const rosteredBreakdown = buildScoreBreakdown(
+    rosteredPlayer.player_id,
+    rosteredPlayer.position,
+    rosteredPlayer.weighted_score,
+    rosteredPlayer.normalizedStats
+  );
+
+  if (
+    waiverBreakdown.components.length === 0 ||
+    rosteredBreakdown.components.length === 0
+  ) {
+    // No comparison possible - fall back to the waiver player's own strengths
+    return waiverBreakdown.components
+      .filter((c) => c.contribution > 0)
+      .slice(0, limit)
+      .map((c) => c.label.toLowerCase());
+  }
+
+  const { keyAdvantages } = comparePlayerBreakdowns(
+    waiverBreakdown,
+    rosteredBreakdown
+  );
+
+  return keyAdvantages.slice(0, limit).map((a) => a.label.toLowerCase());
+}
+
 export function generateWaiverWireReason(
   waiverPlayer: WaiverPlayerWithStats,
   rosteredPlayer: RosteredPlayerWithScore

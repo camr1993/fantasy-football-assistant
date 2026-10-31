@@ -73,6 +73,37 @@ function buildPlayerBreakdown(player: PlayerGroup) {
 /**
  * Generate detailed reason for starting a player at their position
  */
+/**
+ * The factors behind one player out-scoring another, best first.
+ *
+ * comparePlayerBreakdowns already computes these, but the reason generators
+ * flatten them into a sentence and discard the structure. The UI wants them
+ * as discrete labels so it can show them as chips rather than re-parsing
+ * prose.
+ */
+export function getComparisonFactors(
+  betterPlayer: PlayerGroup,
+  worsePlayer: PlayerGroup,
+  limit = 3
+): string[] {
+  const betterBreakdown = buildPlayerBreakdown(betterPlayer);
+  const worseBreakdown = buildPlayerBreakdown(worsePlayer);
+
+  if (
+    betterBreakdown.components.length === 0 ||
+    worseBreakdown.components.length === 0
+  ) {
+    return [];
+  }
+
+  const { keyAdvantages } = comparePlayerBreakdowns(
+    betterBreakdown,
+    worseBreakdown
+  );
+
+  return keyAdvantages.slice(0, limit).map((a) => a.label.toLowerCase());
+}
+
 export function generateStartReason(
   player: PlayerGroup,
   sortedPlayers: PlayerGroup[],

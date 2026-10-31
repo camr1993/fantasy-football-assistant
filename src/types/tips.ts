@@ -36,6 +36,7 @@ export interface WaiverWireRecommendation {
   team_name: string;
   recommendation: 'ADD';
   reason: string;
+  factors?: string[];
   confidence: RecommendationConfidence;
 }
 
@@ -49,6 +50,9 @@ export interface StartBenchRecommendation {
   weighted_score: number;
   comparison_score: number;
   comparison_name: string;
+  comparison_team?: string;
+  comparison_slot?: string;
+  factors?: string[];
   league_id: string;
   league_name: string;
   team_id: string;

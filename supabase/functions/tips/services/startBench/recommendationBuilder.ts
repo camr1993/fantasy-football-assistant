@@ -4,6 +4,12 @@ import { calculateConfidence } from './confidence.ts';
 export interface ComparisonInfo {
   score: number;
   name: string;
+  /** NFL team of the comparison player, for display in the ranked list */
+  team?: string;
+  /** Roster slot of the comparison player, so the UI can say where they are */
+  slot?: string;
+  /** Why the better player wins, best first */
+  factors?: string[];
 }
 
 /**
@@ -32,6 +38,9 @@ export function createRecommendation(
     weighted_score: player.weighted_score,
     comparison_score: comparison.score,
     comparison_name: comparison.name,
+    comparison_team: comparison.team,
+    comparison_slot: comparison.slot,
+    factors: comparison.factors ?? [],
     league_id: player.league_id,
     league_name: player.league_name,
     team_id: player.team_id,
@@ -42,4 +51,3 @@ export function createRecommendation(
     injury_status: injuryStatus,
   };
 }
-
