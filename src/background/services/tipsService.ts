@@ -4,8 +4,13 @@ import type { TipsResponse, PlayerRecommendationsMap } from '../../types/tips';
 /**
  * Fetch tips from the API and store in chrome.storage
  */
+export const TIPS_LOADING_KEY = 'tips_loading';
+
 export async function fetchAndStoreTips(): Promise<void> {
   try {
+    // Signal the content script so it can show a loading state on the icons
+    await chrome.storage.local.set({ [TIPS_LOADING_KEY]: true });
+
     const result = await apiClient.getTips();
 
     if (result.success && result.data) {
@@ -19,6 +24,7 @@ export async function fetchAndStoreTips(): Promise<void> {
         tips_data: tips,
         player_recommendations: playerRecommendations,
         user_teams: tips.user_teams || [],
+        rostered_players: tips.rostered_players || [],
         tips_timestamp: Date.now(),
       });
 
@@ -34,6 +40,8 @@ export async function fetchAndStoreTips(): Promise<void> {
     }
   } catch (error) {
     console.error('Error fetching tips:', error);
+  } finally {
+    await chrome.storage.local.set({ [TIPS_LOADING_KEY]: false });
   }
 }
 
