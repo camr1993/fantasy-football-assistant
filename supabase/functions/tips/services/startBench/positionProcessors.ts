@@ -38,36 +38,45 @@ export function processStandardPositions(
   const playersFillingPositionSlots = new Map<string, Set<string>>();
 
   for (const [, players] of positionGroups) {
-    const sorted = [...players].sort(
-      (a, b) => (b.weighted_score || 0) - (a.weighted_score || 0)
-    );
-
-    const position = sorted[0]?.position;
-    const teamId = sorted[0]?.team_id;
+    const position = players[0]?.position;
+    const teamId = players[0]?.team_id;
     if (!position || !teamId) continue;
 
+    // Players already in a flex slot are starting and are evaluated by the
+    // flex pass, so they do not compete for position slots as well.
+    const candidates = players.filter((p) => !isFlexSlot(p.slot));
+
+    // Rank only the players who can actually start this week. Anyone who
+    // cannot - injured, or on bye - still consumed a rank previously, which
+    // both pushed eligible players out of the starting slots and let an
+    // unavailable player be recommended to start.
+    const sorted = candidates
+      .filter(
+        (p) =>
+          !injuredPlayerIds.has(p.player_id) &&
+          !byeWeekPlayerIds.has(p.player_id)
+      )
+      .sort((a, b) => (b.weighted_score || 0) - (a.weighted_score || 0));
+
+    const rankByPlayerId = new Map(sorted.map((p, i) => [p.player_id, i]));
     const startingSlots = getStartingSlotsForPosition(rosterSlots, position);
 
     if (!playersFillingPositionSlots.has(teamId)) {
       playersFillingPositionSlots.set(teamId, new Set());
     }
 
-    for (let rank = 0; rank < sorted.length; rank++) {
-      const player = sorted[rank];
+    for (const player of candidates) {
       const slotUpper = player.slot?.toUpperCase() || '';
       const isBenchSlot = BENCH_SLOTS.includes(slotUpper);
-      const isInFlexSlot = isFlexSlot(player.slot);
-      const isPositionStartingSlot = !isBenchSlot && !isInFlexSlot;
-      const shouldStartAtPosition = rank < startingSlots;
+      const isPositionStartingSlot = !isBenchSlot;
       const isInjured = injuredPlayerIds.has(player.player_id);
       const isOnBye = byeWeekPlayerIds.has(player.player_id);
       const injuryStatus = injuryStatusMap.get(player.player_id);
+      const rank = rankByPlayerId.get(player.player_id);
+      const shouldStartAtPosition = rank !== undefined && rank < startingSlots;
 
-      // Skip flex-slotted players entirely - they're already starting and will be evaluated in flex section
-      if (isInFlexSlot) continue;
-
-      // Track players filling position slots (exclude injured, bye week, and flex players)
-      if (shouldStartAtPosition && !isInjured && !isOnBye) {
+      // Track players filling position slots
+      if (shouldStartAtPosition) {
         playersFillingPositionSlots.get(teamId)!.add(player.player_id);
       }
 
@@ -118,6 +127,10 @@ export function processStandardPositions(
         );
         continue;
       }
+
+      // An unavailable player sitting on the bench is already where they
+      // should be, so there is nothing to recommend
+      if (isInjured || isOnBye) continue;
 
       // Recommend if slot doesn't match where they should be
       if (isPositionStartingSlot !== shouldStartAtPosition) {
@@ -313,4 +326,3 @@ export function processFlexPositions(
 
   return recommendations;
 }
-
