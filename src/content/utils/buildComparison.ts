@@ -115,8 +115,14 @@ export function buildComparisonView(
   const currentIndex = entries.findIndex((e) => e.source === 'current');
   const best = entries[0];
   const isBestAlready = best.source === 'current';
-  const bestGap = isBestAlready ? 0 : (best.gap ?? 0);
-  const isMarginal = !isBestAlready && bestGap < MARGINAL_GAP;
+  const runnerUp = isBestAlready ? entries[1] : undefined;
+
+  // When the player leads, the margin that matters is over the next option,
+  // not over themselves
+  const decidingGap = isBestAlready
+    ? Math.abs(runnerUp?.gap ?? Number.POSITIVE_INFINITY)
+    : (best.gap ?? 0);
+  const isMarginal = decidingGap < MARGINAL_GAP;
 
   // Prefer the factors describing whichever option actually tops the list
   const factors =
@@ -132,7 +138,12 @@ export function buildComparisonView(
     entries,
     currentIndex,
     factors,
-    headline: buildHeadline(entries[0], entries[currentIndex], isMarginal),
+    headline: buildHeadline(
+      entries[0],
+      entries[currentIndex],
+      runnerUp,
+      isMarginal
+    ),
     isMarginal,
   };
 }
@@ -140,9 +151,23 @@ export function buildComparisonView(
 function buildHeadline(
   best: ComparisonEntry,
   current: ComparisonEntry,
+  runnerUp: ComparisonEntry | undefined,
   isMarginal: boolean
 ): string | null {
-  if (best.source === 'current') return null;
+  // The clicked player already tops the list. For a start recommendation
+  // that is the normal case - they are the best option and simply are not
+  // in the lineup - so say what to do rather than falling silent.
+  if (best.source === 'current') {
+    if (!runnerUp) return null;
+
+    if (isMarginal) {
+      return `${current.name} is a slight edge over ${runnerUp.name}`;
+    }
+
+    return runnerUp.source === 'starting'
+      ? `Start ${current.name} over ${runnerUp.name}`
+      : `Start ${current.name}`;
+  }
 
   if (isMarginal) {
     return `${best.name} is a slight edge over ${current.name}`;

@@ -108,7 +108,7 @@ export function processStandardPositions(
       const isOnBye = byeWeekPlayerIds.has(player.player_id);
       const injuryStatus = injuryStatusMap.get(player.player_id);
       const rank = rankByPlayerId.get(player.player_id);
-      const shouldStartAtPosition = rank !== undefined && rank < startingSlots;
+      const shouldStartAtPosition = rank !== undefined && rank < openSlots;
 
       // Track players filling position slots
       if (shouldStartAtPosition) {
