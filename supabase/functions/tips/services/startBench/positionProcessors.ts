@@ -74,6 +74,7 @@ export function processStandardPositions(
     const sorted = candidates
       .filter(
         (p) =>
+          p.has_score &&
           !injuredPlayerIds.has(p.player_id) &&
           !byeWeekPlayerIds.has(p.player_id)
       )
@@ -81,6 +82,19 @@ export function processStandardPositions(
 
     const rankByPlayerId = new Map(sorted.map((p, i) => [p.player_id, i]));
     const startingSlots = getStartingSlotsForPosition(rosterSlots, position);
+
+    // An unscored player in a starting slot is left where they are, so the
+    // slot is not actually open. Counting it as open would recommend someone
+    // into a spot nobody is being asked to vacate.
+    const slotsHeldWithoutScore = candidates.filter(
+      (p) =>
+        !p.has_score &&
+        !BENCH_SLOTS.includes(p.slot?.toUpperCase() || '') &&
+        !injuredPlayerIds.has(p.player_id) &&
+        !byeWeekPlayerIds.has(p.player_id)
+    ).length;
+
+    const openSlots = Math.max(0, startingSlots - slotsHeldWithoutScore);
 
     if (!playersFillingPositionSlots.has(teamId)) {
       playersFillingPositionSlots.set(teamId, new Set());
@@ -155,21 +169,42 @@ export function processStandardPositions(
       // should be, so there is nothing to recommend
       if (isInjured || isOnBye) continue;
 
+      // No score for the week we rank on - most often a player who was on
+      // bye then but plays this week. We have no basis for an opinion, so
+      // say nothing, and treat a starting slot as still occupied so the flex
+      // pass does not try to fill it.
+      if (!player.has_score) {
+        if (isPositionStartingSlot) {
+          playersFillingPositionSlots.get(teamId)!.add(player.player_id);
+        }
+        continue;
+      }
+
       // Recommend if slot doesn't match where they should be
       if (isPositionStartingSlot !== shouldStartAtPosition) {
         const reason = shouldStartAtPosition
-          ? generateStartReason(player, sorted, rank, startingSlots)
-          : generateBenchReason(player, sorted, rank, startingSlots);
+          ? generateStartReason(player, sorted, rank, openSlots)
+          : generateBenchReason(player, sorted, rank, openSlots);
 
         let comparison: ComparisonInfo;
         if (shouldStartAtPosition) {
           // The player being displaced, so the UI can show who moves out
-          comparison = toComparison(sorted[startingSlots], player, {
+          comparison = toComparison(sorted[openSlots], player, {
             score: 0,
             name: 'starter',
           });
         } else {
-          comparison = toComparison(sorted[startingSlots - 1], player, {
+          // The player who takes the vacated slot is the best-ranked one
+          // not already starting - naming a player who is themselves
+          // already in the lineup produced "Start X over Y" where X had
+          // nothing to move from
+          const incoming =
+            sorted
+              .slice(0, openSlots)
+              .find((p) => BENCH_SLOTS.includes(p.slot?.toUpperCase() || '')) ??
+            sorted[openSlots - 1];
+
+          comparison = toComparison(incoming, player, {
             score: 0,
             name: 'bench',
           });
@@ -218,6 +253,8 @@ export function processFlexPositions(
         continue;
       if (injuredPlayerIds.has(player.player_id)) continue;
       if (byeWeekPlayerIds.has(player.player_id)) continue;
+      // Same reasoning as the position pass: no score means no opinion
+      if (!player.has_score) continue;
 
       if (!flexEligibleByTeam.has(player.team_id)) {
         flexEligibleByTeam.set(player.team_id, []);

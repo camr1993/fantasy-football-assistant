@@ -37,6 +37,10 @@ export function groupPlayersByPositionAndTeam(
 
     positionGroups.get(key)!.push({
       player_id: entry.player_id,
+      // A missing score is not a zero score - a player on bye during the
+      // scored week simply has no row, and ranking them at the bottom reads
+      // as "this player is bad" rather than "we have no data"
+      has_score: !!scoreData,
       yahoo_player_id: extractYahooPlayerId(player.yahoo_player_id),
       name: player.name,
       position: player.position,
@@ -55,4 +59,3 @@ export function groupPlayersByPositionAndTeam(
 
   return positionGroups;
 }
-

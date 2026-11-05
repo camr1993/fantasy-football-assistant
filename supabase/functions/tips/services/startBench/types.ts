@@ -112,6 +112,8 @@ export interface NormalizedStatsData {
 
 export interface PlayerGroup {
   player_id: string;
+  /** False when the player has no league_calcs row for the scored week */
+  has_score: boolean;
   yahoo_player_id: string;
   name: string;
   position: string;
