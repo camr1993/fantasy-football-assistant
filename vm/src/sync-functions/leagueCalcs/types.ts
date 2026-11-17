@@ -14,4 +14,5 @@ export interface LeagueCalcsResult {
   season_year?: number;
   week?: number;
   updated_count?: number;
+  leagues_processed?: number;
 }

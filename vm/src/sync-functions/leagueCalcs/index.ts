@@ -181,29 +181,35 @@ export async function calculateRecentStatsOnly(
       week: currentWeek,
     };
   } else {
-    // Update recent stats for all leagues
+    // Which leagues have points for this week. Read this from `leagues`
+    // rather than from league_calcs: league_calcs holds a row per player per
+    // league, so deriving the league list from it meant paging through
+    // thousands of rows to recover a handful of ids - and the previous query
+    // did not page at all. PostgREST capped it at 1000 rows, so only the
+    // leagues that happened to appear in that slice were ever processed, and
+    // with no ORDER BY which ones those were varied between runs.
     const { data: leagues, error } = await supabase
-      .from('league_calcs')
-      .select('league_id')
-      .eq('season_year', currentYear)
-      .eq('week', currentWeek)
-      .not('fantasy_points', 'is', null);
+      .from('leagues')
+      .select('id')
+      .eq('season_year', currentYear);
 
     if (error) {
       logger.error('Failed to fetch leagues for recent stats', { error });
       throw new Error(`Failed to fetch leagues: ${error.message}`);
     }
 
-    if (leagues && leagues.length > 0) {
-      // Deduplicate league IDs since we can't use DISTINCT in Supabase select
-      const leagueIds = leagues.map(
-        (league: { league_id: string }) => league.league_id
-      );
-      const uniqueLeagueIds = [...new Set<string>(leagueIds)];
+    const leagueIds = (leagues || []).map(
+      (league: { id: string }) => league.id
+    );
 
-      for (const leagueId of uniqueLeagueIds) {
-        await updateRecentStatsForLeague(leagueId, currentYear, currentWeek);
-      }
+    logger.info('Calculating recent stats for leagues', {
+      season_year: currentYear,
+      week: currentWeek,
+      leagueCount: leagueIds.length,
+    });
+
+    for (const leagueId of leagueIds) {
+      await updateRecentStatsForLeague(leagueId, currentYear, currentWeek);
     }
 
     return {
@@ -211,6 +217,7 @@ export async function calculateRecentStatsOnly(
       message: 'Recent statistics calculated for all leagues',
       season_year: currentYear,
       week: currentWeek,
+      leagues_processed: leagueIds.length,
     };
   }
 }
