@@ -361,7 +361,8 @@ export async function calculateWeightedScoresForLeagueQB(
     const enoughOpportunity = hasEnoughOpportunity(
       'QB',
       recentOpportunity,
-      player.player_id
+      player.player_id,
+      week
     );
 
     const recentStd = enoughOpportunity

@@ -46,7 +46,7 @@ export async function fetchRecentOpportunity(
   const opportunity = new Map<string, number>();
   if (playerIds.length === 0) return opportunity;
 
-  const startWeek = Math.max(1, week - RECENT_WEEKS + 1);
+  const startWeek = Math.max(1, week - recentWindowWeeks(week) + 1);
 
   const { data, error } = await supabase
     .from('player_stats')
@@ -98,6 +98,30 @@ export async function fetchRecentOpportunity(
   return opportunity;
 }
 
+/** How many weeks of the season the recent window actually covers */
+export function recentWindowWeeks(week: number): number {
+  return Math.min(RECENT_WEEKS, Math.max(1, week));
+}
+
+/**
+ * The opportunity threshold for a position, prorated to the window.
+ *
+ * The thresholds are three-week totals, but the window is shorter at the
+ * start of a season - one week in week 1. Applying the full figure then would
+ * make the bar three times as strict per game, for no reason. Kickers show
+ * this most clearly: one field goal attempt in a game is ordinary, so a flat
+ * gate of 2 would neutralise much of the position in week 1.
+ */
+export function opportunityThreshold(
+  position: string,
+  week: number
+): number | undefined {
+  const full = MIN_RECENT_OPPORTUNITY[position];
+  if (full === undefined) return undefined;
+
+  return (full * recentWindowWeeks(week)) / RECENT_WEEKS;
+}
+
 /**
  * Whether a player saw enough of the field for "avoided a bad outcome" to
  * count as a genuine strength rather than an artefact of not playing.
@@ -105,9 +129,10 @@ export async function fetchRecentOpportunity(
 export function hasEnoughOpportunity(
   position: string,
   opportunity: Map<string, number>,
-  playerId: string
+  playerId: string,
+  week: number
 ): boolean {
-  const threshold = MIN_RECENT_OPPORTUNITY[position];
+  const threshold = opportunityThreshold(position, week);
   if (threshold === undefined) return true; // positions with no volume concept
   return (opportunity.get(playerId) || 0) >= threshold;
 }
