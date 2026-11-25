@@ -182,33 +182,28 @@ export function processStandardPositions(
 
       // Recommend if slot doesn't match where they should be
       if (isPositionStartingSlot !== shouldStartAtPosition) {
-        const reason = shouldStartAtPosition
-          ? generateStartReason(player, sorted, rank, openSlots)
-          : generateBenchReason(player, sorted, rank, openSlots);
-
-        let comparison: ComparisonInfo;
-        if (shouldStartAtPosition) {
-          // The player being displaced, so the UI can show who moves out
-          comparison = toComparison(sorted[openSlots], player, {
-            score: 0,
-            name: 'starter',
-          });
-        } else {
-          // The player who takes the vacated slot is the best-ranked one
-          // not already starting - naming a player who is themselves
-          // already in the lineup produced "Start X over Y" where X had
-          // nothing to move from
-          const incoming =
-            sorted
+        // Pick the counterpart first, then build both the comparison row and
+        // the prose from it. Generating the reason independently let the
+        // sentence cite a different player than the one on screen.
+        const counterpart = shouldStartAtPosition
+          ? // The player being displaced, so the UI can show who moves out
+            sorted[openSlots]
+          : // The player who takes the vacated slot is the best-ranked one
+            // not already starting - naming someone already in the lineup
+            // produced "Start X over Y" where X had nothing to move from
+            (sorted
               .slice(0, openSlots)
               .find((p) => BENCH_SLOTS.includes(p.slot?.toUpperCase() || '')) ??
-            sorted[openSlots - 1];
+            sorted[openSlots - 1]);
 
-          comparison = toComparison(incoming, player, {
-            score: 0,
-            name: 'bench',
-          });
-        }
+        const reason = shouldStartAtPosition
+          ? generateStartReason(player, sorted, rank, openSlots, counterpart)
+          : generateBenchReason(player, sorted, rank, openSlots, counterpart);
+
+        const comparison: ComparisonInfo = toComparison(counterpart, player, {
+          score: 0,
+          name: shouldStartAtPosition ? 'starter' : 'bench',
+        });
 
         recommendations.push(
           createRecommendation(

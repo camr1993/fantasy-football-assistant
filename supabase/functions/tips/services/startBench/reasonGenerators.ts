@@ -4,6 +4,7 @@ import {
   comparePlayerBreakdowns,
   generateDetailedComparisonReason,
   getTopFactors,
+  endSentence,
 } from './scoreBreakdown.ts';
 
 /**
@@ -108,7 +109,13 @@ export function generateStartReason(
   player: PlayerGroup,
   sortedPlayers: PlayerGroup[],
   rank: number,
-  startingSlots: number
+  startingSlots: number,
+  /**
+   * The player the recommendation is shown against. Passed in so the prose
+   * names the same player the comparison row does - picking one here
+   * independently meant the sentence could cite someone the user never saw.
+   */
+  counterpart?: PlayerGroup
 ): string {
   const { position, weighted_score, name } = player;
 
@@ -128,8 +135,14 @@ export function generateStartReason(
   const comparisonPlayerIndex =
     playerToBenchIndex >= 0 ? playerToBenchIndex : worstStarterIndex;
 
-  if (comparisonPlayerIndex >= 0 && comparisonPlayerIndex !== rank) {
-    const comparisonPlayer = sortedPlayers[comparisonPlayerIndex];
+  const resolved =
+    counterpart ??
+    (comparisonPlayerIndex >= 0 && comparisonPlayerIndex !== rank
+      ? sortedPlayers[comparisonPlayerIndex]
+      : undefined);
+
+  if (resolved) {
+    const comparisonPlayer = resolved;
 
     // Build breakdowns and compare
     const playerBreakdown = buildPlayerBreakdown(player);
@@ -177,17 +190,20 @@ export function generateBenchReason(
   player: PlayerGroup,
   sortedPlayers: PlayerGroup[],
   rank: number,
-  startingSlots: number
+  startingSlots: number,
+  /** The player the recommendation is shown against - see generateStartReason */
+  counterpart?: PlayerGroup
 ): string {
   const { position, weighted_score, name } = player;
   const betterPlayers = sortedPlayers.slice(0, startingSlots);
 
-  if (betterPlayers.length === 0) {
+  if (!counterpart && betterPlayers.length === 0) {
     return `Ranked #${rank + 1} of ${sortedPlayers.length} ${position}s on your roster.`;
   }
 
-  // Compare against the last starter (the threshold player)
-  const thresholdPlayer = betterPlayers[betterPlayers.length - 1];
+  // Compare against whoever the UI names, falling back to the last starter
+  const thresholdPlayer =
+    counterpart ?? betterPlayers[betterPlayers.length - 1];
 
   // Build breakdowns and compare
   const playerBreakdown = buildPlayerBreakdown(player);
@@ -210,7 +226,7 @@ export function generateBenchReason(
   }
 
   // Fallback to generic reason
-  return `${name} is a weaker option than ${thresholdPlayer.name}. Not among top ${startingSlots} ${position}s.`;
+  return `${endSentence(`${name} is a weaker option than ${thresholdPlayer.name}`)} Not among top ${startingSlots} ${position}s.`;
 }
 
 /**
