@@ -1,4 +1,8 @@
 import { logger } from '../../../../../../supabase/functions/utils/logger.ts';
+import {
+  fetchRecentOpportunity,
+  hasEnoughOpportunity,
+} from '../../recentOpportunity.ts';
 import { supabase } from '../../../../../../supabase/functions/utils/supabase.ts';
 import { POSITION_WEIGHTS } from '../../constants.ts';
 
@@ -301,6 +305,12 @@ export async function calculateWeightedScoresForLeagueTE(
   }
 
   // Build efficiency metrics lookup
+  const recentOpportunity = await fetchRecentOpportunity(
+    seasonYear,
+    week,
+    playerIds
+  );
+
   const efficiencyMap = new Map<string, any>();
   if (efficiencyMetrics) {
     for (const em of efficiencyMetrics) {
@@ -344,7 +354,19 @@ export async function calculateWeightedScoresForLeagueTE(
 
     const efficiency = efficiencyMap.get(player.player_id);
     const recentMean = player.recent_mean_norm || 0;
-    const recentStd = Math.max(-2, Math.min(2, player.recent_std_norm || 0)); // Clip volatility z-score to ±2
+    // Credit for avoiding bad outcomes only counts in proportion to the
+    // chance of causing them. Below the opportunity threshold these z-scores
+    // are neutralised to 0 (population average) rather than left to reward a
+    // player for not being on the field.
+    const enoughOpportunity = hasEnoughOpportunity(
+      'TE',
+      recentOpportunity,
+      player.player_id
+    );
+
+    const recentStd = enoughOpportunity
+      ? Math.max(-2, Math.min(2, player.recent_std_norm || 0)) // Clip volatility z-score to ±2
+      : 0;
     const targetsPerGameNorm = efficiency?.targets_per_game_3wk_avg_norm || 0;
     const receivingTouchdownsNorm =
       efficiency?.receiving_touchdowns_3wk_avg_norm || 0;
