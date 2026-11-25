@@ -80,7 +80,11 @@ export async function calculateWeightedScoresForLeagueTE(
     .eq('league_id', leagueId)
     .eq('season_year', seasonYear)
     .eq('week', week)
-    .in('player_id', playerIds);
+    .in('player_id', playerIds)
+    // A player below the minimum recent games has no usable baseline. Scoring
+    // them would coerce the missing z-score to 0, which reads as exactly
+    // league average rather than as "no data".
+    .not('recent_mean', 'is', null);
 
   if (playerDataError || !playerData) {
     logger.error('Failed to fetch player data for weighted scores', {
@@ -351,7 +355,8 @@ export async function calculateWeightedScoresForLeagueTE(
       POSITION_WEIGHTS.TE.recent_mean.weight * recentMean +
       POSITION_WEIGHTS.TE.volatility.weight * recentStd +
       POSITION_WEIGHTS.TE.targets_per_game.weight * targetsPerGameNorm +
-      POSITION_WEIGHTS.TE.receiving_touchdowns.weight * receivingTouchdownsNorm +
+      POSITION_WEIGHTS.TE.receiving_touchdowns.weight *
+        receivingTouchdownsNorm +
       POSITION_WEIGHTS.TE.yards_per_target.weight * yardsPerTargetNorm +
       POSITION_WEIGHTS.TE.opponent_difficulty.weight * opponentDifficulty;
 
@@ -464,4 +469,3 @@ export async function calculateWeightedScoresForLeagueTE(
     tePlayersUpdated: updates.length,
   });
 }
-

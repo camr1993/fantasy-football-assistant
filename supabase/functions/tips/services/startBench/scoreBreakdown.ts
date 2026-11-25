@@ -339,6 +339,16 @@ export function comparePlayerBreakdowns(
 /**
  * Generate a human-readable reason based on score comparison
  */
+/**
+ * End a sentence without doubling the period.
+ *
+ * Plenty of players carry a suffix - "Anthony Richardson Sr." - and appending
+ * a full stop after the name produced "Sr..".
+ */
+export function endSentence(text: string): string {
+  return text.endsWith('.') ? text : `${text}.`;
+}
+
 export function generateDetailedComparisonReason(
   comparison: ScoreComparison,
   betterPlayerName: string,
@@ -350,8 +360,12 @@ export function generateDetailedComparisonReason(
   if (keyAdvantages.length === 0) {
     // Fallback to generic reason if no clear advantages
     return isStartRecommendation
-      ? `${betterPlayerName} is a better option than ${worsePlayerName}.`
-      : `${worsePlayerName} is a weaker option than ${betterPlayerName}.`;
+      ? endSentence(
+          `${betterPlayerName} is a better option than ${worsePlayerName}`
+        )
+      : endSentence(
+          `${worsePlayerName} is a weaker option than ${betterPlayerName}`
+        );
   }
 
   // Get top 2-3 advantages for the reason

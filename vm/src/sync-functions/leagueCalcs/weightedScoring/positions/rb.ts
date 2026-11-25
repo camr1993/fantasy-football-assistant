@@ -80,7 +80,11 @@ export async function calculateWeightedScoresForLeagueRB(
     .eq('league_id', leagueId)
     .eq('season_year', seasonYear)
     .eq('week', week)
-    .in('player_id', playerIds);
+    .in('player_id', playerIds)
+    // A player below the minimum recent games has no usable baseline. Scoring
+    // them would coerce the missing z-score to 0, which reads as exactly
+    // league average rather than as "no data".
+    .not('recent_mean', 'is', null);
 
   if (playerDataError || !playerData) {
     logger.error('Failed to fetch player data for weighted scores', {
@@ -355,8 +359,10 @@ export async function calculateWeightedScoresForLeagueRB(
     const weightedScore =
       POSITION_WEIGHTS.RB.recent_mean.weight * recentMean +
       POSITION_WEIGHTS.RB.volatility.weight * recentStd +
-      POSITION_WEIGHTS.RB.weighted_opportunity.weight * weightedOpportunityNorm +
-      POSITION_WEIGHTS.RB.touchdown_production.weight * touchdownProductionNorm +
+      POSITION_WEIGHTS.RB.weighted_opportunity.weight *
+        weightedOpportunityNorm +
+      POSITION_WEIGHTS.RB.touchdown_production.weight *
+        touchdownProductionNorm +
       POSITION_WEIGHTS.RB.receiving_profile.weight * receivingProfileNorm +
       POSITION_WEIGHTS.RB.efficiency.weight * efficiencyNorm +
       POSITION_WEIGHTS.RB.opponent_difficulty.weight * opponentDifficulty;
